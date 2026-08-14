@@ -7,4 +7,9 @@
     <RootNamespace>The__Fix_WebApp</RootNamespace>
   </PropertyGroup>
 
+  <ItemGroup>
+    <None Include="..\..\..\..\Downloads\FashionFix-Step1\FashionFix\Views\_ViewImports.cshtml" Link="Views\_ViewImports.cshtml" />
+    <None Include="..\..\..\..\Downloads\FashionFix-Step1\FashionFix\Views\_ViewStart.cshtml" Link="Views\_ViewStart.cshtml" />
+  </ItemGroup>
+
 </Project>
