@@ -37,3 +37,31 @@ public class EmployeeViewModel
     /// <summary>Roles selectable for staff accounts (Customer is excluded - that's self-registration only).</summary>
     public static readonly string[] AssignableRoles = { "Administrator", "Manager", "Employee", "Owner" };
 }
+
+/// <summary>Backs the "Edit Employee" form - updates profile fields without touching login credentials.</summary>
+public class EmployeeEditViewModel
+{
+    public string Id { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "Full name is required")]
+    [Display(Name = "Full Name")]
+    public string FullName { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "Email is required")]
+    [EmailAddress(ErrorMessage = "Enter a valid email address")]
+    [Display(Name = "Email")]
+    public string Email { get; set; } = string.Empty;
+
+    [Display(Name = "Job Position")]
+    public string? JobPosition { get; set; }
+
+    [Display(Name = "Employment Status")]
+    public string? EmploymentStatus { get; set; }
+
+    [Display(Name = "Role")]
+    public string Role { get; set; } = string.Empty;
+
+    public bool IsActive { get; set; } = true;
+
+    public static readonly string[] EmploymentStatuses = { "Active", "On Leave", "Terminated" };
+}

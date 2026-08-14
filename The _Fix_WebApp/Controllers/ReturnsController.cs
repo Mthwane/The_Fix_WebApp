@@ -58,21 +58,34 @@ public class ReturnsController : Controller
     {
         var orderItem = await _context.OrderItems
             .Include(oi => oi.Order)
+            .Include(oi => oi.Product)
             .FirstOrDefaultAsync(oi => oi.OrderItemId == orderItemId);
 
         if (orderItem is null) return NotFound();
 
         var refundAmount = orderItem.UnitPrice * quantity;
+        var processedByUserId = _userManager.GetUserId(User) ?? string.Empty;
 
         _context.ReturnTransactions.Add(new ReturnTransaction
         {
             OrderId = orderItem.OrderId,
             OrderItemId = orderItem.OrderItemId,
-            ProcessedByUserId = _userManager.GetUserId(User) ?? string.Empty,
+            ProcessedByUserId = processedByUserId,
             QuantityReturned = quantity,
             IsResalable = isResalable,
             RefundMethod = refundMethod,
             RefundAmount = refundAmount
+        });
+
+        orderItem.Order.Status = OrderStatus.Returned;
+
+        _context.AuditLogs.Add(new AuditLog
+        {
+            UserId = processedByUserId,
+            Action = "ReturnProcessed",
+            // NOTE: store-credit ledger integration (when RefundMethod == StoreCredit) is a
+            // follow-up item - for now the credit is recorded here but not yet redeemable.
+            Details = $"Returned {quantity}x '{orderItem.Product.Name}' from order {orderItem.Order.OrderNumber} - {refundAmount:C} via {refundMethod}."
         });
 
         await _context.SaveChangesAsync();
@@ -80,7 +93,6 @@ public class ReturnsController : Controller
         if (isResalable)
             await _inventoryService.IncrementStockAsync(orderItem.ProductId, quantity, InventoryChangeReason.Return);
 
-        // TODO: write an AuditLog entry ("ReturnProcessed") and hook up store-credit ledger if RefundMethod == StoreCredit.
         return RedirectToAction(nameof(Index));
     }
 }

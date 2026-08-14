@@ -5,18 +5,33 @@
 <div class="container py-4">
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h2 class="mb-0">Purchase Orders</h2>
-        <a asp-controller="PurchaseOrders" asp-action="Create" class="btn btn-primary">New Purchase Order</a>
+        <div>
+            <a asp-controller="Suppliers" asp-action="Index" class="btn btn-outline-secondary">Suppliers</a>
+            <a asp-controller="PurchaseOrders" asp-action="Create" class="btn btn-primary">New Purchase Order</a>
+        </div>
     </div>
 
     <table class="table table-sm">
-        <thead><tr><th>PO #</th><th>Supplier</th><th>Status</th><th>Created</th><th>Expected</th><th></th></tr></thead>
+        <thead><tr><th>PO #</th><th>Supplier</th><th>Items</th><th>Status</th><th>Created</th><th>Expected</th><th></th></tr></thead>
         <tbody>
         @foreach (var po in Model)
         {
             <tr>
                 <td>@po.PONumber</td>
                 <td>@po.Supplier?.Name</td>
-                <td>@po.Status</td>
+                <td>@po.Items.Sum(i => i.QuantityOrdered) unit(s) / @po.Items.Count line(s)</td>
+                <td>
+                    @{
+                        var statusClass = po.Status switch
+                        {
+                            PurchaseOrderStatus.Received => "bg-success",
+                            PurchaseOrderStatus.Cancelled => "bg-danger",
+                            PurchaseOrderStatus.Shipped => "bg-info text-dark",
+                            _ => "bg-secondary"
+                        };
+                    }
+                    <span class="badge @statusClass">@po.Status</span>
+                </td>
                 <td>@po.DateCreated.ToLocalTime().ToShortDateString()</td>
                 <td>@(po.DateExpected?.ToShortDateString() ?? "-")</td>
                 <td>

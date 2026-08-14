@@ -41,6 +41,7 @@
                 <form asp-controller="Account" asp-action="Login" method="post">
                     <div asp-validation-summary="ModelOnly" class="text-danger"></div>
                     <input type="hidden" asp-for="ReturnUrl" />
+                    <input type="hidden" asp-for="IsEmployeeLogin" value="false" />
 
                     <div class="mb-3">
                         <label asp-for="Username" class="form-label"></label>

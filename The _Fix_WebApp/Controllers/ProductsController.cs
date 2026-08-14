@@ -2,6 +2,7 @@ using FashionFix.Web.Data;
 using FashionFix.Web.Models.Entities;
 using FashionFix.Web.Models.ViewModels;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -11,10 +12,12 @@ namespace FashionFix.Web.Controllers;
 public class ProductsController : Controller
 {
     private readonly ApplicationDbContext _context;
+    private readonly UserManager<ApplicationUser> _userManager;
 
-    public ProductsController(ApplicationDbContext context)
+    public ProductsController(ApplicationDbContext context, UserManager<ApplicationUser> userManager)
     {
         _context = context;
+        _userManager = userManager;
     }
 
     // GET: /Products?SearchTerm=&Category=&Size=&Color=&InStockOnly=
@@ -79,7 +82,8 @@ public class ProductsController : Controller
 
         _context.Products.Add(product);
         await _context.SaveChangesAsync();
-        // TODO: write an AuditLog entry ("ProductCreated").
+
+        await LogAuditAsync("ProductCreated", $"Added product '{product.Name}' (SKU {product.SKU}).");
 
         return RedirectToAction(nameof(Index));
     }
@@ -137,7 +141,8 @@ public class ProductsController : Controller
         // only change via InventoryService (sales, returns, PO receipts, adjustments).
 
         await _context.SaveChangesAsync();
-        // TODO: write an AuditLog entry ("ProductUpdated").
+
+        await LogAuditAsync("ProductUpdated", $"Updated product '{product.Name}' (SKU {product.SKU}).");
 
         return RedirectToAction(nameof(Index));
     }
@@ -154,6 +159,19 @@ public class ProductsController : Controller
         product.DateUpdated = DateTime.UtcNow;
         await _context.SaveChangesAsync();
 
+        await LogAuditAsync("ProductDeactivated", $"Deactivated product '{product.Name}' (SKU {product.SKU}).");
+
         return RedirectToAction(nameof(Index));
+    }
+
+    private async Task LogAuditAsync(string action, string details)
+    {
+        _context.AuditLogs.Add(new AuditLog
+        {
+            UserId = _userManager.GetUserId(User),
+            Action = action,
+            Details = details
+        });
+        await _context.SaveChangesAsync();
     }
 }

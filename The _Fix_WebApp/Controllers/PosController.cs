@@ -74,7 +74,14 @@ public class PosController : Controller
             await _inventoryService.DecrementStockAsync(line.ProductId, line.Quantity);
         }
 
-        // TODO: write an AuditLog entry ("SaleProcessed") and trigger Receipt generation.
+        _context.AuditLogs.Add(new AuditLog
+        {
+            UserId = cashierId,
+            Action = "SaleProcessed",
+            Details = $"Processed sale {order.OrderNumber} for {order.GrandTotal:C} ({model.CartItems.Count} line item(s))."
+        });
+        await _context.SaveChangesAsync();
+
         return RedirectToAction(nameof(Receipt), new { id = order.OrderId });
     }
 

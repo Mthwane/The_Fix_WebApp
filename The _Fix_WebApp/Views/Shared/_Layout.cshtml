@@ -11,20 +11,76 @@
 </head>
 <body>
 
-    @* Landing/login page renders full-bleed with no navbar - everything else gets one *@
+    @* Landing/login page renders full-bleed with no navbar - everything else gets one.
+       The nav itself is role-based: every user only sees the links they're actually
+       authorized to open, so no one lands on an Access Denied page from the menu. *@
     @if (ViewData["HideNav"] as bool? != true)
     {
+        var isStaff = User.IsInRole("Administrator") || User.IsInRole("Manager")
+                      || User.IsInRole("Employee") || User.IsInRole("Owner");
+        var isCustomer = User.IsInRole("Customer") && !isStaff;
+
         <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
             <div class="container">
                 <a class="navbar-brand fw-bold" asp-controller="Home" asp-action="Index">Fashion Fix</a>
-                <div class="collapse navbar-collapse">
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="mainNav">
                     <ul class="navbar-nav me-auto">
-                        <li class="nav-item"><a class="nav-link" asp-controller="Products" asp-action="Index">Products</a></li>
-                        <li class="nav-item"><a class="nav-link" asp-controller="Pos" asp-action="Index">POS</a></li>
-                        <li class="nav-item"><a class="nav-link" asp-controller="Returns" asp-action="Index">Returns</a></li>
-                        <li class="nav-item"><a class="nav-link" asp-controller="Employees" asp-action="Index">Employees</a></li>
-                        <li class="nav-item"><a class="nav-link" asp-controller="Reports" asp-action="Index">Reports</a></li>
-                        <li class="nav-item"><a class="nav-link" asp-controller="PurchaseOrders" asp-action="Index">Purchase Orders</a></li>
+                        @if (User.Identity?.IsAuthenticated == true)
+                        {
+                            @if (isStaff)
+                            {
+                                <li class="nav-item"><a class="nav-link" asp-controller="Home" asp-action="Dashboard">Dashboard</a></li>
+                            }
+                            @if (User.IsInRole("Administrator") || User.IsInRole("Manager"))
+                            {
+                                <li class="nav-item"><a class="nav-link" asp-controller="Products" asp-action="Index">Products</a></li>
+                            }
+                            @if (User.IsInRole("Administrator") || User.IsInRole("Manager") || User.IsInRole("Employee"))
+                            {
+                                <li class="nav-item"><a class="nav-link" asp-controller="Pos" asp-action="Index">POS</a></li>
+                                <li class="nav-item"><a class="nav-link" asp-controller="Returns" asp-action="Index">Returns</a></li>
+                            }
+                            @if (User.IsInRole("Administrator"))
+                            {
+                                <li class="nav-item"><a class="nav-link" asp-controller="Employees" asp-action="Index">Employees</a></li>
+                                <li class="nav-item"><a class="nav-link" asp-controller="Employees" asp-action="AuditLogs">Audit Logs</a></li>
+                            }
+                            @if (User.IsInRole("Administrator") || User.IsInRole("Manager") || User.IsInRole("Owner"))
+                            {
+                                <li class="nav-item"><a class="nav-link" asp-controller="Reports" asp-action="Index">Reports</a></li>
+                                <li class="nav-item"><a class="nav-link" asp-controller="PurchaseOrders" asp-action="Index">Purchase Orders</a></li>
+                                <li class="nav-item"><a class="nav-link" asp-controller="Suppliers" asp-action="Index">Suppliers</a></li>
+                            }
+                            @if (isCustomer)
+                            {
+                                <li class="nav-item"><a class="nav-link" asp-controller="Customer" asp-action="Orders">My Orders</a></li>
+                                <li class="nav-item"><a class="nav-link" asp-controller="Customer" asp-action="Profile">My Profile</a></li>
+                            }
+                        }
+                    </ul>
+
+                    <ul class="navbar-nav ms-auto align-items-lg-center">
+                        @if (User.Identity?.IsAuthenticated == true)
+                        {
+                            <li class="nav-item">
+                                <span class="navbar-text text-white-50 me-3">
+                                    Signed in as <strong class="text-white">@User.Identity!.Name</strong>
+                                </span>
+                            </li>
+                            <li class="nav-item">
+                                <form asp-controller="Account" asp-action="Logout" method="post" class="d-inline">
+                                    <button type="submit" class="btn btn-outline-light btn-sm">Logout</button>
+                                </form>
+                            </li>
+                        }
+                        else
+                        {
+                            <li class="nav-item"><a class="btn btn-outline-light btn-sm me-2" asp-controller="Home" asp-action="Index">Customer Login</a></li>
+                            <li class="nav-item"><a class="btn btn-light btn-sm" asp-controller="Account" asp-action="EmployeeLogin">Employee Login</a></li>
+                        }
                     </ul>
                 </div>
             </div>

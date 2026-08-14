@@ -38,6 +38,15 @@ public class EmployeesController : Controller
             .OrderBy(u => u.FullName)
             .ToListAsync();
 
+        var roleLookup = new Dictionary<string, string>();
+        foreach (var employee in employees)
+        {
+            var roles = await _userManager.GetRolesAsync(employee);
+            roleLookup[employee.Id] = string.Join(", ", roles);
+        }
+        ViewBag.Roles = roleLookup;
+        ViewBag.AssignableRoles = EmployeeViewModel.AssignableRoles;
+
         return View(employees);
     }
 
@@ -118,6 +127,134 @@ public class EmployeesController : Controller
             UserId = _userManager.GetUserId(User),
             Action = "RoleAssigned",
             Details = $"Changed '{user.UserName}' role from [{previousRoles}] to '{role}'.",
+        });
+        await _context.SaveChangesAsync();
+
+        return RedirectToAction(nameof(Index));
+    }
+
+    // GET: /Employees/Edit/{id} - update staff profile details (US-15).
+    [HttpGet]
+    public async Task<IActionResult> Edit(string id)
+    {
+        var user = await _userManager.FindByIdAsync(id);
+        if (user is null) return NotFound();
+
+        var roles = await _userManager.GetRolesAsync(user);
+
+        var model = new EmployeeEditViewModel
+        {
+            Id = user.Id,
+            FullName = user.FullName,
+            Email = user.Email ?? string.Empty,
+            JobPosition = user.JobPosition,
+            EmploymentStatus = user.EmploymentStatus ?? "Active",
+            Role = roles.FirstOrDefault(r => r != "Customer") ?? roles.FirstOrDefault() ?? string.Empty,
+            IsActive = user.IsActive
+        };
+
+        return View(model);
+    }
+
+    // POST: /Employees/Edit/{id}
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Edit(string id, EmployeeEditViewModel model)
+    {
+        if (id != model.Id) return BadRequest();
+        if (!ModelState.IsValid) return View(model);
+
+        var user = await _userManager.FindByIdAsync(id);
+        if (user is null) return NotFound();
+
+        if (!string.Equals(user.Email, model.Email, StringComparison.OrdinalIgnoreCase))
+        {
+            var existing = await _userManager.FindByEmailAsync(model.Email);
+            if (existing is not null && existing.Id != user.Id)
+            {
+                ModelState.AddModelError(nameof(model.Email), "That email is already registered to another account.");
+                return View(model);
+            }
+            await _userManager.SetEmailAsync(user, model.Email);
+        }
+
+        user.FullName = model.FullName;
+        user.JobPosition = model.JobPosition;
+        user.EmploymentStatus = model.EmploymentStatus;
+        user.IsActive = model.IsActive;
+
+        var updateResult = await _userManager.UpdateAsync(user);
+        if (!updateResult.Succeeded)
+        {
+            foreach (var error in updateResult.Errors)
+                ModelState.AddModelError(string.Empty, error.Description);
+            return View(model);
+        }
+
+        if (!string.IsNullOrWhiteSpace(model.Role))
+        {
+            var currentRoles = (await _userManager.GetRolesAsync(user)).Where(r => r != "Customer").ToList();
+            if (!currentRoles.Contains(model.Role))
+            {
+                await _userManager.RemoveFromRolesAsync(user, currentRoles);
+                await _userManager.AddToRoleAsync(user, model.Role);
+            }
+        }
+
+        _context.AuditLogs.Add(new AuditLog
+        {
+            UserId = _userManager.GetUserId(User),
+            Action = "EmployeeUpdated",
+            Details = $"Updated profile for '{user.UserName}'.",
+        });
+        await _context.SaveChangesAsync();
+
+        return RedirectToAction(nameof(Index));
+    }
+
+    // POST: /Employees/Deactivate/{id} - soft-deactivate a staff account (never a hard delete,
+    // consistent with Product Control's "deactivate without permanently deleting" rule).
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Deactivate(string id)
+    {
+        var user = await _userManager.FindByIdAsync(id);
+        if (user is null) return NotFound();
+
+        user.IsActive = false;
+        user.EmploymentStatus = "Terminated";
+        await _userManager.UpdateAsync(user);
+        await _userManager.SetLockoutEndDateAsync(user, DateTimeOffset.MaxValue);
+
+        _context.AuditLogs.Add(new AuditLog
+        {
+            UserId = _userManager.GetUserId(User),
+            Action = "EmployeeDeactivated",
+            Details = $"Deactivated staff account '{user.UserName}'.",
+        });
+        await _context.SaveChangesAsync();
+
+        return RedirectToAction(nameof(Index));
+    }
+
+    // POST: /Employees/Reactivate/{id}
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Reactivate(string id)
+    {
+        var user = await _userManager.FindByIdAsync(id);
+        if (user is null) return NotFound();
+
+        user.IsActive = true;
+        user.EmploymentStatus = "Active";
+        await _userManager.UpdateAsync(user);
+        await _userManager.SetLockoutEndDateAsync(user, null);
+
+        _context.AuditLogs.Add(new AuditLog
+        {
+            UserId = _userManager.GetUserId(User),
+            Action = "EmployeeReactivated",
+            Details = $"Reactivated staff account '{user.UserName}'.",
         });
         await _context.SaveChangesAsync();
 

@@ -54,6 +54,37 @@ using (var scope = app.Services.CreateScope())
         if (!await roleManager.RoleExistsAsync(role))
             await roleManager.CreateAsync(new IdentityRole(role));
     }
+
+    // --- Bootstrap the first Administrator account ---
+    // Staff accounts can only be created by an existing Administrator (US-15/16), so on a
+    // brand-new database there'd be no way to sign in at all. Seed one default admin once,
+    // with a console warning to change the password immediately after first login.
+    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+    const string seedAdminUsername = "admin";
+
+    if (await userManager.FindByNameAsync(seedAdminUsername) is null)
+    {
+        var admin = new ApplicationUser
+        {
+            UserName = seedAdminUsername,
+            Email = "admin@fashionfix.local",
+            FullName = "System Administrator",
+            JobPosition = "Administrator",
+            EmploymentStatus = "Active",
+            DateHired = DateTime.UtcNow,
+            IsActive = true,
+            EmailConfirmed = true,
+        };
+
+        var createResult = await userManager.CreateAsync(admin, "Admin@12345");
+        if (createResult.Succeeded)
+        {
+            await userManager.AddToRoleAsync(admin, "Administrator");
+            app.Logger.LogWarning(
+                "Seeded default Administrator account - username: '{Username}', password: 'Admin@12345'. " +
+                "Log in via Employee Login and change this password immediately.", seedAdminUsername);
+        }
+    }
 }
 
 // --- HTTP pipeline ---

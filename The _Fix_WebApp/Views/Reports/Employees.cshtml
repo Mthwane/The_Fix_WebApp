@@ -1,5 +1,26 @@
+@model IEnumerable<dynamic>
 @{
     ViewData["Title"] = "Employee Performance";
 }
-<h1>Employee Performance</h1>
-<p class="text-muted">TODO: sales-by-employee analytics.</p>
+<div class="container py-4">
+    <h1>Employee Performance</h1>
+    <p class="text-muted">Sales processed per staff member over the last 30 days.</p>
+
+    <table class="table table-hover">
+        <thead><tr><th>Employee</th><th>Sales Processed</th><th>Revenue Generated</th></tr></thead>
+        <tbody>
+        @foreach (var e in Model)
+        {
+            <tr>
+                <td>@e.FullName</td>
+                <td>@e.SalesCount</td>
+                <td>@(((decimal)e.Revenue).ToString("C"))</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+    @if (!Model.Any())
+    {
+        <div class="alert alert-info">No sales recorded in the last 30 days.</div>
+    }
+</div>

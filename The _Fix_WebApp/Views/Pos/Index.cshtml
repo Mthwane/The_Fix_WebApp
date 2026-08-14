@@ -1,7 +1,73 @@
+@model POSCheckoutViewModel
 @{
     ViewData["Title"] = "POS / Till";
 }
-<div class="container py-4">
+<div class="container-fluid py-4">
     <h2>POS / Till</h2>
-    <p class="text-muted">Placeholder view for the PosController.Index() action - we'll build this out in a later step.</p>
+
+    <div class="row">
+        <div class="col-lg-7">
+            <div class="mb-3">
+                <label class="form-label">Scan or enter SKU</label>
+                <input type="text" id="barcodeInput" class="form-control form-control-lg" placeholder="Scan barcode or type SKU and press Enter" autofocus />
+                <div id="scanError" class="text-danger small mt-1"></div>
+            </div>
+
+            <table class="table" id="cartTable">
+                <thead>
+                    <tr><th>Item</th><th>SKU</th><th>Qty</th><th>Unit Price</th><th>Line Total</th><th></th></tr>
+                </thead>
+                <tbody id="cartBody">
+                    <tr id="emptyCartRow"><td colspan="6" class="text-muted text-center py-3">Cart is empty - scan an item to begin.</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="col-lg-5">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Checkout</h5>
+
+                    <form id="checkoutForm" asp-controller="Pos" asp-action="Checkout" method="post">
+                        <div id="cartInputs"></div>
+
+                        <div class="mb-2 d-flex justify-content-between">
+                            <span>Subtotal</span><strong id="subtotalDisplay">R0.00</strong>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">Discount</label>
+                            <input type="number" step="0.01" min="0" name="DiscountTotal" id="discountInput" class="form-control" value="0" />
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">Tax</label>
+                            <input type="number" step="0.01" min="0" name="TaxTotal" id="taxInput" class="form-control" value="0" />
+                        </div>
+                        <div class="mb-3 d-flex justify-content-between fs-5">
+                            <span>Total</span><strong id="grandTotalDisplay">R0.00</strong>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Payment Method</label>
+                            <select name="PaymentMethod" class="form-select" required>
+                                <option value="Cash">Cash</option>
+                                <option value="CreditCard">Credit Card</option>
+                                <option value="DebitCard">Debit Card</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Customer ID (optional)</label>
+                            <input type="text" name="CustomerId" class="form-control" placeholder="Link this sale to a customer account" />
+                        </div>
+
+                        <button type="submit" id="checkoutBtn" class="btn btn-danger w-100" disabled>Complete Sale</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
+
+@section Scripts {
+    <script src="~/js/site.js"></script>
+}

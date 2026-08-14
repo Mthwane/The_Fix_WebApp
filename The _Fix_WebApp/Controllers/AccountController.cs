@@ -1,3 +1,4 @@
+using FashionFix.Web.Data;
 using FashionFix.Web.Models.Entities;
 using FashionFix.Web.Models.ViewModels;
 using Microsoft.AspNetCore.Authorization;
@@ -6,75 +7,129 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace FashionFix.Web.Controllers;
 
+/// <summary>
+/// Handles authentication for every entity in the system (US-10, plus the login/verification
+/// requirements in the "User Authentication" functional requirements). Customers self-register
+/// and sign in through the branded landing page; staff (Administrator/Manager/Employee/Owner)
+/// sign in through the dedicated Employee Login screen so the two audiences never get confused.
+/// </summary>
 [AllowAnonymous]
 public class AccountController : Controller
 {
+    private static readonly string[] StaffRoles = { "Administrator", "Manager", "Employee", "Owner" };
+
     private readonly SignInManager<ApplicationUser> _signInManager;
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly ApplicationDbContext _context;
     private readonly ILogger<AccountController> _logger;
 
     public AccountController(
         SignInManager<ApplicationUser> signInManager,
         UserManager<ApplicationUser> userManager,
+        ApplicationDbContext context,
         ILogger<AccountController> logger)
     {
         _signInManager = signInManager;
         _userManager = userManager;
+        _context = context;
         _logger = logger;
     }
 
-    // GET: /Account/Login - the login form itself lives on Home/Index (the branded landing page),
-    // so a direct GET here just lands you back on that page.
+    // GET: /Account/Login - the customer login form itself lives on Home/Index (the branded
+    // landing page), so a direct GET here just lands you back on that page.
     [HttpGet]
     public IActionResult Login(string? returnUrl = null)
     {
+        if (User.Identity?.IsAuthenticated == true)
+            return RedirectToAction("Dashboard", "Home");
+
         return RedirectToAction("Index", "Home", new { returnUrl });
     }
 
-    // POST: /Account/Login
+    // POST: /Account/Login - handles BOTH the customer login form (Home/Index) and the
+    // staff login form (Account/EmployeeLogin); model.IsEmployeeLogin tells us which.
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Login(LoginViewModel model)
     {
-        if (!ModelState.IsValid)
-            return View("~/Views/Home/Index.cshtml", model);
+        var viewName = model.IsEmployeeLogin ? "EmployeeLogin" : "~/Views/Home/Index.cshtml";
 
-        // TODO: swap FindByNameAsync for a lookup that also allows email login if required.
+        if (!ModelState.IsValid)
+            return View(viewName, model);
+
+        var user = await _userManager.FindByNameAsync(model.Username);
+        if (user is not null && !user.IsActive)
+        {
+            ModelState.AddModelError(string.Empty, "This account has been deactivated. Contact an administrator.");
+            return View(viewName, model);
+        }
+
         var result = await _signInManager.PasswordSignInAsync(
             model.Username, model.Password, model.RememberMe, lockoutOnFailure: true);
 
-        if (result.Succeeded)
+        if (result.Succeeded && user is not null)
         {
-            // TODO: write an AuditLog entry here ("Login") per NFR-11 Audit and Logging.
-            return RedirectToLocal(model.ReturnUrl);
+            var roles = await _userManager.GetRolesAsync(user);
+            var isStaff = roles.Any(r => StaffRoles.Contains(r));
+
+            // Keep the two portals separate: staff must use the Employee Login screen,
+            // customers must use the main storefront login.
+            if (model.IsEmployeeLogin && !isStaff)
+            {
+                await _signInManager.SignOutAsync();
+                ModelState.AddModelError(string.Empty, "This account isn't a staff account. Please use the customer login instead.");
+                return View(viewName, model);
+            }
+
+            if (!model.IsEmployeeLogin && isStaff && !roles.Contains("Customer"))
+            {
+                await _signInManager.SignOutAsync();
+                ModelState.AddModelError(string.Empty, "Staff accounts must sign in from the Employee Login screen.");
+                return View(viewName, model);
+            }
+
+            await LogAuditAsync(user.Id, "Login", $"'{user.UserName}' signed in ({string.Join(", ", roles)}).");
+            return RedirectAfterLogin(model.ReturnUrl, roles);
         }
 
         if (result.IsLockedOut)
         {
-            ModelState.AddModelError(string.Empty, "This account is locked. Try again later.");
+            ModelState.AddModelError(string.Empty, "This account is locked due to repeated failed attempts. Try again later.");
         }
         else
         {
             ModelState.AddModelError(string.Empty, "Invalid username or password.");
         }
 
-        return View("~/Views/Home/Index.cshtml", model);
+        return View(viewName, model);
     }
 
-    // GET: /Account/EmployeeLogin - placeholder staff-only login (US matches customer login shape).
+    // GET: /Account/EmployeeLogin - dedicated staff sign-in screen (Administrator, Manager,
+    // Employee, Owner). Kept visually distinct from the customer storefront login.
     [HttpGet]
-    public IActionResult EmployeeLogin() => View();
+    public IActionResult EmployeeLogin(string? returnUrl = null)
+    {
+        if (User.Identity?.IsAuthenticated == true)
+            return RedirectToAction("Dashboard", "Home");
+
+        return View(new LoginViewModel { IsEmployeeLogin = true, ReturnUrl = returnUrl });
+    }
 
     // POST: /Account/Logout
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Logout()
     {
+        var userId = _userManager.GetUserId(User);
+        if (userId is not null)
+            await LogAuditAsync(userId, "Logout", "User signed out.");
+
         await _signInManager.SignOutAsync();
         return RedirectToAction("Index", "Home");
     }
 
-    // GET: /Account/Register
+    // GET: /Account/Register - customer self-registration only. Staff accounts are created
+    // by an Administrator via /Employees/CreateEmployee so role assignment stays controlled.
     [HttpGet]
     public IActionResult Register() => View(new RegisterViewModel());
 
@@ -117,19 +172,35 @@ public class AccountController : Controller
         }
 
         await _userManager.AddToRoleAsync(user, "Customer");
+        await LogAuditAsync(user.Id, "CustomerRegistered", $"New customer account '{user.UserName}' created.");
         await _signInManager.SignInAsync(user, isPersistent: false);
 
-        return RedirectToAction("Index", "Home");
+        return RedirectToAction("Orders", "Customer");
     }
 
     [HttpGet]
     public IActionResult AccessDenied() => View();
 
-    private IActionResult RedirectToLocal(string? returnUrl)
+    private IActionResult RedirectAfterLogin(string? returnUrl, IList<string> roles)
     {
         if (Url.IsLocalUrl(returnUrl))
             return Redirect(returnUrl!);
 
+        // Customers land on their own account area; every staff role lands on the dashboard.
+        if (roles.Contains("Customer") && !roles.Any(r => StaffRoles.Contains(r)))
+            return RedirectToAction("Orders", "Customer");
+
         return RedirectToAction("Dashboard", "Home");
+    }
+
+    private async Task LogAuditAsync(string userId, string action, string? details)
+    {
+        _context.AuditLogs.Add(new AuditLog
+        {
+            UserId = userId,
+            Action = action,
+            Details = details
+        });
+        await _context.SaveChangesAsync();
     }
 }
