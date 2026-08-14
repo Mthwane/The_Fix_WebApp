@@ -1,4 +1,4 @@
-@model FashionFix.Models.LoginViewModel
+@model LoginViewModel
 @{
     ViewData["Title"] = "Login";
     ViewData["HideNav"] = true; // no navbar on the login screen
@@ -39,6 +39,8 @@
                 <p class="text-muted mb-4">Enter your credentials to access your account</p>
 
                 <form asp-controller="Account" asp-action="Login" method="post">
+                    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+                    <input type="hidden" asp-for="ReturnUrl" />
 
                     <div class="mb-3">
                         <label asp-for="Username" class="form-label"></label>
@@ -65,7 +67,7 @@
 
                 <div class="text-center text-muted mb-3">OR</div>
 
-                <!-- Secondary action: redirects to a different placeholder view -->
+                <!-- Secondary action: staff-only login placeholder -->
                 <a asp-controller="Account" asp-action="EmployeeLogin" class="btn btn-outline-secondary w-100 mb-3">
                     Login as Employee
                 </a>
