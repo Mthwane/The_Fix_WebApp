@@ -1,5 +1,6 @@
 using FashionFix.Web.Data;
 using FashionFix.Web.Models.Entities;
+using FashionFix.Web.Models.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -42,16 +43,59 @@ public class EmployeesController : Controller
 
     // GET: /Employees/Create
     [HttpGet]
-    public IActionResult CreateEmployee() => View();
+    public IActionResult CreateEmployee() => View(new EmployeeViewModel());
 
     // POST: /Employees/Create
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> CreateEmployee(/* EmployeeViewModel model */)
+    public async Task<IActionResult> CreateEmployee(EmployeeViewModel model)
     {
-        // TODO: build an EmployeeViewModel (FullName, Username, Email, JobPosition, Role),
-        // call _userManager.CreateAsync, then _userManager.AddToRoleAsync.
-        await Task.CompletedTask;
+        if (!ModelState.IsValid) return View(model);
+
+        var existingByUsername = await _userManager.FindByNameAsync(model.Username);
+        if (existingByUsername is not null)
+        {
+            ModelState.AddModelError(nameof(model.Username), "That username is already taken.");
+            return View(model);
+        }
+
+        var existingByEmail = await _userManager.FindByEmailAsync(model.Email);
+        if (existingByEmail is not null)
+        {
+            ModelState.AddModelError(nameof(model.Email), "That email is already registered.");
+            return View(model);
+        }
+
+        var user = new ApplicationUser
+        {
+            UserName = model.Username,
+            Email = model.Email,
+            FullName = model.FullName,
+            JobPosition = model.JobPosition,
+            EmploymentStatus = "Active",
+            DateHired = DateTime.UtcNow,
+            IsActive = true,
+            EmailConfirmed = true,
+        };
+
+        var createResult = await _userManager.CreateAsync(user, model.Password);
+        if (!createResult.Succeeded)
+        {
+            foreach (var error in createResult.Errors)
+                ModelState.AddModelError(string.Empty, error.Description);
+            return View(model);
+        }
+
+        await _userManager.AddToRoleAsync(user, model.Role);
+
+        _context.AuditLogs.Add(new AuditLog
+        {
+            UserId = _userManager.GetUserId(User),
+            Action = "EmployeeCreated",
+            Details = $"Created {model.Role} account for '{user.UserName}' ({model.JobPosition}).",
+        });
+        await _context.SaveChangesAsync();
+
         return RedirectToAction(nameof(Index));
     }
 
@@ -64,10 +108,19 @@ public class EmployeesController : Controller
         if (user is null) return NotFound();
 
         var currentRoles = await _userManager.GetRolesAsync(user);
+        var previousRoles = string.Join(", ", currentRoles);
+
         await _userManager.RemoveFromRolesAsync(user, currentRoles);
         await _userManager.AddToRoleAsync(user, role);
 
-        // TODO: write an AuditLog entry ("RoleAssigned").
+        _context.AuditLogs.Add(new AuditLog
+        {
+            UserId = _userManager.GetUserId(User),
+            Action = "RoleAssigned",
+            Details = $"Changed '{user.UserName}' role from [{previousRoles}] to '{role}'.",
+        });
+        await _context.SaveChangesAsync();
+
         return RedirectToAction(nameof(Index));
     }
 

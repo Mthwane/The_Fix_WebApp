@@ -76,17 +76,50 @@ public class AccountController : Controller
 
     // GET: /Account/Register
     [HttpGet]
-    public IActionResult Register() => View();
+    public IActionResult Register() => View(new RegisterViewModel());
 
     // POST: /Account/Register
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Register(/* RegisterViewModel model */)
+    public async Task<IActionResult> Register(RegisterViewModel model)
     {
-        // TODO: create a RegisterViewModel and wire up _userManager.CreateAsync,
-        // then assign the "Customer" role by default.
-        await Task.CompletedTask;
-        return View();
+        if (!ModelState.IsValid) return View(model);
+
+        var existingByUsername = await _userManager.FindByNameAsync(model.Username);
+        if (existingByUsername is not null)
+        {
+            ModelState.AddModelError(nameof(model.Username), "That username is already taken.");
+            return View(model);
+        }
+
+        var existingByEmail = await _userManager.FindByEmailAsync(model.Email);
+        if (existingByEmail is not null)
+        {
+            ModelState.AddModelError(nameof(model.Email), "That email is already registered.");
+            return View(model);
+        }
+
+        var user = new ApplicationUser
+        {
+            UserName = model.Username,
+            Email = model.Email,
+            FullName = model.FullName,
+            IsActive = true,
+            EmailConfirmed = true,
+        };
+
+        var createResult = await _userManager.CreateAsync(user, model.Password);
+        if (!createResult.Succeeded)
+        {
+            foreach (var error in createResult.Errors)
+                ModelState.AddModelError(string.Empty, error.Description);
+            return View(model);
+        }
+
+        await _userManager.AddToRoleAsync(user, "Customer");
+        await _signInManager.SignInAsync(user, isPersistent: false);
+
+        return RedirectToAction("Index", "Home");
     }
 
     [HttpGet]

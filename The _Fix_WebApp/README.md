@@ -44,15 +44,35 @@ Done:
 - Full folder structure, EF Core entities + relationships, DbContext, Identity
   + role seeding, controllers with stub/working actions, view stubs wired to
   their models, InventoryService for stock sync + low-stock alerts.
+- Branded split-panel login page (`Home/Index`) wired to `LoginViewModel`,
+  with `Account/Login` (POST) redisplaying it with validation errors on failure.
+- Views/controllers renamed to match the UI design 1:1 (`Pos`, `Employees`,
+  new `PurchaseOrders` and `Returns` areas), with working return-processing
+  logic in `ReturnsController` wired to `InventoryService`.
+- `EmployeeViewModel` + full Create Employee flow (`EmployeesController`):
+  form validation, duplicate username/email checks, `UserManager.CreateAsync`
+  + role assignment, and `AuditLog` writes on both employee creation and
+  `AssignRole`.
+- `RegisterViewModel` + full customer self-registration flow (`AccountController`):
+  same validation/duplicate-check pattern, assigns the "Customer" role, and
+  signs the new user in.
+- `PurchaseOrders/Create` and `Returns/Lookup` views added (were missing,
+  causing a 500 on those routes) - `Returns/Index` now has a working
+  order-number lookup form and lists recent returns; `PurchaseOrders/Index`
+  lists POs with a "Mark Received" action.
+- Solution-wide consistency pass: no leftover commented-out method
+  parameters, every `View()`/`View(model)` call resolves to a `.cshtml` file,
+  and every `asp-controller`/`asp-action` reference resolves to a real
+  action. This is now a skeleton that **compiles and runs** end-to-end
+  (login → dashboard → nav → every page renders, even where the underlying
+  feature is still a placeholder).
 
 Still TODO (marked with `// TODO` / `<!-- TODO -->` throughout):
-- The branded login page UI (in progress separately).
-- RegisterViewModel + registration flow.
-- EmployeeViewModel + employee create/edit forms.
-- AuditLog writes on login/product/sale/role-change events.
+- Employee edit form (Create is done; Edit/deactivate still pending).
+- AuditLog writes on login/product/sale events (role-change and employee-create are done).
 - POS barcode-scan JS wiring (site.js) and cart -> CartItems serialization.
 - Receipt email/SMS delivery.
 - Reports: best-sellers, stock turnover, revenue-by-category, PDF/CSV export.
-- Purchase order UI (Supplier/PurchaseOrder entities already modelled).
-- Returns & exchanges UI (ReturnTransaction entity already modelled).
-- First EF Core migration (run once SQL Server is available).
+- Purchase order create form + receiving logic (Supplier/PurchaseOrder entities already modelled, `Receive` action is currently a no-op stub).
+- Return refund/store-credit ledger hookup (return processing + restock already works).
+- First EF Core migration (run once SQL Server is available) - **required before the app will actually connect to a database**; without it the app still builds and serves the login page, but any DB-touching action will throw until you run the commands in "Getting started" below.

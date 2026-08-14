@@ -1,7 +1,34 @@
+@model List<PurchaseOrder>
 @{
     ViewData["Title"] = "Purchase Orders";
 }
 <div class="container py-4">
-    <h2>Purchase Orders</h2>
-    <p class="text-muted">Placeholder view for the PurchaseOrdersController.Index() action - we'll build this out in a later step.</p>
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="mb-0">Purchase Orders</h2>
+        <a asp-controller="PurchaseOrders" asp-action="Create" class="btn btn-primary">New Purchase Order</a>
+    </div>
+
+    <table class="table table-sm">
+        <thead><tr><th>PO #</th><th>Supplier</th><th>Status</th><th>Created</th><th>Expected</th><th></th></tr></thead>
+        <tbody>
+        @foreach (var po in Model)
+        {
+            <tr>
+                <td>@po.PONumber</td>
+                <td>@po.Supplier?.Name</td>
+                <td>@po.Status</td>
+                <td>@po.DateCreated.ToLocalTime().ToShortDateString()</td>
+                <td>@(po.DateExpected?.ToShortDateString() ?? "-")</td>
+                <td>
+                    @if (po.Status != PurchaseOrderStatus.Received)
+                    {
+                        <form asp-controller="PurchaseOrders" asp-action="Receive" asp-route-id="@po.PurchaseOrderId" method="post" class="d-inline">
+                            <button type="submit" class="btn btn-sm btn-outline-success">Mark Received</button>
+                        </form>
+                    }
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
 </div>

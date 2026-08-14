@@ -1,0 +1,40 @@
+@model Order
+@{
+    ViewData["Title"] = "Process Return";
+}
+
+<div class="container py-4">
+    <h2>Process Return</h2>
+    <p class="text-muted">Order #@Model.OrderNumber - @Model.DateCreated.ToLocalTime()</p>
+
+    <table class="table">
+        <thead><tr><th>Product</th><th>Qty Sold</th><th>Unit Price</th><th></th></tr></thead>
+        <tbody>
+        @foreach (var item in Model.OrderItems)
+        {
+            <tr>
+                <td>@item.Product.Name (@item.Product.SKU)</td>
+                <td>@item.Quantity</td>
+                <td>@item.UnitPrice.ToString("C")</td>
+                <td>
+                    <form asp-controller="Returns" asp-action="Process" method="post" class="d-flex gap-2 align-items-center">
+                        <input type="hidden" name="orderItemId" value="@item.OrderItemId" />
+                        <input type="number" name="quantity" min="1" max="@item.Quantity" value="1" class="form-control form-control-sm" style="width:70px;" />
+                        <select name="refundMethod" class="form-select form-select-sm" style="width:150px;">
+                            <option value="OriginalPayment">Original Payment</option>
+                            <option value="StoreCredit">Store Credit</option>
+                        </select>
+                        <div class="form-check">
+                            <input type="checkbox" name="isResalable" value="true" class="form-check-input" checked />
+                            <label class="form-check-label small">Resalable</label>
+                        </div>
+                        <button type="submit" class="btn btn-sm btn-primary">Process</button>
+                    </form>
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+
+    <a asp-controller="Returns" asp-action="Index" class="btn btn-link">&larr; Back to Returns</a>
+</div>

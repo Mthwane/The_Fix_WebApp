@@ -1,6 +1,58 @@
+@model EmployeeViewModel
 @{
     ViewData["Title"] = "Add Employee";
 }
+
 <h1>Add Employee</h1>
-<!-- TODO: build EmployeeViewModel-bound form (FullName, Username, Email, JobPosition, Role) -->
-<p class="text-muted">Form pending EmployeeViewModel.</p>
+
+<form asp-controller="Employees" asp-action="CreateEmployee" method="post" class="row g-3" style="max-width: 640px;">
+    <div asp-validation-summary="ModelOnly" class="text-danger col-12"></div>
+
+    <div class="col-md-6">
+        <label asp-for="FullName" class="form-label"></label>
+        <input asp-for="FullName" class="form-control" />
+        <span asp-validation-for="FullName" class="text-danger"></span>
+    </div>
+
+    <div class="col-md-6">
+        <label asp-for="Username" class="form-label"></label>
+        <input asp-for="Username" class="form-control" />
+        <span asp-validation-for="Username" class="text-danger"></span>
+    </div>
+
+    <div class="col-md-6">
+        <label asp-for="Email" class="form-label"></label>
+        <input asp-for="Email" class="form-control" type="email" />
+        <span asp-validation-for="Email" class="text-danger"></span>
+    </div>
+
+    <div class="col-md-6">
+        <label asp-for="JobPosition" class="form-label"></label>
+        <input asp-for="JobPosition" class="form-control" />
+        <span asp-validation-for="JobPosition" class="text-danger"></span>
+    </div>
+
+    <div class="col-md-6">
+        <label asp-for="Role" class="form-label"></label>
+        <select asp-for="Role" class="form-select">
+            <option value="">-- Select role --</option>
+            @foreach (var role in EmployeeViewModel.AssignableRoles)
+            {
+                <option value="@role">@role</option>
+            }
+        </select>
+        <span asp-validation-for="Role" class="text-danger"></span>
+    </div>
+
+    <div class="col-md-6">
+        <label asp-for="Password" class="form-label"></label>
+        <input asp-for="Password" class="form-control" type="password" />
+        <span asp-validation-for="Password" class="text-danger"></span>
+        <div class="form-text">The employee should change this after first login.</div>
+    </div>
+
+    <div class="col-12 mt-4">
+        <button type="submit" class="btn btn-primary">Create Employee</button>
+        <a asp-controller="Employees" asp-action="Index" class="btn btn-outline-secondary">Cancel</a>
+    </div>
+</form>
