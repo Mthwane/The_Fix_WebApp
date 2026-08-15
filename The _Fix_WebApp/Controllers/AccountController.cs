@@ -181,6 +181,40 @@ public class AccountController : Controller
     [HttpGet]
     public IActionResult AccessDenied() => View();
 
+    // GET: /Account/ChangePassword - available to every signed-in user (staff or customer).
+    [HttpGet]
+    [Authorize]
+    public IActionResult ChangePassword() => View(new ChangePasswordViewModel());
+
+    // POST: /Account/ChangePassword
+    [HttpPost]
+    [Authorize]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ChangePassword(ChangePasswordViewModel model)
+    {
+        if (!ModelState.IsValid) return View(model);
+
+        var user = await _userManager.GetUserAsync(User);
+        if (user is null) return NotFound();
+
+        var result = await _userManager.ChangePasswordAsync(user, model.CurrentPassword, model.NewPassword);
+        if (!result.Succeeded)
+        {
+            foreach (var error in result.Errors)
+                ModelState.AddModelError(string.Empty, error.Description);
+            return View(model);
+        }
+
+        // Re-sign the user in so their auth cookie reflects the new security stamp
+        // (ChangePasswordAsync rotates it) instead of getting logged out unexpectedly.
+        await _signInManager.RefreshSignInAsync(user);
+
+        await LogAuditAsync(user.Id, "PasswordChanged", $"'{user.UserName}' changed their password.");
+
+        TempData["PasswordChanged"] = true;
+        return RedirectToAction(nameof(ChangePassword));
+    }
+
     private IActionResult RedirectAfterLogin(string? returnUrl, IList<string> roles)
     {
         if (Url.IsLocalUrl(returnUrl))

@@ -1,6 +1,7 @@
 using FashionFix.Web.Data;
 using FashionFix.Web.Models.Entities;
 using FashionFix.Web.Services;
+using FashionFix.Web.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -9,7 +10,7 @@ using Microsoft.EntityFrameworkCore;
 namespace FashionFix.Web.Controllers;
 
 /// <summary>Process returns and exchanges against a valid receipt or transaction ID (US-09).</summary>
-[Authorize(Roles = "Administrator,Manager,Employee")]
+[Authorize(Policy = Permissions.ReturnsProcess)]
 public class ReturnsController : Controller
 {
     private readonly ApplicationDbContext _context;

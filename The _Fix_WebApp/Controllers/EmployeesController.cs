@@ -1,6 +1,7 @@
 using FashionFix.Web.Data;
 using FashionFix.Web.Models.Entities;
 using FashionFix.Web.Models.ViewModels;
+using FashionFix.Web.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -8,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FashionFix.Web.Controllers;
 
-[Authorize(Roles = "Administrator")]
+[Authorize]
 public class EmployeesController : Controller
 {
     private readonly ApplicationDbContext _context;
@@ -27,6 +28,7 @@ public class EmployeesController : Controller
 
     // GET: /Employees - lists staff accounts (US-15).
     [HttpGet]
+    [Authorize(Policy = Permissions.EmployeesManage)]
     public async Task<IActionResult> Index()
     {
         // Staff = any user NOT solely in the Customer role.
@@ -45,26 +47,47 @@ public class EmployeesController : Controller
             roleLookup[employee.Id] = string.Join(", ", roles);
         }
         ViewBag.Roles = roleLookup;
-        ViewBag.AssignableRoles = EmployeeViewModel.AssignableRoles;
+        ViewBag.AssignableRoles = await GetAssignableRoleNamesAsync();
 
         return View(employees);
     }
 
+    /// <summary>All roles except "Customer" - customers self-register and are never assigned via this screen.</summary>
+    private async Task<List<string>> GetAssignableRoleNamesAsync()
+    {
+        return await Task.FromResult(_roleManager.Roles
+            .Where(r => r.Name != "Customer")
+            .Select(r => r.Name!)
+            .OrderBy(n => n)
+            .ToList());
+    }
+
     // GET: /Employees/Create
     [HttpGet]
-    public IActionResult CreateEmployee() => View(new EmployeeViewModel());
+    [Authorize(Policy = Permissions.EmployeesManage)]
+    public async Task<IActionResult> CreateEmployee()
+    {
+        ViewBag.AssignableRoles = await GetAssignableRoleNamesAsync();
+        return View(new EmployeeViewModel());
+    }
 
     // POST: /Employees/Create
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [Authorize(Policy = Permissions.EmployeesManage)]
     public async Task<IActionResult> CreateEmployee(EmployeeViewModel model)
     {
-        if (!ModelState.IsValid) return View(model);
+        if (!ModelState.IsValid)
+        {
+            ViewBag.AssignableRoles = await GetAssignableRoleNamesAsync();
+            return View(model);
+        }
 
         var existingByUsername = await _userManager.FindByNameAsync(model.Username);
         if (existingByUsername is not null)
         {
             ModelState.AddModelError(nameof(model.Username), "That username is already taken.");
+            ViewBag.AssignableRoles = await GetAssignableRoleNamesAsync();
             return View(model);
         }
 
@@ -72,6 +95,7 @@ public class EmployeesController : Controller
         if (existingByEmail is not null)
         {
             ModelState.AddModelError(nameof(model.Email), "That email is already registered.");
+            ViewBag.AssignableRoles = await GetAssignableRoleNamesAsync();
             return View(model);
         }
 
@@ -92,6 +116,7 @@ public class EmployeesController : Controller
         {
             foreach (var error in createResult.Errors)
                 ModelState.AddModelError(string.Empty, error.Description);
+            ViewBag.AssignableRoles = await GetAssignableRoleNamesAsync();
             return View(model);
         }
 
@@ -111,6 +136,7 @@ public class EmployeesController : Controller
     // POST: /Employees/AssignRole - role/permission assignment (US-16).
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [Authorize(Policy = Permissions.EmployeesManage)]
     public async Task<IActionResult> AssignRole(string userId, string role)
     {
         var user = await _userManager.FindByIdAsync(userId);
@@ -135,6 +161,7 @@ public class EmployeesController : Controller
 
     // GET: /Employees/Edit/{id} - update staff profile details (US-15).
     [HttpGet]
+    [Authorize(Policy = Permissions.EmployeesManage)]
     public async Task<IActionResult> Edit(string id)
     {
         var user = await _userManager.FindByIdAsync(id);
@@ -153,16 +180,21 @@ public class EmployeesController : Controller
             IsActive = user.IsActive
         };
 
+        ViewBag.AssignableRoles = await GetAssignableRoleNamesAsync();
         return View(model);
     }
-
     // POST: /Employees/Edit/{id}
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [Authorize(Policy = Permissions.EmployeesManage)]
     public async Task<IActionResult> Edit(string id, EmployeeEditViewModel model)
     {
         if (id != model.Id) return BadRequest();
-        if (!ModelState.IsValid) return View(model);
+        if (!ModelState.IsValid)
+        {
+            ViewBag.AssignableRoles = await GetAssignableRoleNamesAsync();
+            return View(model);
+        }
 
         var user = await _userManager.FindByIdAsync(id);
         if (user is null) return NotFound();
@@ -173,6 +205,7 @@ public class EmployeesController : Controller
             if (existing is not null && existing.Id != user.Id)
             {
                 ModelState.AddModelError(nameof(model.Email), "That email is already registered to another account.");
+                ViewBag.AssignableRoles = await GetAssignableRoleNamesAsync();
                 return View(model);
             }
             await _userManager.SetEmailAsync(user, model.Email);
@@ -188,6 +221,7 @@ public class EmployeesController : Controller
         {
             foreach (var error in updateResult.Errors)
                 ModelState.AddModelError(string.Empty, error.Description);
+            ViewBag.AssignableRoles = await GetAssignableRoleNamesAsync();
             return View(model);
         }
 
@@ -216,6 +250,7 @@ public class EmployeesController : Controller
     // consistent with Product Control's "deactivate without permanently deleting" rule).
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [Authorize(Policy = Permissions.EmployeesManage)]
     public async Task<IActionResult> Deactivate(string id)
     {
         var user = await _userManager.FindByIdAsync(id);
@@ -240,6 +275,7 @@ public class EmployeesController : Controller
     // POST: /Employees/Reactivate/{id}
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [Authorize(Policy = Permissions.EmployeesManage)]
     public async Task<IActionResult> Reactivate(string id)
     {
         var user = await _userManager.FindByIdAsync(id);
@@ -262,6 +298,7 @@ public class EmployeesController : Controller
     }
 
     // GET: /Employees/AuditLogs - admin-only audit trail (NFR-11).
+    [Authorize(Policy = Permissions.AuditLogsView)]
     [HttpGet]
     public async Task<IActionResult> AuditLogs()
     {

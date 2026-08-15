@@ -1,13 +1,14 @@
 using System.Text;
 using FashionFix.Web.Data;
 using FashionFix.Web.Models.Entities;
+using FashionFix.Web.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace FashionFix.Web.Controllers;
 
-[Authorize(Roles = "Administrator,Manager,Owner")]
+[Authorize(Policy = Permissions.ReportsView)]
 public class ReportsController : Controller
 {
     private readonly ApplicationDbContext _context;

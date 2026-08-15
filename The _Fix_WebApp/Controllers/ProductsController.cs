@@ -1,6 +1,7 @@
 using FashionFix.Web.Data;
 using FashionFix.Web.Models.Entities;
 using FashionFix.Web.Models.ViewModels;
+using FashionFix.Web.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -8,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FashionFix.Web.Controllers;
 
-[Authorize(Roles = "Administrator,Manager")]
+[Authorize(Policy = Permissions.ProductsManage)]
 public class ProductsController : Controller
 {
     private readonly ApplicationDbContext _context;

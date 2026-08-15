@@ -11,85 +11,192 @@
 </head>
 <body>
 
-    @* Landing/login page renders full-bleed with no navbar - everything else gets one.
-       The nav itself is role-based: every user only sees the links they're actually
-       authorized to open, so no one lands on an Access Denied page from the menu. *@
-    @if (ViewData["HideNav"] as bool? != true)
-    {
-        var isStaff = User.IsInRole("Administrator") || User.IsInRole("Manager")
-                      || User.IsInRole("Employee") || User.IsInRole("Owner");
-        var isCustomer = User.IsInRole("Customer") && !isStaff;
+@* Landing/login page renders full-bleed with no sidebar - everything else gets the app shell.
+   Every link below is gated on a PERMISSION CLAIM (see Security/Permissions.cs), never a role
+   name - so a brand-new role assembled on the Roles screen shows exactly the right nav items
+   automatically, with no code changes. *@
+@if (ViewData["HideNav"] as bool? == true)
+{
+    @RenderBody()
+}
+else
+{
+    var isAuthenticated = User.Identity?.IsAuthenticated == true;
+    var isCustomer = User.IsInRole("Customer") &&
+                      !(User.IsInRole("Administrator") || User.IsInRole("Manager") || User.IsInRole("Employee") || User.IsInRole("Owner"));
 
-        <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
-            <div class="container">
-                <a class="navbar-brand fw-bold" asp-controller="Home" asp-action="Index">Fashion Fix</a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-                <div class="collapse navbar-collapse" id="mainNav">
-                    <ul class="navbar-nav me-auto">
-                        @if (User.Identity?.IsAuthenticated == true)
-                        {
-                            @if (isStaff)
-                            {
-                                <li class="nav-item"><a class="nav-link" asp-controller="Home" asp-action="Dashboard">Dashboard</a></li>
-                            }
-                            @if (User.IsInRole("Administrator") || User.IsInRole("Manager"))
-                            {
-                                <li class="nav-item"><a class="nav-link" asp-controller="Products" asp-action="Index">Products</a></li>
-                            }
-                            @if (User.IsInRole("Administrator") || User.IsInRole("Manager") || User.IsInRole("Employee"))
-                            {
-                                <li class="nav-item"><a class="nav-link" asp-controller="Pos" asp-action="Index">POS</a></li>
-                                <li class="nav-item"><a class="nav-link" asp-controller="Returns" asp-action="Index">Returns</a></li>
-                            }
-                            @if (User.IsInRole("Administrator"))
-                            {
-                                <li class="nav-item"><a class="nav-link" asp-controller="Employees" asp-action="Index">Employees</a></li>
-                                <li class="nav-item"><a class="nav-link" asp-controller="Employees" asp-action="AuditLogs">Audit Logs</a></li>
-                            }
-                            @if (User.IsInRole("Administrator") || User.IsInRole("Manager") || User.IsInRole("Owner"))
-                            {
-                                <li class="nav-item"><a class="nav-link" asp-controller="Reports" asp-action="Index">Reports</a></li>
-                                <li class="nav-item"><a class="nav-link" asp-controller="PurchaseOrders" asp-action="Index">Purchase Orders</a></li>
-                                <li class="nav-item"><a class="nav-link" asp-controller="Suppliers" asp-action="Index">Suppliers</a></li>
-                            }
-                            @if (isCustomer)
-                            {
-                                <li class="nav-item"><a class="nav-link" asp-controller="Customer" asp-action="Orders">My Orders</a></li>
-                                <li class="nav-item"><a class="nav-link" asp-controller="Customer" asp-action="Profile">My Profile</a></li>
-                            }
-                        }
-                    </ul>
+    bool Can(string permission) => User.HasClaim(Permissions.ClaimType, permission);
 
-                    <ul class="navbar-nav ms-auto align-items-lg-center">
-                        @if (User.Identity?.IsAuthenticated == true)
-                        {
-                            <li class="nav-item">
-                                <span class="navbar-text text-white-50 me-3">
-                                    Signed in as <strong class="text-white">@User.Identity!.Name</strong>
-                                </span>
-                            </li>
-                            <li class="nav-item">
-                                <form asp-controller="Account" asp-action="Logout" method="post" class="d-inline">
-                                    <button type="submit" class="btn btn-outline-light btn-sm">Logout</button>
-                                </form>
-                            </li>
-                        }
-                        else
-                        {
-                            <li class="nav-item"><a class="btn btn-outline-light btn-sm me-2" asp-controller="Home" asp-action="Index">Customer Login</a></li>
-                            <li class="nav-item"><a class="btn btn-light btn-sm" asp-controller="Account" asp-action="EmployeeLogin">Employee Login</a></li>
-                        }
-                    </ul>
-                </div>
+    <div class="app-shell" id="appShell">
+
+        <aside class="sidebar">
+            <div class="sidebar-brand">
+                <span class="brand-text">Fashion Fix</span>
             </div>
-        </nav>
-    }
 
-    <main role="main">
-        @RenderBody()
-    </main>
+            <nav class="sidebar-nav nav flex-column">
+                @if (isAuthenticated)
+                {
+                    if (Can(Permissions.DashboardView))
+                    {
+                        <a class="nav-link" asp-controller="Home" asp-action="Dashboard">
+                            <span class="nav-icon">📊</span><span class="nav-label">Dashboard</span>
+                        </a>
+                    }
+
+                    if (Can(Permissions.ProductsManage) || Can(Permissions.PosUse) || Can(Permissions.ReturnsProcess))
+                    {
+                        <div class="sidebar-section-label">Store</div>
+                    }
+                    if (Can(Permissions.ProductsManage))
+                    {
+                        <a class="nav-link" asp-controller="Products" asp-action="Index">
+                            <span class="nav-icon">🏷️</span><span class="nav-label">Products</span>
+                        </a>
+                    }
+                    if (Can(Permissions.PosUse))
+                    {
+                        <a class="nav-link" asp-controller="Pos" asp-action="Index">
+                            <span class="nav-icon">🧾</span><span class="nav-label">POS</span>
+                        </a>
+                    }
+                    if (Can(Permissions.ReturnsProcess))
+                    {
+                        <a class="nav-link" asp-controller="Returns" asp-action="Index">
+                            <span class="nav-icon">↩️</span><span class="nav-label">Returns</span>
+                        </a>
+                    }
+
+                    if (Can(Permissions.PurchaseOrdersManage) || Can(Permissions.SuppliersManage))
+                    {
+                        <div class="sidebar-section-label">Purchasing</div>
+                    }
+                    if (Can(Permissions.PurchaseOrdersManage))
+                    {
+                        <a class="nav-link" asp-controller="PurchaseOrders" asp-action="Index">
+                            <span class="nav-icon">📦</span><span class="nav-label">Purchase Orders</span>
+                        </a>
+                    }
+                    if (Can(Permissions.SuppliersManage))
+                    {
+                        <a class="nav-link" asp-controller="Suppliers" asp-action="Index">
+                            <span class="nav-icon">🚚</span><span class="nav-label">Suppliers</span>
+                        </a>
+                    }
+
+                    if (Can(Permissions.ReportsView))
+                    {
+                        <div class="sidebar-section-label">Insight</div>
+                        <a class="nav-link" asp-controller="Reports" asp-action="Index">
+                            <span class="nav-icon">📈</span><span class="nav-label">Reports</span>
+                        </a>
+                    }
+
+                    if (Can(Permissions.EmployeesManage) || Can(Permissions.RolesManage) || Can(Permissions.AuditLogsView))
+                    {
+                        <div class="sidebar-section-label">Administration</div>
+                    }
+                    if (Can(Permissions.EmployeesManage))
+                    {
+                        <a class="nav-link" asp-controller="Employees" asp-action="Index">
+                            <span class="nav-icon">👥</span><span class="nav-label">Employees</span>
+                        </a>
+                    }
+                    if (Can(Permissions.RolesManage))
+                    {
+                        <a class="nav-link" asp-controller="Roles" asp-action="Index">
+                            <span class="nav-icon">🔐</span><span class="nav-label">Roles & Permissions</span>
+                        </a>
+                    }
+                    if (Can(Permissions.AuditLogsView))
+                    {
+                        <a class="nav-link" asp-controller="Employees" asp-action="AuditLogs">
+                            <span class="nav-icon">📝</span><span class="nav-label">Audit Logs</span>
+                        </a>
+                    }
+
+                    if (isCustomer)
+                    {
+                        <div class="sidebar-section-label">My Account</div>
+                        <a class="nav-link" asp-controller="Customer" asp-action="Orders">
+                            <span class="nav-icon">🛍️</span><span class="nav-label">My Orders</span>
+                        </a>
+                        <a class="nav-link" asp-controller="Customer" asp-action="Profile">
+                            <span class="nav-icon">👤</span><span class="nav-label">My Profile</span>
+                        </a>
+                    }
+
+                    <div class="sidebar-section-label">Account</div>
+                    <a class="nav-link" asp-controller="Account" asp-action="ChangePassword">
+                        <span class="nav-icon">🔑</span><span class="nav-label">Change Password</span>
+                    </a>
+                }
+            </nav>
+
+            @if (isAuthenticated)
+            {
+                <div class="sidebar-footer">
+                    <div class="footer-text text-white-50 small mb-2">
+                        Signed in as <strong class="text-white">@User.Identity!.Name</strong>
+                    </div>
+                    <form asp-controller="Account" asp-action="Logout" method="post">
+                        <button type="submit" class="btn btn-outline-light btn-sm w-100">Logout</button>
+                    </form>
+                </div>
+            }
+        </aside>
+
+        <div class="content-area">
+            <div class="topbar">
+                <button type="button" class="sidebar-toggle-btn" id="sidebarToggleBtn" aria-label="Toggle sidebar" title="Toggle sidebar">
+                    &#9776;
+                </button>
+
+                @if (!isAuthenticated)
+                {
+                    <div class="ms-auto">
+                        <a class="btn btn-outline-dark btn-sm me-2" asp-controller="Home" asp-action="Index">Customer Login</a>
+                        <a class="btn btn-dark btn-sm" asp-controller="Account" asp-action="EmployeeLogin">Employee Login</a>
+                    </div>
+                }
+            </div>
+
+            <main role="main">
+                @RenderBody()
+            </main>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            var shell = document.getElementById('appShell');
+            var toggleBtn = document.getElementById('sidebarToggleBtn');
+            var isMobile = function () { return window.innerWidth < 768; };
+            var STORAGE_KEY = 'fashionfix.sidebarCollapsed';
+
+            // Restore desktop collapsed/expanded preference between page loads.
+            if (!isMobile() && localStorage.getItem(STORAGE_KEY) === '1') {
+                shell.classList.add('sidebar-collapsed');
+            }
+
+            toggleBtn.addEventListener('click', function () {
+                if (isMobile()) {
+                    shell.classList.toggle('sidebar-mobile-open');
+                } else {
+                    shell.classList.toggle('sidebar-collapsed');
+                    localStorage.setItem(STORAGE_KEY, shell.classList.contains('sidebar-collapsed') ? '1' : '0');
+                }
+            });
+
+            // Tapping the dimmed backdrop on mobile closes the drawer.
+            shell.addEventListener('click', function (e) {
+                if (isMobile() && shell.classList.contains('sidebar-mobile-open') && e.target === shell) {
+                    shell.classList.remove('sidebar-mobile-open');
+                }
+            });
+        })();
+    </script>
+}
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     @await RenderSectionAsync("Scripts", required: false)

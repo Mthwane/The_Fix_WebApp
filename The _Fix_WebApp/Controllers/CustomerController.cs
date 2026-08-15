@@ -12,7 +12,7 @@ namespace FashionFix.Web.Controllers;
 /// Self-service area for Customer accounts: manage personal details (US-11),
 /// view purchase history (US-12) and track order status (US-13).
 /// </summary>
-[Authorize(Roles = "Customer")]
+[Authorize(Roles = "Customer")] // customer self-service area, not permission-gated
 public class CustomerController : Controller
 {
     private readonly ApplicationDbContext _context;

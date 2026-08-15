@@ -2,7 +2,7 @@
 @{
     ViewData["Title"] = "Employees";
     var roles = ViewBag.Roles as Dictionary<string, string> ?? new();
-    var assignableRoles = ViewBag.AssignableRoles as string[] ?? Array.Empty<string>();
+    var assignableRoles = ViewBag.AssignableRoles as List<string> ?? new List<string>();
 }
 <div class="container py-4">
     <div class="d-flex justify-content-between align-items-center mb-3">

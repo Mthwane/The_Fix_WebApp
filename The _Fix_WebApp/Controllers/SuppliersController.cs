@@ -1,6 +1,7 @@
 using FashionFix.Web.Data;
 using FashionFix.Web.Models.Entities;
 using FashionFix.Web.Models.ViewModels;
+using FashionFix.Web.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -8,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 namespace FashionFix.Web.Controllers;
 
 /// <summary>Records supplier details (name, contact, lead time) ahead of raising purchase orders (US-20).</summary>
-[Authorize(Roles = "Administrator,Manager,Owner")]
+[Authorize(Policy = Permissions.SuppliersManage)]
 public class SuppliersController : Controller
 {
     private readonly ApplicationDbContext _context;

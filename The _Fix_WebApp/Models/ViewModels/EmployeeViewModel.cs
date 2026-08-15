@@ -33,9 +33,6 @@ public class EmployeeViewModel
     [DataType(DataType.Password)]
     [Display(Name = "Temporary Password")]
     public string Password { get; set; } = string.Empty;
-
-    /// <summary>Roles selectable for staff accounts (Customer is excluded - that's self-registration only).</summary>
-    public static readonly string[] AssignableRoles = { "Administrator", "Manager", "Employee", "Owner" };
 }
 
 /// <summary>Backs the "Edit Employee" form - updates profile fields without touching login credentials.</summary>

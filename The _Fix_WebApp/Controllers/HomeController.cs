@@ -1,6 +1,7 @@
 using FashionFix.Web.Data;
 using FashionFix.Web.Models.Entities;
 using FashionFix.Web.Models.ViewModels;
+using FashionFix.Web.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -34,7 +35,7 @@ public class HomeController : Controller
     // GET: /Home/Dashboard - dashboard of business statistics (US-04, US-05).
     // Staff-only: customers get their own account area instead (see CustomerController).
     [HttpGet]
-    [Authorize(Roles = "Administrator,Manager,Employee,Owner")]
+    [Authorize(Policy = Permissions.DashboardView)]
     public async Task<IActionResult> Dashboard()
     {
         var today = DateTime.UtcNow.Date;

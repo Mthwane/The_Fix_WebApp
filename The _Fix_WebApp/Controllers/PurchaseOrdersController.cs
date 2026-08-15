@@ -2,6 +2,7 @@ using FashionFix.Web.Data;
 using FashionFix.Web.Models.Entities;
 using FashionFix.Web.Models.ViewModels;
 using FashionFix.Web.Services;
+using FashionFix.Web.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -10,7 +11,7 @@ using Microsoft.EntityFrameworkCore;
 namespace FashionFix.Web.Controllers;
 
 /// <summary>Create and monitor purchase orders with suppliers (US-20).</summary>
-[Authorize(Roles = "Administrator,Manager,Owner")]
+[Authorize(Policy = Permissions.PurchaseOrdersManage)]
 public class PurchaseOrdersController : Controller
 {
     private readonly ApplicationDbContext _context;
