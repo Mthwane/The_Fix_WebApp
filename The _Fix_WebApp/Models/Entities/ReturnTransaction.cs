@@ -42,7 +42,8 @@ public enum InventoryChangeReason
     Sale,
     Return,
     PurchaseOrderReceived,
-    ManualAdjustment
+    ManualAdjustment,
+    OrderCancelled
 }
 
 /// <summary>Audit trail of every stock quantity change, for traceability.</summary>

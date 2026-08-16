@@ -1,0 +1,34 @@
+@model Order
+@{
+    ViewData["Title"] = "Order Confirmed";
+    var fallbackImage = "https://placehold.co/56x56?text=No+Image";
+}
+<div class="container py-5 text-center" style="max-width:520px;">
+    <h1 class="display-6 text-success">✔ Order Confirmed</h1>
+    <p class="text-muted">Order <strong>@Model.OrderNumber</strong> has been placed and is being processed.</p>
+
+    <table class="table table-sm text-start mt-4 align-middle">
+        <tbody>
+        @foreach (var item in Model.OrderItems)
+        {
+            <tr>
+                <td style="width:56px;">
+                    <img src="@(string.IsNullOrWhiteSpace(item.Product?.ImageUrl) ? fallbackImage : item.Product.ImageUrl)"
+                         alt="@item.Product?.Name" class="rounded border" style="width:48px;height:48px;object-fit:cover;" />
+                </td>
+                <td>@item.Product?.Name (x@item.Quantity)</td><td class="text-end">@item.LineTotal.ToString("C")</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+    <div class="text-start">
+        <div class="d-flex justify-content-between"><span>Subtotal</span><span>@Model.SubTotal.ToString("C")</span></div>
+        <div class="d-flex justify-content-between text-muted"><span>VAT (15%)</span><span>@Model.TaxTotal.ToString("C")</span></div>
+        <div class="d-flex justify-content-between fs-5 border-top pt-2 mt-2"><strong>Total</strong><strong>@Model.GrandTotal.ToString("C")</strong></div>
+    </div>
+
+    <div class="mt-4">
+        <a asp-controller="Customer" asp-action="Orders" class="btn btn-danger">View My Orders</a>
+        <a asp-controller="Shop" asp-action="Index" class="btn btn-outline-secondary">Continue Shopping</a>
+    </div>
+</div>

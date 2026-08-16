@@ -102,6 +102,7 @@ public class PurchaseOrdersController : Controller
 
         await _context.SaveChangesAsync();
 
+        this.ToastSuccess($"Purchase order {purchaseOrder.PONumber} was created.");
         return RedirectToAction(nameof(Index));
     }
 
@@ -142,6 +143,7 @@ public class PurchaseOrdersController : Controller
         });
         await _context.SaveChangesAsync();
 
+        this.ToastSuccess($"{purchaseOrder.PONumber} received - stock updated for {purchaseOrder.Items.Count} product(s).");
         return RedirectToAction(nameof(Index));
     }
 

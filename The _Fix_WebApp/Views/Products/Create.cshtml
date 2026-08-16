@@ -17,6 +17,10 @@
             <label asp-for="SKU" class="form-label"></label>
             <input asp-for="SKU" class="form-control" />
         </div>
+        <div class="col-md-12 mb-3">
+            <label asp-for="Description" class="form-label"></label>
+            <textarea asp-for="Description" class="form-control" rows="3" placeholder="Shown to customers browsing the shop, and to staff on the POS scan popup"></textarea>
+        </div>
         <div class="col-md-4 mb-3">
             <label asp-for="Category" class="form-label"></label>
             <input asp-for="Category" class="form-control" />
@@ -32,6 +36,10 @@
         <div class="col-md-4 mb-3">
             <label asp-for="Brand" class="form-label"></label>
             <input asp-for="Brand" class="form-control" />
+        </div>
+        <div class="col-md-4 mb-3">
+            <label asp-for="ImageUrl" class="form-label"></label>
+            <input asp-for="ImageUrl" class="form-control" placeholder="https://..." />
         </div>
         <div class="col-md-4 mb-3">
             <label asp-for="CostPrice" class="form-label"></label>

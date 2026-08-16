@@ -1,0 +1,19 @@
+[Unit]
+Description=FashionFix ASP.NET Core App
+After=network.target postgresql.service
+
+[Service]
+WorkingDirectory=/var/www/fashionfix
+ExecStart=/usr/bin/dotnet /var/www/fashionfix/FashionFix.Web.dll
+Restart=always
+RestartSec=10
+KillSignal=SIGINT
+SyslogIdentifier=fashionfix
+User=www-data
+Environment=ASPNETCORE_ENVIRONMENT=Production
+Environment=ASPNETCORE_URLS=http://localhost:5000
+# Put real secrets here instead of appsettings.json in production:
+# Environment=ConnectionStrings__DefaultConnection=Host=localhost;Port=5432;Database=fashionfixdb;Username=fashionfix_app;Password=REPLACE_ME
+
+[Install]
+WantedBy=multi-user.target

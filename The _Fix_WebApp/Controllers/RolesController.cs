@@ -88,6 +88,7 @@ public class RolesController : Controller
             await _roleManager.AddClaimAsync(role, new System.Security.Claims.Claim(Permissions.ClaimType, permission));
 
         await LogAuditAsync("RoleCreated", $"Created role '{role.Name}' with {model.SelectedPermissions.Count} permission(s).");
+        this.ToastSuccess($"Role '{role.Name}' was created.");
 
         return RedirectToAction(nameof(Index));
     }
@@ -139,6 +140,7 @@ public class RolesController : Controller
             await _roleManager.AddClaimAsync(role, new System.Security.Claims.Claim(Permissions.ClaimType, permission));
 
         await LogAuditAsync("RolePermissionsUpdated", $"Updated permissions for role '{role.Name}' ({model.SelectedPermissions.Count} permission(s)).");
+        this.ToastSuccess($"Permissions for '{role.Name}' were updated.");
 
         return RedirectToAction(nameof(Index));
     }
@@ -153,19 +155,20 @@ public class RolesController : Controller
 
         if (ProtectedRoles.Contains(role.Name))
         {
-            TempData["RoleError"] = $"'{role.Name}' is a built-in role and can't be deleted.";
+            this.ToastError($"'{role.Name}' is a built-in role and can't be deleted.");
             return RedirectToAction(nameof(Index));
         }
 
         var members = await _userManager.GetUsersInRoleAsync(role.Name!);
         if (members.Any())
         {
-            TempData["RoleError"] = $"Can't delete '{role.Name}' - {members.Count} user(s) are still assigned to it. Reassign them first.";
+            this.ToastError($"Can't delete '{role.Name}' - {members.Count} user(s) are still assigned to it. Reassign them first.");
             return RedirectToAction(nameof(Index));
         }
 
         await _roleManager.DeleteAsync(role);
         await LogAuditAsync("RoleDeleted", $"Deleted role '{role.Name}'.");
+        this.ToastSuccess($"Role '{role.Name}' was deleted.");
 
         return RedirectToAction(nameof(Index));
     }

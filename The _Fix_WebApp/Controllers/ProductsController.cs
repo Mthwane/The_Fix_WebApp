@@ -68,6 +68,7 @@ public class ProductsController : Controller
         var product = new Product
         {
             Name = model.Name,
+            Description = model.Description,
             SKU = model.SKU,
             Category = model.Category,
             Size = model.Size,
@@ -85,6 +86,7 @@ public class ProductsController : Controller
         await _context.SaveChangesAsync();
 
         await LogAuditAsync("ProductCreated", $"Added product '{product.Name}' (SKU {product.SKU}).");
+        this.ToastSuccess($"'{product.Name}' was added to the catalogue.");
 
         return RedirectToAction(nameof(Index));
     }
@@ -100,6 +102,7 @@ public class ProductsController : Controller
         {
             ProductId = product.ProductId,
             Name = product.Name,
+            Description = product.Description,
             SKU = product.SKU,
             Category = product.Category,
             Size = product.Size,
@@ -128,6 +131,7 @@ public class ProductsController : Controller
         if (product is null) return NotFound();
 
         product.Name = model.Name;
+        product.Description = model.Description;
         product.SKU = model.SKU;
         product.Category = model.Category;
         product.Size = model.Size;
@@ -144,6 +148,7 @@ public class ProductsController : Controller
         await _context.SaveChangesAsync();
 
         await LogAuditAsync("ProductUpdated", $"Updated product '{product.Name}' (SKU {product.SKU}).");
+        this.ToastSuccess($"'{product.Name}' was updated.");
 
         return RedirectToAction(nameof(Index));
     }
@@ -161,6 +166,7 @@ public class ProductsController : Controller
         await _context.SaveChangesAsync();
 
         await LogAuditAsync("ProductDeactivated", $"Deactivated product '{product.Name}' (SKU {product.SKU}).");
+        this.ToastSuccess($"'{product.Name}' was deactivated.");
 
         return RedirectToAction(nameof(Index));
     }

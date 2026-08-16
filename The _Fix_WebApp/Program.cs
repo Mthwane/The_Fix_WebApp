@@ -26,24 +26,24 @@ builder.Services.AddDataProtection()
 
 // --- Identity / Authentication ---
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
-{
-    // Password policy - meets common baseline (length, mixed character classes).
-    options.Password.RequiredLength = 10;
-    options.Password.RequireNonAlphanumeric = true;
-    options.Password.RequireUppercase = true;
-    options.Password.RequireLowercase = true;
-    options.Password.RequireDigit = true;
+    {
+        // Password policy - meets common baseline (length, mixed character classes).
+        options.Password.RequiredLength = 10;
+        options.Password.RequireNonAlphanumeric = true;
+        options.Password.RequireUppercase = true;
+        options.Password.RequireLowercase = true;
+        options.Password.RequireDigit = true;
 
-    options.Lockout.MaxFailedAccessAttempts = 5;
-    options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(10);
-    options.Lockout.AllowedForNewUsers = true;
+        options.Lockout.MaxFailedAccessAttempts = 5;
+        options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(10);
+        options.Lockout.AllowedForNewUsers = true;
 
-    options.User.RequireUniqueEmail = true;
+        options.User.RequireUniqueEmail = true;
 
-    // How often a signed-in user's role/claims are re-checked against the database.
-    // Keeps permission changes (Roles screen) from being stuck on a stale cookie for too long.
-    options.SignIn.RequireConfirmedAccount = false;
-})
+        // How often a signed-in user's role/claims are re-checked against the database.
+        // Keeps permission changes (Roles screen) from being stuck on a stale cookie for too long.
+        options.SignIn.RequireConfirmedAccount = false;
+    })
     .AddEntityFrameworkStores<ApplicationDbContext>()
     .AddDefaultTokenProviders();
 
@@ -85,6 +85,17 @@ builder.Services.AddAuthorization(options =>
 
 // --- Application services ---
 builder.Services.AddScoped<IInventoryService, InventoryService>();
+builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection("Email"));
+builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
+
+// --- Session (backs the customer's shopping cart - no new DB table needed) ---
+builder.Services.AddDistributedMemoryCache();
+builder.Services.AddSession(options =>
+{
+    options.IdleTimeout = TimeSpan.FromHours(2);
+    options.Cookie.HttpOnly = true;
+    options.Cookie.IsEssential = true; // the cart is core functionality, not tracking
+});
 
 // --- MVC ---
 builder.Services.AddControllersWithViews();
@@ -163,16 +174,26 @@ using (var scope = app.Services.CreateScope())
 }
 
 // --- HTTP pipeline ---
-if (!app.Environment.IsDevelopment())
+if (app.Environment.IsDevelopment())
+{
+    // Detailed in-browser stack traces during development.
+    app.UseDeveloperExceptionPage();
+}
+else
 {
     app.UseExceptionHandler("/Home/Error");
     app.UseHsts();
 }
 
+// Friendly fallback for 404s instead of a bare status page.
+app.UseStatusCodePagesWithReExecute("/Home/StatusCode/{0}");
+
 app.UseHttpsRedirection();
 app.UseStaticFiles();
 
 app.UseRouting();
+
+app.UseSession();
 
 app.UseAuthentication();
 app.UseAuthorization();

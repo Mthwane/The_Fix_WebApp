@@ -1,6 +1,24 @@
 @{
-    ViewData["Title"] = "Error";
+    ViewData["Title"] = "Something Went Wrong";
+    ViewData["HideNav"] = User.Identity?.IsAuthenticated != true;
+    var requestId = ViewBag.RequestId as string;
 }
-<div class="container py-5">
-    <h1 class="text-danger">Something went wrong.</h1>
+<div class="container py-5 text-center" style="max-width:520px;">
+    <div class="display-1 mb-2">⚠️</div>
+    <h1 class="mb-2">Something went wrong</h1>
+    <p class="text-muted">
+        An unexpected error occurred while processing your request. It's been logged, and
+        nothing you were working on should have been lost - any change that succeeded before
+        the error happened was already saved.
+    </p>
+
+    @if (!string.IsNullOrEmpty(requestId))
+    {
+        <p class="text-muted small">Reference ID: <code>@requestId</code> - mention this if you report the issue.</p>
+    }
+
+    <div class="mt-4">
+        <a asp-controller="Home" asp-action="Index" class="btn btn-danger">Go to Home</a>
+        <a href="javascript:history.back()" class="btn btn-outline-secondary">Go Back</a>
+    </div>
 </div>

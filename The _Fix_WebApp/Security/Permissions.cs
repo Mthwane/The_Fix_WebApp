@@ -25,6 +25,9 @@ public static class Permissions
     public const string EmployeesManage = "employees.manage";
     public const string RolesManage = "roles.manage";
 
+    // Fulfillment
+    public const string OrdersManage = "orders.manage";
+
     // Insight
     public const string DashboardView = "dashboard.view";
     public const string ReportsView = "reports.view";
@@ -40,6 +43,7 @@ public static class Permissions
         [SuppliersManage] = "Manage Suppliers",
         [EmployeesManage] = "Manage Employees (create/edit/deactivate staff)",
         [RolesManage] = "Manage Roles & Permissions",
+        [OrdersManage] = "Manage Orders (update status, cancel, fulfill)",
         [DashboardView] = "View Business Dashboard",
         [ReportsView] = "View Reports & Analytics",
         [AuditLogsView] = "View Audit Logs",
@@ -49,8 +53,8 @@ public static class Permissions
     public static readonly IReadOnlyDictionary<string, string[]> DefaultRolePermissions = new Dictionary<string, string[]>
     {
         ["Administrator"] = All.Keys.ToArray(), // everything
-        ["Manager"] = new[] { ProductsManage, PosUse, ReturnsProcess, PurchaseOrdersManage, SuppliersManage, DashboardView, ReportsView },
-        ["Employee"] = new[] { PosUse, ReturnsProcess, DashboardView },
+        ["Manager"] = new[] { ProductsManage, PosUse, ReturnsProcess, PurchaseOrdersManage, SuppliersManage, DashboardView, ReportsView, OrdersManage },
+        ["Employee"] = new[] { PosUse, ReturnsProcess, DashboardView, OrdersManage },
         ["Owner"] = new[] { DashboardView, ReportsView, PurchaseOrdersManage, SuppliersManage },
         ["Customer"] = Array.Empty<string>(), // customers use the self-service area, not permission-gated staff screens
     };

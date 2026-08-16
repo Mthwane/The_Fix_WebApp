@@ -130,6 +130,7 @@ public class EmployeesController : Controller
         });
         await _context.SaveChangesAsync();
 
+        this.ToastSuccess($"'{user.UserName}' was created as a {model.Role}.");
         return RedirectToAction(nameof(Index));
     }
 
@@ -156,6 +157,7 @@ public class EmployeesController : Controller
         });
         await _context.SaveChangesAsync();
 
+        this.ToastSuccess($"'{user.UserName}' is now a {role}.");
         return RedirectToAction(nameof(Index));
     }
 
@@ -243,6 +245,7 @@ public class EmployeesController : Controller
         });
         await _context.SaveChangesAsync();
 
+        this.ToastSuccess($"'{user.UserName}' was updated.");
         return RedirectToAction(nameof(Index));
     }
 
@@ -269,6 +272,7 @@ public class EmployeesController : Controller
         });
         await _context.SaveChangesAsync();
 
+        this.ToastSuccess($"'{user.UserName}' was deactivated.");
         return RedirectToAction(nameof(Index));
     }
 
@@ -294,6 +298,7 @@ public class EmployeesController : Controller
         });
         await _context.SaveChangesAsync();
 
+        this.ToastSuccess($"'{user.UserName}' was reactivated.");
         return RedirectToAction(nameof(Index));
     }
 

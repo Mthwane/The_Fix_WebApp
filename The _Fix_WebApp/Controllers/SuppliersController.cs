@@ -47,6 +47,7 @@ public class SuppliersController : Controller
         });
         await _context.SaveChangesAsync();
 
+        this.ToastSuccess($"Supplier '{model.Name}' was added.");
         return RedirectToAction(nameof(Index));
     }
 }

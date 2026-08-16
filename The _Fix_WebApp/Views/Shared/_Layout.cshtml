@@ -60,6 +60,12 @@ else
                             <span class="nav-icon">🧾</span><span class="nav-label">POS</span>
                         </a>
                     }
+                    if (Can(Permissions.OrdersManage))
+                    {
+                        <a class="nav-link" asp-controller="Orders" asp-action="Index">
+                            <span class="nav-icon">📬</span><span class="nav-label">Orders</span>
+                        </a>
+                    }
                     if (Can(Permissions.ReturnsProcess))
                     {
                         <a class="nav-link" asp-controller="Returns" asp-action="Index">
@@ -118,6 +124,9 @@ else
                     if (isCustomer)
                     {
                         <div class="sidebar-section-label">My Account</div>
+                        <a class="nav-link" asp-controller="Shop" asp-action="Index">
+                            <span class="nav-icon">🛒</span><span class="nav-label">Shop</span>
+                        </a>
                         <a class="nav-link" asp-controller="Customer" asp-action="Orders">
                             <span class="nav-icon">🛍️</span><span class="nav-label">My Orders</span>
                         </a>
@@ -199,6 +208,79 @@ else
 }
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    @* Toast notifications - any controller sets these via this.ToastSuccess()/ToastError()/
+       ToastWarning() (see Controllers/ControllerToastExtensions.cs) and it shows here on the
+       very next page render, confirming the action completed or explaining why it didn't. *@
+    @{
+        var toastMessage = TempData["ToastMessage"] as string;
+        var toastType = TempData["ToastType"] as string ?? "success";
+    }
+    <div class="toast-container position-fixed bottom-0 end-0 p-3" id="toastContainer" style="z-index:1080;">
+        @if (!string.IsNullOrEmpty(toastMessage))
+        {
+            <div class="toast align-items-center text-bg-@toastType border-0" role="alert" aria-live="assertive" aria-atomic="true" data-toast-type="@toastType">
+                <div class="d-flex">
+                    <div class="toast-body">@toastMessage</div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+            </div>
+        }
+    </div>
+    <script>
+        // Sound notifications - a short synthesized tone (no audio files needed) plays
+        // alongside every toast, pitched by type: a rising two-note chime for success, a
+        // low buzz for errors, a single mid tone for warnings/info. Browsers require a user
+        // gesture before audio can play; since every toast follows a click/submit that
+        // triggered the page load, that requirement is already satisfied.
+        function playNotificationSound(type) {
+            try {
+                var AudioCtx = window.AudioContext || window.webkitAudioContext;
+                if (!AudioCtx) return;
+                var ctx = new AudioCtx();
+
+                function tone(freq, startTime, duration, volume) {
+                    var osc = ctx.createOscillator();
+                    var gain = ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.value = freq;
+                    gain.gain.setValueAtTime(volume, startTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start(startTime);
+                    osc.stop(startTime + duration);
+                }
+
+                var now = ctx.currentTime;
+                if (type === 'success') {
+                    tone(880, now, 0.12, 0.15);
+                    tone(1318.5, now + 0.1, 0.18, 0.15);
+                } else if (type === 'danger') {
+                    tone(220, now, 0.25, 0.18);
+                } else {
+                    tone(523.25, now, 0.15, 0.15); // warning / info
+                }
+            } catch (e) { /* audio isn't critical - never let it break the page */ }
+        }
+
+        document.querySelectorAll('#toastContainer .toast').forEach(function (el) {
+            var toast = new bootstrap.Toast(el, { delay: 5000 });
+            toast.show();
+            playNotificationSound(el.getAttribute('data-toast-type'));
+        });
+
+        // Client-side JS errors get logged server-side too, so "fallback screens and logs"
+        // covers failures that never even make it to a controller action.
+        window.addEventListener('error', function (e) {
+            fetch('/Home/LogClientError', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: e.message, source: e.filename, line: e.lineno, url: window.location.href })
+            }).catch(function () { /* best-effort only */ });
+        });
+    </script>
+
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

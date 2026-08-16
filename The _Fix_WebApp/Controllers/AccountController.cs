@@ -175,6 +175,7 @@ public class AccountController : Controller
         await LogAuditAsync(user.Id, "CustomerRegistered", $"New customer account '{user.UserName}' created.");
         await _signInManager.SignInAsync(user, isPersistent: false);
 
+        this.ToastSuccess($"Welcome, {user.FullName}! Your account is ready.");
         return RedirectToAction("Orders", "Customer");
     }
 
@@ -212,6 +213,7 @@ public class AccountController : Controller
         await LogAuditAsync(user.Id, "PasswordChanged", $"'{user.UserName}' changed their password.");
 
         TempData["PasswordChanged"] = true;
+        this.ToastSuccess("Your password has been updated.");
         return RedirectToAction(nameof(ChangePassword));
     }
 

@@ -9,6 +9,9 @@ public class ProductViewModel
     [Required, MaxLength(150)]
     public string Name { get; set; } = string.Empty;
 
+    [MaxLength(1000), Display(Name = "Description")]
+    public string? Description { get; set; }
+
     [Required, MaxLength(50), Display(Name = "SKU / Barcode")]
     public string SKU { get; set; } = string.Empty;
 

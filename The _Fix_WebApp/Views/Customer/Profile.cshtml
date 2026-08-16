@@ -6,13 +6,25 @@
 <div class="container py-4" style="max-width: 500px;">
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h2 class="mb-0">My Profile</h2>
-        <a asp-controller="Customer" asp-action="Orders" class="btn btn-outline-secondary btn-sm">&larr; My Orders</a>
+        <div class="d-flex gap-2">
+            <a asp-controller="Customer" asp-action="Orders" class="btn btn-outline-secondary btn-sm">&larr; My Orders</a>
+            <a asp-controller="Shop" asp-action="Index" class="btn btn-danger btn-sm">🛒 Shop Now</a>
+        </div>
     </div>
 
     @if (TempData["ProfileMessage"] is string msg)
     {
         <div class="alert alert-success">@msg</div>
     }
+
+    <div class="mb-4">
+        <label class="form-label">Customer ID</label>
+        <div class="input-group">
+            <input type="text" id="customerIdField" class="form-control" value="@Model.CustomerId" readonly />
+            <button type="button" class="btn btn-outline-secondary" onclick="navigator.clipboard.writeText(document.getElementById('customerIdField').value); this.textContent='Copied!'; setTimeout(() => this.textContent='Copy', 1500);">Copy</button>
+        </div>
+        <div class="form-text">Give this to store staff at checkout so a purchase links to your account and order history.</div>
+    </div>
 
     <form asp-controller="Customer" asp-action="Profile" method="post">
         <div asp-validation-summary="ModelOnly" class="text-danger"></div>

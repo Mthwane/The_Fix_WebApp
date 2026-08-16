@@ -49,7 +49,13 @@ public class ReturnsController : Controller
             .Include(o => o.OrderItems).ThenInclude(oi => oi.Product)
             .FirstOrDefaultAsync(o => o.OrderNumber == orderNumber);
 
-        return order is null ? NotFound() : View(order);
+        if (order is null)
+        {
+            this.ToastError($"No order found with receipt/transaction ID '{orderNumber}'.");
+            return RedirectToAction(nameof(Index));
+        }
+
+        return View(order);
     }
 
     // POST: /Returns/Process - reverses the sale, restocks if resalable, issues refund/credit.
@@ -94,6 +100,7 @@ public class ReturnsController : Controller
         if (isResalable)
             await _inventoryService.IncrementStockAsync(orderItem.ProductId, quantity, InventoryChangeReason.Return);
 
+        this.ToastSuccess($"Return processed - {refundAmount:C} refunded via {refundMethod}.");
         return RedirectToAction(nameof(Index));
     }
 }
