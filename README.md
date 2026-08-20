@@ -1,303 +1,211 @@
-[README.md](https://github.com/user-attachments/files/31116647/README.md)
-# The Fix (FashionFix) – Store Management System
+# Fashion Fix - Store Management System
 
-An ASP.NET Core 8 MVC web app for running a fashion retail store: product
-catalogue, point-of-sale, purchase orders, returns, staff/role management,
-a customer-facing shop, and reporting — all backed by SQL Server and
-ASP.NET Core Identity.
+A full-stack ASP.NET Core MVC application for managing a fashion retail store:
+product catalogue, point-of-sale, purchase orders/suppliers, returns, staff and
+role management, business reporting, and a customer-facing storefront with
+online checkout. Built against the product backlog user stories (US-01 through
+US-20) in the original requirements document.
 
-Repository: https://github.com/Mthwane/The_Fix_WebApp
-
----
-
-## 1. What the app does
-
-The app has **two audiences** that sign in through two different doors:
-
-| Audience | Signs in via | Lands on |
-|---|---|---|
-| **Staff** (Administrator, Manager, Employee, Owner) | `Account/EmployeeLogin` | `Home/Dashboard` |
-| **Customers** | the login form on the home page (`Home/Index`) | `Customer/Orders` |
-
-### Staff-side modules (each mapped to a controller)
-
-| Module | Controller | What it's for |
-|---|---|---|
-| Dashboard | `HomeController` | Business overview stats after login |
-| Products | `ProductsController` | Add / edit / deactivate catalogue items, SKUs, pricing, stock |
-| Point of Sale | `PosController` | In-store checkout — scan/select items, take payment, print a receipt |
-| Orders | `OrdersController` | View orders placed through the online shop, advance status, cancel |
-| Returns | `ReturnsController` | Look up an order by number, process a return/exchange, restock or write off |
-| Purchase Orders | `PurchaseOrdersController` | Create POs to suppliers, mark them received (restocks inventory) |
-| Suppliers | `SuppliersController` | Manage the supplier list used by Purchase Orders |
-| Employees | `EmployeesController` | Create staff accounts, assign roles, edit, deactivate/reactivate, view audit logs |
-| Roles & Permissions | `RolesController` | Create custom roles and tick which permissions each role has |
-| Reports | `ReportsController` | Sales/revenue, inventory, and employee reports; CSV/PDF export |
-
-### Customer-side modules
-
-| Module | Controller | What it's for |
-|---|---|---|
-| Shop | `ShopController` | Browse/search products, add to cart, checkout |
-| My Orders | `CustomerController` | View order history, cancel an order, edit profile |
-| Account | `AccountController` | Register, login/logout, change password |
-
-### How permissions actually work (important for setup and support)
-
-Nothing in the app checks a **role name** directly (except the customer-only
-areas, which use `[Authorize(Roles = "Customer")]`). Every staff controller
-instead checks a **permission policy**, e.g. `[Authorize(Policy =
-Permissions.ProductsManage)]`. Roles are just named bundles of permissions
-that live in the database and can be edited from the **Roles & Permissions**
-screen at runtime — so an Administrator can create a brand-new role (say,
-"Cashier") and hand it exactly the permissions it needs, with zero code
-changes or redeploys.
-
-The full permission catalogue (`Security/Permissions.cs`):
-
-- `products.manage`, `pos.use`, `returns.process`, `purchaseorders.manage`,
-  `suppliers.manage`, `employees.manage`, `roles.manage`, `orders.manage`,
-  `dashboard.view`, `reports.view`, `auditlogs.view`
-
-Default permission bundles seeded for the built-in roles the *first* time
-each role is created (an Administrator's later customizations on the Roles
-screen are never overwritten):
-
-- **Administrator** – every permission (and this is re-guaranteed on every
-  app startup, so an Administrator can never accidentally lock themselves out)
-- **Manager** – products, POS, returns, purchase orders, suppliers,
-  dashboard, reports, orders
-- **Employee** – POS, returns, dashboard, orders
-- **Owner** – dashboard, reports, purchase orders, suppliers
-- **Customer** – none (customers use the self-service shop, not the
-  permission-gated staff screens)
+This README is written for someone who does **not** have the app running
+anywhere yet and needs to get it from zero to a working local instance.
 
 ---
 
-## 2. Logins
+## 1. What's actually in this app
 
-### First-time staff login (seeded automatically on first run)
+- **Authentication** - two separate login portals: a customer storefront login
+  and a dedicated staff ("Employee") login, backed by ASP.NET Core Identity.
+- **Role & permission system** - roles (Administrator, Manager, Employee,
+  Customer, Owner, or any custom role you create) are just named bundles of
+  permissions, editable at runtime from **Roles & Permissions** in the sidebar
+  (Administrator only). No code changes or redeploys needed to add a role.
+- **Product catalogue** - full CRUD, search/filter, low-stock thresholds.
+- **Point of Sale** - barcode/SKU scan with an image preview popup, cart,
+  automatic 15% VAT calculation, receipts (with optional emailed copy).
+- **Customer storefront** - browse, cart, checkout, order tracking, order
+  cancellation, "My Profile" self-service (with a visible Customer ID to give
+  staff at the till).
+- **Staff order fulfillment** - move online orders through
+  Processing -> Shipped -> Delivered, or cancel and auto-restock.
+- **Returns & refunds**, **Purchase Orders & Suppliers**, **Employee
+  management**, **Audit log**, **Reports & Analytics** (with CSV export),
+  **Dashboard** with live stats and low-stock alerts.
+- **Notifications** - every action across the app confirms success/failure via
+  an on-screen toast, each with its own short sound.
+- **Real email** - genuine SMTP sending (not a stub) for receipts, order
+  status changes, and cancellations. Silently no-ops if unconfigured, so the
+  app still runs fine without it.
 
-The app seeds one Administrator account the very first time it starts up
-against a fresh database, because there'd otherwise be no way to create the
-first staff member at all:
+---
 
-| Field | Value |
+## 2. Prerequisites
+
+Install these before doing anything else:
+
+| Tool | Notes |
 |---|---|
-| Username | `admin` |
-| Password | `Ch4ngeMe!Now` |
-| Sign in via | `Account/EmployeeLogin` (the **Employee Login** page, not the customer login on the home page) |
-
-**Change this password immediately after your first login** — go to your
-profile menu → **Change Password**. In Development, the console also logs a
-warning with these credentials as a reminder every time the app starts and
-this seed account still exists.
-
-### Creating more staff accounts
-
-Only an Administrator (or anyone holding the `employees.manage` permission)
-can create staff accounts, from **Employees → Create Employee**. This
-assigns a role (Administrator/Manager/Employee/Owner), which in turn grants
-whatever permissions that role currently has.
-
-### Customer accounts
-
-Anyone can self-register as a customer from the home page (**Register**).
-Customer accounts always get the `Customer` role and land on their order
-history after signing in. Staff accounts cannot sign in through the
-customer login form, and customer accounts cannot sign in through
-`Account/EmployeeLogin` — the app checks this and rejects the mismatched
-attempt with a clear error message.
+| [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) | Check with `dotnet --version` - needs to report `8.x`. |
+| SQL Server (or SQL Server Express / LocalDB) | Any edition works. |
+| EF Core CLI tools | `dotnet tool install --global dotnet-ef` |
+| A code editor | Visual Studio 2022, VS Code, or Rider all work. |
 
 ---
 
-## 3. Getting it running from Visual Studio
-
-### Prerequisites
-
-- **Visual Studio 2022** (17.8+) with the **ASP.NET and web development**
-  workload, or VS Code + the .NET 8 SDK
-- **.NET 8 SDK**
-- **SQL Server** — LocalDB (installed automatically with the Visual Studio
-  workload above) is enough for local development; SQL Server Express or a
-  full instance also works
-- Git
-
-### Step 1 — Clone the repo
+## 3. Getting the app running
 
 ```bash
-git clone https://github.com/Mthwane/The_Fix_WebApp.git
-cd The_Fix_WebApp
+# 1. Restore NuGet packages
+dotnet restore
+
+# 2. Point it at your database
+#    Open appsettings.json and edit ConnectionStrings:DefaultConnection
+#    to match your SQL Server instance. The default assumes a local
+#    instance with Windows/Trusted authentication:
+#    "Server=localhost;Database=FashionFixDb;Trusted_Connection=True;MultipleActiveResultSets=true;TrustServerCertificate=True"
+
+# 3. Create the database schema
+#    If the Migrations folder already has files in it (it should, if you're
+#    cloning this from the team's shared repo), just apply them:
+dotnet ef database update
+
+#    Only if there's no Migrations folder at all yet (a genuinely fresh
+#    project with none committed), generate one first:
+#    dotnet ef migrations add InitialCreate
+#    dotnet ef database update
+
+# 4. Run it
+dotnet run
 ```
 
-Open the solution/`.csproj` in Visual Studio (**File → Open → Project/Solution**,
-select `The _Fix_WebApp.csproj`), or run everything from a terminal in the
-project folder — both are covered below.
+The console will print something like `Now listening on: https://localhost:7160`
+- open that URL in a browser.
 
-### Step 2 — Point it at your database
+### First login
 
-Open `appsettings.json` and check the connection string under
-`ConnectionStrings:DefaultConnection`:
+On first startup against an empty database, the app automatically seeds:
+- The five built-in roles (Administrator, Manager, Employee, Customer, Owner)
+  with a sensible default set of permissions each.
+- **One bootstrap Administrator account** so there's a way to log in at all:
+
+```
+Username: admin
+Password: Ch4ngeMe!Now
+```
+
+Log in via the **Employee Login** link (not the customer login on the
+homepage). Once in, go to **Change Password** and change this immediately -
+this credential is sitting in plain text in `Program.cs`.
+
+> **Important:** This bootstrap account is only ever created if no user named
+> `admin` already exists. If you ever want to fully reset, drop the database,
+> re-run `dotnet ef database update`, and restart the app.
+
+---
+
+## 4. Project structure
+
+```
+Controllers/     One controller per feature area - see the list below.
+Models/
+  Entities/      EF Core entities (Product, Order, Supplier, ApplicationUser, ...)
+  ViewModels/    Form-backing models, separate from the entities.
+Views/           Razor views, one folder per controller.
+Data/            ApplicationDbContext + EF Core migrations.
+  SeedScripts/   Optional demo-data scripts (see section 6).
+Services/        IInventoryService, IEmailSender, SessionCart.
+Security/        Permissions.cs (the permission catalog) and TaxSettings.cs (VAT rate).
+wwwroot/         Static assets - site.css, site.js (POS scanning + cart JS).
+```
+
+Controllers: `Account`, `Home`, `Customer`, `Shop`, `Products`, `Pos`,
+`Orders`, `Returns`, `PurchaseOrders`, `Suppliers`, `Employees`, `Roles`,
+`Reports`.
+
+---
+
+## 5. Configuring email (optional but recommended)
+
+Email is real SMTP, not a stub - but it's disabled by default until you fill
+in credentials. Without this, the app works completely normally; receipts and
+notifications just silently don't send.
+
+In `appsettings.json`, under `Email`:
 
 ```json
-"DefaultConnection": "Server=localhost;Database=FashionFixDb;Trusted_Connection=True;MultipleActiveResultSets=true;TrustServerCertificate=True"
+"Email": {
+  "Host": "smtp.gmail.com",
+  "Port": 587,
+  "Username": "youraddress@gmail.com",
+  "Password": "your-16-character-app-password",
+  "EnableSsl": true,
+  "FromAddress": "youraddress@gmail.com",
+  "FromName": "Fashion Fix"
+}
 ```
 
-- If you're using **LocalDB**, change `Server=localhost` to
-  `Server=(localdb)\\mssqllocaldb` (this is the most common setup for a
-  fresh Visual Studio install and needs no separate SQL Server install).
-- If you're pointing at a real SQL Server instance (including a remote/Azure
-  one), use that server's connection details instead — `appsettings.SqlServer.example.json`
-  in the repo has a template for a SQL Server/Azure SQL connection string.
-- Don't commit real credentials to `appsettings.json`. For anything beyond
-  local development, use **.NET user-secrets** (right-click the project in
-  Visual Studio → **Manage User Secrets**) or environment variables instead.
+Free path via Gmail:
+1. Turn on 2-Step Verification on the sending Gmail account
+   (`myaccount.google.com/security`).
+2. Generate an App Password at `myaccount.google.com/apppasswords`.
+3. Use that 16-character code as `Password` above - **not** your normal Gmail
+   password.
 
-> **Security note:** the copy of `appsettings.json` in this project currently
-> has live SMTP credentials committed under the `Email` section. Treat that
-> password as compromised — rotate/regenerate it (e.g. revoke and reissue the
-> Gmail App Password) and move real credentials to user-secrets or
-> environment variables rather than the checked-in file, both locally and
-> especially before deploying anywhere public.
+Any standard SMTP provider works the same way (Outlook: `smtp-mail.outlook.com:587`,
+Zoho: `smtp.zoho.com:587`).
 
-### Step 3 — Restore packages
-
-Visual Studio does this automatically on open. From the command line:
-
-```bash
-dotnet restore
-```
-
-### Step 4 — Create/update the database (EF Core)
-
-The repo already includes two migrations (`InitialCreate` and
-`AddProductDescription`), so you just need to **apply** them — you don't
-need to add a new migration unless you've changed a model.
-
-**From the Visual Studio Package Manager Console** (Tools → NuGet Package
-Manager → Package Manager Console; make sure the project is selected as the
-Default project):
-
-```powershell
-Update-Database
-```
-
-**Or from a terminal**, using the EF Core CLI tool (install it once if you
-don't have it: `dotnet tool install --global dotnet-ef`):
-
-```bash
-dotnet ef database update
-```
-
-This creates the `FashionFixDb` database (Identity tables, Products, Orders,
-Suppliers, PurchaseOrders, Returns, AuditLogs, etc.) and applies both
-migrations. You only need to run this once per database — after that, just
-rerun it whenever a new migration is added to the repo.
-
-If you ever change an entity class and need a **new** migration:
-
-```powershell
-Add-Migration YourMigrationName   # Package Manager Console
-# or
-dotnet ef migrations add YourMigrationName   # CLI
-```
-then `Update-Database` / `dotnet ef database update` again to apply it.
-
-### Step 5 — Run the app
-
-**In Visual Studio:** press **F5** (or the green ▶ Run button), with either
-the `https` or `http` launch profile selected in the toolbar dropdown.
-
-**From the command line:**
-
-```bash
-dotnet run
-```
-
-By default it listens on:
-- `https://localhost:7160`
-- `http://localhost:5238`
-
-The browser opens automatically to the home page, which is the **customer
-login / branded landing page**. To reach the staff dashboard, go to
-`/Account/EmployeeLogin` and sign in with the seeded `admin` account (see
-section 2), or use the **Employee Login** link if one is present on the
-landing page.
-
-### Step 6 — First login and cleanup
-
-1. Sign in at `/Account/EmployeeLogin` with `admin` / `Ch4ngeMe!Now`.
-2. Immediately go to **Change Password** and set a real password.
-3. Create real staff accounts under **Employees → Create Employee**, then
-   consider deactivating or repurposing the seeded `admin` account.
-4. Review **Roles & Permissions** and adjust what each role can do, if the
-   defaults in section 1 don't match how your store operates.
+> Don't commit real credentials to source control. For anything beyond local
+> development, move these into [user-secrets](https://learn.microsoft.com/en-us/aspnet/core/security/app-secrets)
+> or environment variables instead of `appsettings.json`.
 
 ---
 
-## 4. Notes on configuration
+## 6. Seeding demo data
 
-- **Data protection keys** (used to encrypt the auth cookie) persist to a
-  `keys/` folder next to the project, so signed-in sessions survive app
-  restarts. Don't delete that folder in production, or everyone gets
-  signed out.
-- **Password policy**: minimum 10 characters, requires upper/lowercase, a
-  digit, and a non-alphanumeric character. Accounts lock for 10 minutes
-  after 5 failed attempts.
-- **Session/cookie lifetime**: sign-in cookie lasts 8 hours with sliding
-  expiration; the shopping cart session lasts 2 hours idle.
-- **Email**: optional. Leave `Email:Host` blank in `appsettings.json` to
-  disable email entirely — the app works fine without it. If you do want
-  email (e.g. order confirmations), fill in real SMTP credentials via
-  user-secrets/environment variables rather than the committed file (see
-  the security note in Step 2).
-- **Low stock threshold**: `InventorySettings:DefaultLowStockThreshold`
-  controls when a product is flagged as low stock (default `5`).
+An empty catalogue makes for a boring demo. Two options, in `Data/SeedScripts/`:
 
-### Deploying beyond your own machine
+### Option A - SQL script (`SeedDemoData.sql`)
+Run directly against your database (SSMS, Azure Data Studio, `sqlcmd`, etc.)
+**after** the app has run at least once (it needs the roles table to already
+be seeded). Adds ~20 products, 4 suppliers, and 5 working login accounts
+(3 customers + a Manager + an Employee, all password `Demo@12345`) with
+genuinely valid Identity password hashes - not placeholders.
 
-The repo includes `DEPLOYMENT.md` with a full walkthrough for deploying to
-an Ubuntu ARM (Oracle Cloud Ampere A1) server behind Nginx with Let's
-Encrypt, plus ready-made `deploy/fashionfix.service` (systemd) and
-`deploy/nginx-fashionfix.conf` files. That guide targets a PostgreSQL
-setup for ARM compatibility — if you deploy to a normal x86 Linux or
-Windows server instead, you can keep the SQL Server setup this repo ships
-with by default; just point `ConnectionStrings:DefaultConnection` at your
-production SQL Server/Azure SQL instance the same way you did for local
-development.
-
----
-
-## 5. Known gaps (per the repo's own README/TODOs)
-
-This is an actively evolving project. As of this snapshot, the following
-are still placeholders or in progress — check the repo's `README.md` for
-the latest status:
-
-- Receipt email/SMS delivery after a POS sale
-- POS barcode-scan JS wiring
-- Reports: best-sellers / stock-turnover breakdowns, PDF export
-- Return refund/store-credit ledger (return processing + restock already work)
-
----
-
-## 6. Quick reference — common commands
+### Option B - Live HTTP seeding script (`seed_live.py`) - recommended
+Drives the actual running app over HTTP, the same way a person would use the
+forms, so everything goes through real validation and business logic:
 
 ```bash
-# Clone
-git clone https://github.com/Mthwane/The_Fix_WebApp.git
-cd The_Fix_WebApp
-
-# Restore
-dotnet restore
-
-# Apply database migrations
-dotnet ef database update
-
-# Run
-dotnet run
-
-# Add a new migration after changing a model
-dotnet ef migrations add <MigrationName>
-dotnet ef database update
+pip install requests
+python Data/SeedScripts/seed_live.py --base-url https://localhost:7160 --admin-password "Ch4ngeMe!Now"
 ```
+
+Creates 200 products, 15 suppliers, and 30 customer accounts by default (all
+adjustable via `--products` / `--suppliers` / `--customers` flags). Safe to
+re-run - it won't collide with data from a previous run.
+
+---
+
+## 7. Known gotchas
+
+- **Only one `.csproj` file should exist** in the project root
+  (`The _Fix_WebApp.csproj`). If you ever see a second one appear, delete it -
+  `dotnet build` refuses to run with more than one project file in the same
+  folder.
+- **Migrations aren't bundled with every code update** - if you're pulling
+  entity changes, you may need to run `dotnet ef migrations add <Name>` and
+  `dotnet ef database update` yourself. Check `dotnet ef migrations list`
+  against your database if something looks out of sync (e.g. a column the app
+  expects doesn't exist yet).
+- **VAT is fixed at 15%**, computed server-side in `Security/TaxSettings.cs` -
+  never trust a tax value posted from a client.
+- **Data Protection keys** persist to a local `keys/` folder so login sessions
+  survive an app restart. Don't delete that folder in the middle of testing,
+  or everyone gets logged out.
+
+---
+
+## 8. What's next
+
+Planned but not yet done: Docker packaging for easier team sharing, and a
+general UI/visual polish pass (the app is currently functional Bootstrap
+styling, not custom-branded).
