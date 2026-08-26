@@ -66,23 +66,9 @@ else
                             <span class="nav-icon">📬</span><span class="nav-label">Orders</span>
                         </a>
                     }
-                    if (Can(Permissions.ReturnsProcess))
-                    {
-                        <a class="nav-link" asp-controller="Returns" asp-action="Index">
-                            <span class="nav-icon">↩️</span><span class="nav-label">Returns</span>
-                        </a>
-                    }
+                  // removed
 
-                    if (Can(Permissions.PurchaseOrdersManage) || Can(Permissions.SuppliersManage))
-                    {
-                        <div class="sidebar-section-label">Purchasing</div>
-                    }
-                    if (Can(Permissions.PurchaseOrdersManage))
-                    {
-                        <a class="nav-link" asp-controller="PurchaseOrders" asp-action="Index">
-                            <span class="nav-icon">📦</span><span class="nav-label">Purchase Orders</span>
-                        </a>
-                    }
+                    
                     if (Can(Permissions.SuppliersManage))
                     {
                         <a class="nav-link" asp-controller="Suppliers" asp-action="Index">
