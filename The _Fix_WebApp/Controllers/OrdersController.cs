@@ -18,7 +18,7 @@ namespace FashionFix.Web.Controllers;
 [Authorize(Policy = Permissions.OrdersManage)]
 public class OrdersController : Controller
 {
-    /// <summary>Statuses an order can still be cancelled from - once Delivered/Completed, use Returns instead.</summary>
+    /// <summary>Statuses an order can still be cancelled from - once Delivered/Completed.</summary>
     private static readonly OrderStatus[] CancellableStatuses = { OrderStatus.Pending, OrderStatus.Processing, OrderStatus.Shipped };
 
     private readonly ApplicationDbContext _context;
@@ -110,6 +110,7 @@ public class OrdersController : Controller
         await _context.SaveChangesAsync();
 
         this.ToastSuccess($"Order {order.OrderNumber} is now {order.Status}.");
+        
 
         // Best-effort customer notification on each status change.
         if (order.Customer is not null && !string.IsNullOrWhiteSpace(order.Customer.Email))
@@ -124,7 +125,7 @@ public class OrdersController : Controller
     }
 
     // POST: /Orders/Cancel/5 - staff-initiated cancellation (any role with Manage Orders),
-    // restocks every item on the order. Blocked once Delivered/Completed - use Returns instead.
+    // restocks every item on the order. Blocked once Delivered/Completed.
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Cancel(int id, string? reason)
@@ -138,7 +139,7 @@ public class OrdersController : Controller
 
         if (!CancellableStatuses.Contains(order.Status))
         {
-            this.ToastError($"Order {order.OrderNumber} is {order.Status} and can no longer be cancelled - use Returns instead.");
+            this.ToastError($"Order {order.OrderNumber} is {order.Status} and can no longer be cancelled.");
             return RedirectToAction(nameof(Index));
         }
 

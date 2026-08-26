@@ -14,10 +14,6 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Product> Products => Set<Product>();
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
-    public DbSet<Supplier> Suppliers => Set<Supplier>();
-    public DbSet<PurchaseOrder> PurchaseOrders => Set<PurchaseOrder>();
-    public DbSet<PurchaseOrderItem> PurchaseOrderItems => Set<PurchaseOrderItem>();
-    public DbSet<ReturnTransaction> ReturnTransactions => Set<ReturnTransaction>();
     public DbSet<InventoryTransaction> InventoryTransactions => Set<InventoryTransaction>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
@@ -32,10 +28,6 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 
         builder.Entity<Order>()
             .HasIndex(o => o.OrderNumber)
-            .IsUnique();
-
-        builder.Entity<PurchaseOrder>()
-            .HasIndex(po => po.PONumber)
             .IsUnique();
 
         // --- Order relationships ---
@@ -61,32 +53,6 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             .HasOne(oi => oi.Product)
             .WithMany(p => p.OrderItems)
             .HasForeignKey(oi => oi.ProductId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        // --- Purchase order relationships ---
-        builder.Entity<PurchaseOrderItem>()
-            .HasOne(poi => poi.PurchaseOrder)
-            .WithMany(po => po.Items)
-            .HasForeignKey(poi => poi.PurchaseOrderId)
-            .OnDelete(DeleteBehavior.Cascade);
-
-        builder.Entity<PurchaseOrderItem>()
-            .HasOne(poi => poi.Product)
-            .WithMany(p => p.PurchaseOrderItems)
-            .HasForeignKey(poi => poi.ProductId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        // --- Return relationships ---
-        builder.Entity<ReturnTransaction>()
-            .HasOne(r => r.Order)
-            .WithMany(o => o.Returns)
-            .HasForeignKey(r => r.OrderId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        builder.Entity<ReturnTransaction>()
-            .HasOne(r => r.OrderItem)
-            .WithMany()
-            .HasForeignKey(r => r.OrderItemId)
             .OnDelete(DeleteBehavior.Restrict);
 
         // --- Decimal precision guards (belt-and-braces alongside [Column] attributes) ---

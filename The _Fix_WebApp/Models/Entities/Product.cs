@@ -50,7 +50,6 @@ public class Product
 
     // --- Navigation ---
     public ICollection<OrderItem> OrderItems { get; set; } = new List<OrderItem>();
-    public ICollection<PurchaseOrderItem> PurchaseOrderItems { get; set; } = new List<PurchaseOrderItem>();
     public ICollection<InventoryTransaction> InventoryTransactions { get; set; } = new List<InventoryTransaction>();
 
     [NotMapped]

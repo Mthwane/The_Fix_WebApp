@@ -64,7 +64,6 @@ public class Order
 
     // --- Navigation ---
     public ICollection<OrderItem> OrderItems { get; set; } = new List<OrderItem>();
-    public ICollection<ReturnTransaction> Returns { get; set; } = new List<ReturnTransaction>();
 }
 
 public class OrderItem
