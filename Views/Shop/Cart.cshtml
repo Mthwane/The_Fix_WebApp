@@ -1,0 +1,62 @@
+@model CartViewModel
+@{
+    ViewData["Title"] = "My Cart";
+    var fallbackImage = "https://placehold.co/80x80?text=No+Image";
+}
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="mb-0">My Cart</h2>
+        <a asp-controller="Shop" asp-action="Index" class="btn btn-outline-secondary">&larr; Continue Shopping</a>
+    </div>
+
+    @if (!Model.Lines.Any())
+    {
+        <div class="alert alert-info">Your cart is empty.</div>
+    }
+    else
+    {
+        <table class="table align-middle">
+            <thead><tr><th></th><th>Item</th><th>SKU</th><th>Unit Price</th><th>Quantity</th><th>Line Total</th><th></th></tr></thead>
+            <tbody>
+            @foreach (var line in Model.Lines)
+            {
+                <tr>
+                    <td style="width:64px;">
+                        <img src="@(string.IsNullOrWhiteSpace(line.ImageUrl) ? fallbackImage : line.ImageUrl)"
+                             alt="@line.Name" class="rounded border" style="width:56px;height:56px;object-fit:cover;" />
+                    </td>
+                    <td>@line.Name</td>
+                    <td>@line.SKU</td>
+                    <td>@line.UnitPrice.ToString("C")</td>
+                    <td style="width:140px;">
+                        <form asp-controller="Shop" asp-action="UpdateCartLine" method="post" class="d-flex gap-1">
+                            <input type="hidden" name="productId" value="@line.ProductId" />
+                            <input type="number" name="quantity" value="@line.Quantity" min="0" class="form-control form-control-sm" />
+                            <button type="submit" class="btn btn-sm btn-outline-secondary">Update</button>
+                        </form>
+                    </td>
+                    <td>@line.LineTotal.ToString("C")</td>
+                    <td>
+                        <form asp-controller="Shop" asp-action="RemoveFromCart" method="post">
+                            <input type="hidden" name="productId" value="@line.ProductId" />
+                            <button type="submit" class="btn btn-sm btn-outline-danger">Remove</button>
+                        </form>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+
+        <div class="d-flex justify-content-end">
+            <div style="min-width:260px;">
+                @{
+                    var vat = FashionFix.Web.Security.TaxSettings.CalculateVat(Model.SubTotal);
+                }
+                <div class="d-flex justify-content-between"><span>Subtotal</span><span>@Model.SubTotal.ToString("C")</span></div>
+                <div class="d-flex justify-content-between text-muted"><span>VAT (15%)</span><span>@vat.ToString("C")</span></div>
+                <div class="d-flex justify-content-between fs-5 border-top pt-2 mt-2 mb-3"><strong>Total</strong><strong>@((Model.SubTotal + vat).ToString("C"))</strong></div>
+                <a asp-controller="Shop" asp-action="Checkout" class="btn btn-danger w-100">Proceed to Checkout</a>
+            </div>
+        </div>
+    }
+</div>

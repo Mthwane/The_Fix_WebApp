@@ -1,0 +1,47 @@
+@model List<RoleListItemViewModel>
+@{
+    ViewData["Title"] = "Roles & Permissions";
+}
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h2 class="mb-0">Roles & Permissions</h2>
+            <p class="text-muted mb-0">Create roles and choose exactly what each one can do. Changes apply immediately.</p>
+        </div>
+        <a asp-controller="Roles" asp-action="Create" class="btn btn-primary">+ New Role</a>
+    </div>
+
+    @if (TempData["RoleError"] is string err)
+    {
+        <div class="alert alert-danger">@err</div>
+    }
+
+    <table class="table table-hover align-middle">
+        <thead><tr><th>Role</th><th>Permissions Granted</th><th>Members</th><th></th></tr></thead>
+        <tbody>
+        @foreach (var role in Model)
+        {
+            <tr>
+                <td>
+                    @role.Name
+                    @if (role.IsProtected)
+                    {
+                        <span class="badge bg-secondary ms-1">Built-in</span>
+                    }
+                </td>
+                <td>@role.PermissionCount permission(s)</td>
+                <td>@role.MemberCount user(s)</td>
+                <td class="text-end">
+                    <a asp-controller="Roles" asp-action="Edit" asp-route-id="@role.Id" class="btn btn-sm btn-outline-primary">Edit</a>
+                    @if (!role.IsProtected)
+                    {
+                        <form asp-controller="Roles" asp-action="Delete" asp-route-id="@role.Id" method="post" class="d-inline">
+                            <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete this role?');">Delete</button>
+                        </form>
+                    }
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+</div>

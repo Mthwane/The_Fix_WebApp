@@ -1,0 +1,82 @@
+@model List<Order>
+@{
+    ViewData["Title"] = "My Orders";
+    var cancellableStatuses = ViewBag.CancellableStatuses as OrderStatus[] ?? Array.Empty<OrderStatus>();
+    var fallbackImage = "https://placehold.co/80x80?text=No+Image";
+}
+
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h2 class="mb-0">My Orders</h2>
+            <p class="text-muted mb-0">Your purchase history and delivery status.</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a asp-controller="Customer" asp-action="Profile" class="btn btn-outline-secondary">My Profile</a>
+            <a asp-controller="Shop" asp-action="Index" class="btn btn-danger">🛒 Shop Now</a>
+        </div>
+    </div>
+
+    @if (!Model.Any())
+    {
+        <div class="alert alert-info d-flex justify-content-between align-items-center">
+            <span>You haven't placed any orders yet.</span>
+            <a asp-controller="Shop" asp-action="Index" class="btn btn-sm btn-danger">Start Shopping</a>
+        </div>
+    }
+    else
+    {
+        @foreach (var order in Model)
+        {
+            <div class="card mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong>Order #@order.OrderNumber</strong>
+                        <span class="text-muted ms-2">@order.DateCreated.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</span>
+                    </div>
+                    @{
+                        var badgeClass = order.Status switch
+                        {
+                            OrderStatus.Completed or OrderStatus.Delivered => "bg-success",
+                            OrderStatus.Cancelled or OrderStatus.Returned => "bg-danger",
+                            OrderStatus.Shipped or OrderStatus.Processing => "bg-info text-dark",
+                            _ => "bg-secondary"
+                        };
+                    }
+                    <span class="badge @badgeClass">@order.Status</span>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm mb-2 align-middle">
+                        <tbody>
+                        @foreach (var item in order.OrderItems)
+                        {
+                            <tr>
+                                <td style="width:64px;">
+                                    <img src="@(string.IsNullOrWhiteSpace(item.Product?.ImageUrl) ? fallbackImage : item.Product.ImageUrl)"
+                                         alt="@item.Product?.Name" class="rounded border" style="width:56px;height:56px;object-fit:cover;" />
+                                </td>
+                                <td>@item.Product?.Name <span class="text-muted">(x@item.Quantity)</span></td>
+                                <td class="text-end">@item.LineTotal.ToString("C")</td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="text-muted">@order.PaymentMethod</span>
+                        <strong>Total: @order.GrandTotal.ToString("C")</strong>
+                    </div>
+
+                    @if (cancellableStatuses.Contains(order.Status))
+                    {
+                        <form asp-controller="Customer" asp-action="CancelOrder" asp-route-id="@order.OrderId" method="post" class="mt-2 text-end">
+                            <button type="submit" class="btn btn-sm btn-outline-danger"
+                                    onclick="return confirm('Cancel this order? Items will be released back to stock.');">
+                                Cancel Order
+                            </button>
+                        </form>
+                    }
+                </div>
+            </div>
+        }
+    }
+</div>
