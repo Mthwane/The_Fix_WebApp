@@ -1,4 +1,5 @@
-<<<<<<< HEAD
+
+
 # FashionFix - Store Management System
 
 ASP.NET Core MVC backend skeleton for the FashionFix fashion retail store,
