@@ -36,68 +36,44 @@ else
 
             <nav class="sidebar-nav nav flex-column">
                 @if (isAuthenticated)
-                {
-                    if (Can(Permissions.DashboardView))
-                    {
-                        <a class="nav-link" asp-controller="Home" asp-action="Dashboard">
-                            <span class="nav-icon">📊</span><span class="nav-label">Dashboard</span>
-                        </a>
-                    }
+                        {
+                            if (Can(Permissions.DashboardView))
+                            {
+                                <a class="nav-link" asp-controller="Home" asp-action="Dashboard">
+                                    <span class="nav-icon">📊</span><span class="nav-label">Dashboard</span>
+                                </a>
+                            }
 
-                    if (Can(Permissions.ProductsManage) || Can(Permissions.PosUse))
-                    {
-                        <div class="sidebar-section-label">Store</div>
-                    }
-                    if (Can(Permissions.ProductsManage))
-                    {
-                        <a class="nav-link" asp-controller="Products" asp-action="Index">
-                            <span class="nav-icon">🏷️</span><span class="nav-label">Products</span>
-                        </a>
-                    }
-                    if (Can(Permissions.PosUse))
-                    {
-                        <a class="nav-link" asp-controller="Pos" asp-action="Index">
-                            <span class="nav-icon">🧾</span><span class="nav-label">POS</span>
-                        </a>
-                    }
-                    if (Can(Permissions.OrdersManage))
-                    {
-                        <a class="nav-link" asp-controller="Orders" asp-action="Index">
-                            <span class="nav-icon">📬</span><span class="nav-label">Orders</span>
-                        </a>
-                    }
-<<<<<<< Updated upstream
-<<<<<<< HEAD
+                            if (Can(Permissions.ProductsManage) || Can(Permissions.PosUse))
+                            {
+                                <div class="sidebar-section-label">Store</div>
+                            }
+                            if (Can(Permissions.ProductsManage))
+                            {
+                                <a class="nav-link" asp-controller="Products" asp-action="Index">
+                                    <span class="nav-icon">🏷️</span><span class="nav-label">Products</span>
+                                </a>
+                            }
+                            if (Can(Permissions.PosUse))
+                            {
+                                <a class="nav-link" asp-controller="Pos" asp-action="Index">
+                                    <span class="nav-icon">🧾</span><span class="nav-label">POS</span>
+                                </a>
+                            }
+                            if (Can(Permissions.OrdersManage))
+                            {
+                                <a class="nav-link" asp-controller="Orders" asp-action="Index">
+                                    <span class="nav-icon">📬</span><span class="nav-label">Orders</span>
+                                </a>
+                            }
 
-                  //  Sbonga removed
 
-                    
-                   //Gci 
-=======
-<<<<<<< HEAD
-                  //  Sbonga removed
 
-                    
-                   //Gci removed
-=======
->>>>>>> be737eba77e65a4e9e88a9eb728f24a3b06df917
-                  // removed
+                        
+                        
 
-                    
-                    if (Can(Permissions.SuppliersManage))
-                    {
-                        <a class="nav-link" asp-controller="Suppliers" asp-action="Index">
-                            <span class="nav-icon">🚚</span><span class="nav-label">Suppliers</span>
-                        </a>
-                    }
-<<<<<<< HEAD
-=======
->>>>>>> ad41ca7c783ec7105a9db5d208bedbaebd619a71
->>>>>>> be737eba77e65a4e9e88a9eb728f24a3b06df917
-=======
->>>>>>> Stashed changes
-
-                    if (Can(Permissions.ReportsView))
+ 
+                      if (Can(Permissions.ReportsView))
                     {
                         <div class="sidebar-section-label">Insight</div>
                         <a class="nav-link" asp-controller="Reports" asp-action="Index">
