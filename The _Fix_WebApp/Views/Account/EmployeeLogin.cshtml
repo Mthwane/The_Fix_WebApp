@@ -1,0 +1,81 @@
+@model LoginViewModel
+@{
+    ViewData["Title"] = "Employee Login";
+    ViewData["HideNav"] = true;
+}
+
+<div class="container-fluid vh-100">
+    <div class="row h-100">
+
+        <!-- LEFT PANEL: staff branding, distinct dark theme from the customer login -->
+        <div class="col-lg-6 d-none d-lg-flex flex-column justify-content-center text-white p-5"
+             style="background: linear-gradient(135deg,#1a1d29,#2c3142);">
+            <h1 class="display-5 fw-bold">Fashion Fix</h1>
+            <p class="fs-5">Staff Portal</p>
+            <h2 class="mt-4">Welcome back, team!</h2>
+            <p>Sign in with your staff credentials to access the till, catalogue, and reports.</p>
+
+            <div class="d-flex gap-3 mt-5">
+                <div class="bg-white bg-opacity-10 rounded p-3 text-center flex-fill">
+                    <div class="fs-4">🧾</div>
+                    <small>Run the till</small>
+                </div>
+                <div class="bg-white bg-opacity-10 rounded p-3 text-center flex-fill">
+                    <div class="fs-4">📦</div>
+                    <small>Manage stock</small>
+                </div>
+                <div class="bg-white bg-opacity-10 rounded p-3 text-center flex-fill">
+                    <div class="fs-4">📈</div>
+                    <small>View reports</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT PANEL: the staff login form -->
+        <div class="col-lg-6 d-flex flex-column justify-content-center p-5">
+            <div class="mx-auto w-100" style="max-width: 380px;">
+
+                <h2 class="mb-1">Employee Login</h2>
+                <p class="text-muted mb-4">For Administrators, Managers, Employees & Store Owners</p>
+
+                <form asp-controller="Account" asp-action="Login" method="post">
+                    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+                    <input type="hidden" asp-for="ReturnUrl" />
+                    <input type="hidden" asp-for="IsEmployeeLogin" value="true" />
+
+                    <div class="mb-3">
+                        <label asp-for="Username" class="form-label"></label>
+                        <input asp-for="Username" class="form-control" placeholder="Enter your staff username" autofocus />
+                        <span asp-validation-for="Username" class="text-danger"></span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="Password" class="form-label"></label>
+                        <input asp-for="Password" class="form-control" placeholder="Enter your password" />
+                        <span asp-validation-for="Password" class="text-danger"></span>
+                    </div>
+
+                    <div class="mb-3 d-flex justify-content-between align-items-center">
+                        <div class="form-check">
+                            <input asp-for="RememberMe" class="form-check-input" />
+                            <label asp-for="RememberMe" class="form-check-label"></label>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-dark w-100 mb-3">Login</button>
+                </form>
+
+                <div class="text-center text-muted mb-3">OR</div>
+
+                <a asp-controller="Home" asp-action="Index" class="btn btn-outline-secondary w-100 mb-3">
+                    Login as Customer
+                </a>
+
+                <p class="text-center text-muted small">
+                    Staff accounts are created by an Administrator - contact yours if you need access.
+                </p>
+            </div>
+        </div>
+
+    </div>
+</div>

@@ -1,0 +1,78 @@
+@model ProductViewModel
+@{
+    ViewData["Title"] = "Edit Product";
+}
+
+<div class="container py-4">
+    <h1>Edit Product</h1>
+
+    <form asp-action="Edit" asp-route-id="@Model.ProductId" method="post">
+        <input type="hidden" asp-for="ProductId" />
+        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+        <div class="row">
+            <div class="col-md-6 mb-3">
+                <label asp-for="Name" class="form-label"></label>
+                <input asp-for="Name" class="form-control" />
+                <span asp-validation-for="Name" class="text-danger"></span>
+            </div>
+            <div class="col-md-6 mb-3">
+                <label asp-for="SKU" class="form-label"></label>
+                <input asp-for="SKU" class="form-control" />
+                <span asp-validation-for="SKU" class="text-danger"></span>
+            </div>
+            <div class="col-md-12 mb-3">
+                <label asp-for="Description" class="form-label"></label>
+                <textarea asp-for="Description" class="form-control" rows="3" placeholder="Shown to customers browsing the shop, and to staff on the POS scan popup"></textarea>
+                <span asp-validation-for="Description" class="text-danger"></span>
+            </div>
+            <div class="col-md-4 mb-3">
+                <label asp-for="Category" class="form-label"></label>
+                <input asp-for="Category" class="form-control" />
+            </div>
+            <div class="col-md-4 mb-3">
+                <label asp-for="Size" class="form-label"></label>
+                <input asp-for="Size" class="form-control" />
+            </div>
+            <div class="col-md-4 mb-3">
+                <label asp-for="Color" class="form-label"></label>
+                <input asp-for="Color" class="form-control" />
+            </div>
+            <div class="col-md-4 mb-3">
+                <label asp-for="Brand" class="form-label"></label>
+                <input asp-for="Brand" class="form-control" />
+            </div>
+            <div class="col-md-4 mb-3">
+                <label asp-for="CostPrice" class="form-label"></label>
+                <input asp-for="CostPrice" class="form-control" />
+            </div>
+            <div class="col-md-4 mb-3">
+                <label asp-for="SellingPrice" class="form-label"></label>
+                <input asp-for="SellingPrice" class="form-control" />
+                <span asp-validation-for="SellingPrice" class="text-danger"></span>
+            </div>
+            <div class="col-md-4 mb-3">
+                <label asp-for="ImageUrl" class="form-label"></label>
+                <input asp-for="ImageUrl" class="form-control" />
+            </div>
+            <div class="col-md-4 mb-3">
+                <label asp-for="StockQuantity" class="form-label"></label>
+                <input asp-for="StockQuantity" class="form-control" disabled />
+                <div class="form-text">Stock changes only via sales, returns, or purchase order receipts.</div>
+            </div>
+            <div class="col-md-4 mb-3">
+                <label asp-for="LowStockThreshold" class="form-label"></label>
+                <input asp-for="LowStockThreshold" class="form-control" />
+                <span asp-validation-for="LowStockThreshold" class="text-danger"></span>
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+        <a asp-action="Index" class="btn btn-link">Cancel</a>
+    </form>
+
+    <hr />
+    <form asp-action="Deactivate" asp-route-id="@Model.ProductId" method="post" class="d-inline">
+        <button type="submit" class="btn btn-outline-danger" onclick="return confirm('Deactivate this product? It will no longer be sellable but its history is preserved.');">Deactivate Product</button>
+    </form>
+</div>

@@ -1,0 +1,15 @@
+@{
+    ViewData["Title"] = "Access Denied";
+}
+<div class="container py-5 text-center">
+    <h1 class="display-6">Access Denied</h1>
+    <p class="text-muted">You do not have permission to view this page.</p>
+    @if (User.Identity?.IsAuthenticated == true)
+    {
+        <a asp-controller="Home" asp-action="Index" class="btn btn-danger mt-2">Go to my home page</a>
+    }
+    else
+    {
+        <a asp-controller="Home" asp-action="Index" class="btn btn-danger mt-2">Back to Login</a>
+    }
+</div>

@@ -1,0 +1,52 @@
+@model Order
+@{
+    ViewData["Title"] = $"Order {Model.OrderNumber}";
+}
+<div class="container py-4" style="max-width:720px;">
+    <a asp-controller="Orders" asp-action="Index" class="btn btn-outline-secondary btn-sm mb-3">&larr; All Orders</a>
+
+    <div class="d-flex justify-content-between align-items-start mb-3">
+        <div>
+            <h2 class="mb-0">Order @Model.OrderNumber</h2>
+            <div class="text-muted">@Model.DateCreated.ToLocalTime().ToString("dd MMM yyyy, HH:mm") &middot; @Model.OrderType</div>
+        </div>
+        <span class="badge bg-secondary fs-6">@Model.Status</span>
+    </div>
+
+    <dl class="row">
+        <dt class="col-sm-3">Customer</dt>
+        <dd class="col-sm-9">@(Model.Customer?.FullName ?? "Walk-in") @(Model.Customer?.Email is string e ? $"({e})" : "")</dd>
+        <dt class="col-sm-3">Processed By</dt>
+        <dd class="col-sm-9">@(Model.ProcessedByUser?.FullName ?? "-")</dd>
+        <dt class="col-sm-3">Payment Method</dt>
+        <dd class="col-sm-9">@Model.PaymentMethod</dd>
+    </dl>
+
+    <table class="table table-sm">
+        <thead><tr><th>Item</th><th>Qty</th><th>Unit Price</th><th>Total</th></tr></thead>
+        <tbody>
+        @foreach (var item in Model.OrderItems)
+        {
+            <tr><td>@item.Product?.Name</td><td>@item.Quantity</td><td>@item.UnitPrice.ToString("C")</td><td>@item.LineTotal.ToString("C")</td></tr>
+        }
+        </tbody>
+    </table>
+    <div class="text-end">
+        <div>Subtotal: @Model.SubTotal.ToString("C")</div>
+        <div class="text-muted">VAT: @Model.TaxTotal.ToString("C")</div>
+        @if (Model.DiscountTotal > 0) { <div class="text-muted">Discount: -@Model.DiscountTotal.ToString("C")</div> }
+        <div class="fs-5"><strong>Total: @Model.GrandTotal.ToString("C")</strong></div>
+    </div>
+
+    <div class="mt-4 d-flex gap-2">
+        @if (Model.Status is OrderStatus.Pending or OrderStatus.Processing or OrderStatus.Shipped)
+        {
+            <form asp-controller="Orders" asp-action="AdvanceStatus" asp-route-id="@Model.OrderId" method="post">
+                <button type="submit" class="btn btn-primary">Advance Status</button>
+            </form>
+            <form asp-controller="Orders" asp-action="Cancel" asp-route-id="@Model.OrderId" method="post">
+                <button type="submit" class="btn btn-outline-danger" onclick="return confirm('Cancel this order and restock its items?');">Cancel Order</button>
+            </form>
+        }
+    </div>
+</div>

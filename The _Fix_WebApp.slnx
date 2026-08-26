@@ -1,3 +1,7 @@
 <Solution>
+<<<<<<< HEAD
   <Project Path="The _Fix_WebApp.csproj" />
+=======
+  <Project Path="The _Fix_WebApp/The _Fix_WebApp.csproj" />
+>>>>>>> 3f3499ae27af550b7554805f721fd80a6ef3d34a
 </Solution>
