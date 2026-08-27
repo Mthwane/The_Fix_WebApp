@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Mvc.Rendering;
 
 namespace FashionFix.Web.Controllers;
 
@@ -52,24 +53,34 @@ public class ProductsController : Controller
         ViewBag.Filter = filter;
         return View(products);
     }
-
     // GET: /Products/Create
     [HttpGet]
-    public IActionResult Create() => View(new ProductViewModel());
+    public IActionResult Create()
+    {
+        PopulateDropdowns();
+        return View(new ProductViewModel());
+    }
 
     // POST: /Products/Create
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(ProductViewModel model)
     {
+        // SKU is never taken from the posted form - it's always server-generated,
+        // so clear whatever ModelState has for it and re-validate without it.
+        ModelState.Remove(nameof(ProductViewModel.SKU));
+
         if (!ModelState.IsValid)
+        {
+            PopulateDropdowns();
             return View(model);
+        }
 
         var product = new Product
         {
             Name = model.Name,
             Description = model.Description,
-            SKU = model.SKU,
+            SKU = await GenerateUniqueSkuAsync(model.Category),
             Category = model.Category,
             Size = model.Size,
             Color = model.Color,
@@ -97,6 +108,8 @@ public class ProductsController : Controller
     {
         var product = await _context.Products.FindAsync(id);
         if (product is null) return NotFound();
+        
+        PopulateDropdowns();
 
         var model = new ProductViewModel
         {
@@ -125,14 +138,22 @@ public class ProductsController : Controller
     public async Task<IActionResult> Edit(int id, ProductViewModel model)
     {
         if (id != model.ProductId) return BadRequest();
-        if (!ModelState.IsValid) return View(model);
+
+        // SKU is read-only on Edit - never overwrite it from the posted form.
+        ModelState.Remove(nameof(ProductViewModel.SKU));
+
+        if (!ModelState.IsValid)
+        {
+            PopulateDropdowns();
+            return View(model);
+        }
 
         var product = await _context.Products.FindAsync(id);
         if (product is null) return NotFound();
 
         product.Name = model.Name;
         product.Description = model.Description;
-        product.SKU = model.SKU;
+        // product.SKU intentionally left unchanged - it's fixed at creation time.
         product.Category = model.Category;
         product.Size = model.Size;
         product.Color = model.Color;
@@ -169,6 +190,34 @@ public class ProductsController : Controller
         this.ToastSuccess($"'{product.Name}' was deactivated.");
 
         return RedirectToAction(nameof(Index));
+    }
+
+    private void PopulateDropdowns()
+    {
+        ViewBag.Categories = new SelectList(ProductViewModel.Categories);
+        ViewBag.Colors = new SelectList(ProductViewModel.Colors);
+    }
+
+    /// <summary>
+    /// Builds a SKU as "{CATEGORY-PREFIX}-{4-digit sequence}", e.g. "CLO-0001", and
+    /// retries with the next number on the rare chance of a collision, so Create()
+    /// never has to trust a client-supplied SKU.
+    /// </summary>
+    private async Task<string> GenerateUniqueSkuAsync(string category)
+    {
+        var prefix = new string((category ?? "GEN")
+            .Where(char.IsLetter)
+            .Take(3)
+            .ToArray()).ToUpperInvariant();
+        if (prefix.Length == 0) prefix = "GEN";
+
+        var existingCount = await _context.Products.CountAsync(p => p.SKU.StartsWith(prefix + "-"));
+        for (var attempt = existingCount + 1; ; attempt++)
+        {
+            var candidate = $"{prefix}-{attempt:D4}";
+            var taken = await _context.Products.AnyAsync(p => p.SKU == candidate);
+            if (!taken) return candidate;
+        }
     }
 
     private async Task LogAuditAsync(string action, string details)
