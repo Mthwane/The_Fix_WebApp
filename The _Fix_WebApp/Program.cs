@@ -58,7 +58,7 @@ builder.Services.Configure<SecurityStampValidatorOptions>(options =>
 
 builder.Services.ConfigureApplicationCookie(options =>
 {
-    options.LoginPath = "/Home/Index";
+    options.LoginPath = "/Account/EmployeeLogin";
     options.AccessDeniedPath = "/Account/AccessDenied";
     options.SlidingExpiration = true;
     options.ExpireTimeSpan = TimeSpan.FromHours(8);

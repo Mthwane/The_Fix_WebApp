@@ -23,6 +23,11 @@ public class InventoryService : IInventoryService
     {
         var product = await _context.Products.FindAsync(productId)
             ?? throw new InvalidOperationException($"Product {productId} not found.");
+        if (quantity <= 0)
+            throw new ArgumentOutOfRangeException(nameof(quantity), "Decrement quantity must be positive.");
+        if (product.StockQuantity < quantity)
+            throw new InvalidOperationException($"Cannot decrement stock for '{product.Name}' below zero (have {product.StockQuantity}, need {quantity}).");
+
 
         product.StockQuantity -= quantity;
         product.DateUpdated = DateTime.UtcNow;
@@ -49,6 +54,8 @@ public class InventoryService : IInventoryService
         var product = await _context.Products.FindAsync(productId)
             ?? throw new InvalidOperationException($"Product {productId} not found.");
 
+        if (quantity <= 0)
+            throw new ArgumentOutOfRangeException(nameof(quantity), "Increment quantity must be positive.");
         product.StockQuantity += quantity;
         product.DateUpdated = DateTime.UtcNow;
 

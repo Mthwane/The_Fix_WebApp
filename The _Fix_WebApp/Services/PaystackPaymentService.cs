@@ -41,10 +41,7 @@ public class PaystackPaymentService : IPaymentService
         var response = await _http.PostAsync("transaction/initialize", content);
         var body = await response.Content.ReadAsStringAsync();
 
-        Console.WriteLine($"[PAYSTACK DEBUG] Status: {response.StatusCode}");
-        Console.WriteLine($"[PAYSTACK DEBUG] Key used: '{_options.SecretKey}'");
-        Console.WriteLine($"[PAYSTACK DEBUG] Response body: {body}");
-
+        
         using var doc = JsonDocument.Parse(body);
         var root = doc.RootElement;
 

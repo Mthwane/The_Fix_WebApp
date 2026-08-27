@@ -32,13 +32,14 @@ public class EmployeesController : Controller
     public async Task<IActionResult> Index()
     {
         // Staff = any user NOT solely in the Customer role.
-        var customerRoleUsers = await _userManager.GetUsersInRoleAsync("Customer");
-        var customerIds = customerRoleUsers.Select(u => u.Id).ToHashSet();
-
-        var employees = await _context.Users
-            .Where(u => !customerIds.Contains(u.Id))
-            .OrderBy(u => u.FullName)
-            .ToListAsync();
+        var allUsers = await _context.Users.OrderBy(u => u.FullName).ToListAsync();
+        var employees = new List<ApplicationUser>();
+        foreach (var u in allUsers)
+        {
+            var roles = await _userManager.GetRolesAsync(u);
+            if (roles.Any(r => r != "Customer"))
+                employees.Add(u);
+        }
 
         var roleLookup = new Dictionary<string, string>();
         foreach (var employee in employees)
@@ -121,7 +122,7 @@ public class EmployeesController : Controller
         }
 
         await _userManager.AddToRoleAsync(user, model.Role);
-
+      
         _context.AuditLogs.Add(new AuditLog
         {
             UserId = _userManager.GetUserId(User),
@@ -132,6 +133,21 @@ public class EmployeesController : Controller
 
         this.ToastSuccess($"'{user.UserName}' was created as a {model.Role}.");
         return RedirectToAction(nameof(Index));
+    }
+    [Authorize(Policy = Permissions.AuditLogsView)]
+    [HttpGet]
+    public async Task<IActionResult> AuditLogs(int page = 1)
+    {
+        const int pageSize = 200;
+        var logs = await _context.AuditLogs
+            .Include(a => a.User)
+            .OrderByDescending(a => a.Timestamp)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+
+        ViewBag.Page = page;
+        return View(logs);
     }
 
     // POST: /Employees/AssignRole - role/permission assignment (US-16).
@@ -146,7 +162,8 @@ public class EmployeesController : Controller
         var currentRoles = await _userManager.GetRolesAsync(user);
         var previousRoles = string.Join(", ", currentRoles);
 
-        await _userManager.RemoveFromRolesAsync(user, currentRoles);
+        var rolesToRemove = currentRoles.Where(r => r != "Customer").ToList();
+        await _userManager.RemoveFromRolesAsync(user, rolesToRemove);
         await _userManager.AddToRoleAsync(user, role);
 
         _context.AuditLogs.Add(new AuditLog

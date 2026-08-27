@@ -211,15 +211,18 @@ public class ProductsController : Controller
             .ToArray()).ToUpperInvariant();
         if (prefix.Length == 0) prefix = "GEN";
 
-        var existingCount = await _context.Products.CountAsync(p => p.SKU.StartsWith(prefix + "-"));
-        for (var attempt = existingCount + 1; ; attempt++)
+        var existingSkus = await _context.Products
+            .Where(p => p.SKU.StartsWith(prefix + "-"))
+            .Select(p => p.SKU)
+            .ToListAsync();
+        var existingSet = existingSkus.ToHashSet();
+
+        for (var attempt = existingSkus.Count + 1; ; attempt++)
         {
             var candidate = $"{prefix}-{attempt:D4}";
-            var taken = await _context.Products.AnyAsync(p => p.SKU == candidate);
-            if (!taken) return candidate;
+            if (!existingSet.Contains(candidate)) return candidate;
         }
     }
-
     private async Task LogAuditAsync(string action, string details)
     {
         _context.AuditLogs.Add(new AuditLog
