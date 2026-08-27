@@ -5,6 +5,7 @@ using FashionFix.Web.Services;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using The__Fix_WebApp.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -87,6 +88,8 @@ builder.Services.AddAuthorization(options =>
 builder.Services.AddScoped<IInventoryService, InventoryService>();
 builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection("Email"));
 builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
+builder.Services.Configure<PaystackOptions>(builder.Configuration.GetSection("Paystack"));
+builder.Services.AddHttpClient<IPaymentService, PaystackPaymentService>();
 
 // --- Session (backs the customer's shopping cart - no new DB table needed) ---
 builder.Services.AddDistributedMemoryCache();
@@ -101,7 +104,12 @@ builder.Services.AddSession(options =>
 builder.Services.AddControllersWithViews();
 
 var app = builder.Build();
-
+// --- Apply any pending EF Core migrations, creating the database/tables if they don't exist yet ---
+using (var migrationScope = app.Services.CreateScope())
+{
+    var dbContext = migrationScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    dbContext.Database.Migrate();
+}
 // --- Seed roles + their default permission claims, and bootstrap the first Administrator ---
 using (var scope = app.Services.CreateScope())
 {

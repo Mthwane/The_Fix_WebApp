@@ -16,7 +16,8 @@
                     <img src="@(string.IsNullOrWhiteSpace(item.Product?.ImageUrl) ? fallbackImage : item.Product.ImageUrl)"
                          alt="@item.Product?.Name" class="rounded border" style="width:48px;height:48px;object-fit:cover;" />
                 </td>
-                <td>@item.Product?.Name (x@item.Quantity)</td><td class="text-end">@item.LineTotal.ToString("C")</td>
+                    <td>@item.Product?.Name (x@(item.Quantity))</td>
+                    <td class="text-end">@item.LineTotal.ToString("C")</td>
             </tr>
         }
         </tbody>
