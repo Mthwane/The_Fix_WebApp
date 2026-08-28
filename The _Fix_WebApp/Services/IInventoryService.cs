@@ -15,7 +15,7 @@ public interface IInventoryService
 
     /// <summary>True if a product's stock is at or below its configured threshold.</summary>
     Task<bool> IsLowStockAsync(int productId);
-<<<<<<< HEAD
+
 
     /// <summary>
     /// Decrements stock for every (productId, quantity) line in a single round trip and a
@@ -27,6 +27,5 @@ public interface IInventoryService
 
     /// <summary>Batch equivalent of IncrementStockAsync - one round trip for the whole order.</summary>
     Task<List<Product>> IncrementStockBatchAsync(IEnumerable<(int ProductId, int Quantity)> lines, InventoryChangeReason reason = InventoryChangeReason.PurchaseOrderReceived);
-=======
->>>>>>> origin/SprintPresent
+
 }

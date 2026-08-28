@@ -213,21 +213,19 @@ namespace The__Fix_WebApp.Data
 
                     b.HasIndex("CustomerId");
 
-<<<<<<< HEAD
+
                     b.HasIndex("DateCreated");
 
-=======
->>>>>>> origin/SprintPresent
+
                     b.HasIndex("OrderNumber")
                         .IsUnique();
 
                     b.HasIndex("ProcessedByUserId");
 
-<<<<<<< HEAD
+
                     b.HasIndex("Status", "OrderType");
 
-=======
->>>>>>> origin/SprintPresent
+
                     b.ToTable("Orders");
                 });
 
@@ -330,13 +328,12 @@ namespace The__Fix_WebApp.Data
 
                     b.HasKey("ProductId");
 
-<<<<<<< HEAD
+
                     b.HasIndex("IsActive", "Category");
 
                     b.HasIndex("Name");
 
-=======
->>>>>>> origin/SprintPresent
+
                     b.HasIndex("SKU")
                         .IsUnique();
 

@@ -1,10 +1,9 @@
 using FashionFix.Web.Data;
 using FashionFix.Web.Models.Entities;
 using Microsoft.EntityFrameworkCore;
-<<<<<<< HEAD
+
 using System.Linq;
-=======
->>>>>>> origin/SprintPresent
+
 
 namespace FashionFix.Web.Services;
 
@@ -86,7 +85,7 @@ public class InventoryService : IInventoryService
         var product = await _context.Products.FindAsync(productId);
         return product is not null && product.IsLowStock;
     }
-<<<<<<< HEAD
+
 
     public async Task<List<Product>> DecrementStockBatchAsync(IEnumerable<(int ProductId, int Quantity)> lines, InventoryChangeReason reason = InventoryChangeReason.Sale)
     {
@@ -164,6 +163,5 @@ public class InventoryService : IInventoryService
 
         return products.Values.ToList();
     }
-=======
->>>>>>> origin/SprintPresent
+
 }

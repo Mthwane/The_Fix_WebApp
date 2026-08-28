@@ -44,11 +44,9 @@ public class ShopController : Controller
     [HttpGet]
     public async Task<IActionResult> Index(string? search, string? category)
     {
-<<<<<<< HEAD
+
         var query = _context.Products.AsNoTracking().Where(p => p.IsActive && p.StockQuantity > 0);
-=======
-        var query = _context.Products.Where(p => p.IsActive && p.StockQuantity > 0);
->>>>>>> origin/SprintPresent
+
 
         if (!string.IsNullOrWhiteSpace(search))
             query = query.Where(p => p.Name.Contains(search) || p.SKU.Contains(search));
@@ -57,10 +55,9 @@ public class ShopController : Controller
             query = query.Where(p => p.Category == category);
 
         ViewBag.Categories = await _context.Products
-<<<<<<< HEAD
+
             .AsNoTracking()
-=======
->>>>>>> origin/SprintPresent
+
             .Where(p => p.IsActive)
             .Select(p => p.Category)
             .Distinct()
@@ -80,11 +77,9 @@ public class ShopController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> AddToCart(int productId, int quantity = 1)
     {
-<<<<<<< HEAD
+
         var product = await _context.Products.AsNoTracking().FirstOrDefaultAsync(p => p.ProductId == productId && p.IsActive);
-=======
-        var product = await _context.Products.FirstOrDefaultAsync(p => p.ProductId == productId && p.IsActive);
->>>>>>> origin/SprintPresent
+
         if (product is null)
         {
             this.ToastError("That product is no longer available.");
@@ -201,7 +196,7 @@ public class ShopController : Controller
         }
 
         // Re-check stock before we ever send the customer to pay - no point charging them
-<<<<<<< HEAD
+
         // for something that's gone. One query for the whole cart instead of one per line.
         var checkoutProductIds = cart.Lines.Select(l => l.ProductId).Distinct().ToList();
         var checkoutProducts = await _context.Products
@@ -212,13 +207,7 @@ public class ShopController : Controller
         foreach (var line in cart.Lines)
         {
             if (!checkoutProducts.TryGetValue(line.ProductId, out var product) || !product.IsActive)
-=======
-        // for something that's gone.
-        foreach (var line in cart.Lines)
-        {
-            var product = await _context.Products.FindAsync(line.ProductId);
-            if (product is null || !product.IsActive)
->>>>>>> origin/SprintPresent
+
                 ModelState.AddModelError(string.Empty, $"'{line.Name}' is no longer available. Please remove it from your cart.");
             else if (product.StockQuantity < line.Quantity)
                 ModelState.AddModelError(string.Empty, $"Only {product.StockQuantity} of '{line.Name}' left in stock - please update the quantity.");

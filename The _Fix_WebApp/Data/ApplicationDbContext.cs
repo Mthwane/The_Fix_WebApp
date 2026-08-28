@@ -30,7 +30,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             .HasIndex(o => o.OrderNumber)
             .IsUnique();
 
-<<<<<<< HEAD
+
         // --- Performance indexes: cover the columns that are actually filtered/sorted on ---
         // Products.Index / Shop.Index filter on IsActive + Category (and friends) and always
         // sort by Name - this pair of indexes lets SQL Server seek instead of scanning the
@@ -50,8 +50,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         builder.Entity<Order>()
             .HasIndex(o => new { o.Status, o.OrderType });
 
-=======
->>>>>>> origin/SprintPresent
+
         // --- Order relationships ---
         builder.Entity<Order>()
             .HasOne(o => o.Customer)

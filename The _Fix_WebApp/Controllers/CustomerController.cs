@@ -76,15 +76,14 @@ public class CustomerController : Controller
         {
             order.Status = OrderStatus.Cancelled;
 
-<<<<<<< HEAD
-            // One round trip for every item on the order, instead of one per line.
+
             await _inventoryService.IncrementStockBatchAsync(
                 order.OrderItems.Select(i => (i.ProductId, i.Quantity)),
                 InventoryChangeReason.OrderCancelled);
-=======
+
             foreach (var item in order.OrderItems)
                 await _inventoryService.IncrementStockAsync(item.ProductId, item.Quantity, InventoryChangeReason.OrderCancelled);
->>>>>>> origin/SprintPresent
+
 
             _context.AuditLogs.Add(new AuditLog
             {
