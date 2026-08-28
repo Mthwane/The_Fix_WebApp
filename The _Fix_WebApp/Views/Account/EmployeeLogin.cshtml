@@ -1,0 +1,259 @@
+@model LoginViewModel
+@{
+    ViewData["Title"] = "Employee Login";
+    ViewData["HideNav"] = true;
+}
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,300;0,500;0,600;1,300&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+    :root{
+      --silk-bg:#F1E6D6;
+      --panel-bg:#C9BCAB;
+      --dress:#DFDABF;
+      --ink:#201B15;
+      --cream:#FBF6EC;
+      --umber:#3D3128;
+      --taupe:#8C7355;
+      --clay:#8A6A4E;
+      --card:#FFFDF9;
+      --hairline:#DCD3C4;
+    }
+    .emp-login *{box-sizing:border-box;}
+    .emp-login{ font-family:'Inter', sans-serif; background:var(--card); color:var(--umber); }
+    .emp-login .page{ display:grid; grid-template-columns: 55% 45%; min-height:100vh; }
+
+    /* ---------------- LEFT: poster ---------------- */
+    .emp-login .poster-wrap{
+      position:relative;
+      height:100vh;
+      padding:20px;
+      background:
+        radial-gradient(120% 90% at 15% 10%, #FBF3E6 0%, transparent 55%),
+        radial-gradient(120% 90% at 85% 95%, #F7ECDA 0%, transparent 55%),
+        var(--silk-bg);
+      overflow:hidden;
+    }
+    .emp-login .poster{
+      position:relative;
+      height:100%;
+      border-radius:2px;
+      overflow:hidden;
+    }
+    .emp-login .poster .photo{
+      position:absolute; inset:0;
+      background:var(--panel-bg);
+    }
+    .emp-login .poster .photo img{
+      position:absolute; top:0; left:50%; transform:translateX(-50%);
+      width:auto; height:100%; min-width:100%; object-fit:cover;
+    }
+
+    .emp-login .headline{
+      position:absolute; top:26px; left:0; right:0;
+      text-align:center;
+      z-index:3;
+      pointer-events:none;
+    }
+    .emp-login .headline .top{
+      font-family:'Fraunces', serif; font-weight:500; font-size:clamp(30px,4.6vw,58px);
+      color:var(--ink); letter-spacing:.01em; line-height:.95;
+    }
+    .emp-login .headline .mid{
+      font-family:'Fraunces', serif; font-weight:600; font-size:clamp(46px,7.4vw,92px);
+      color:var(--ink); letter-spacing:.01em; line-height:.95; margin-top:2px;
+    }
+    .emp-login .headline .bottom{
+      font-family:'Fraunces', serif; font-style:italic; font-weight:300; font-size:clamp(52px,8.4vw,104px);
+      color:var(--cream); line-height:.9; margin-top:14px;
+    }
+
+    .emp-login .caption-block{
+      position:absolute; left:24px; bottom:230px; z-index:3; max-width:230px;
+    }
+    .emp-login .caption-block .label{
+      font-size:11px; font-weight:600; letter-spacing:.12em; text-transform:uppercase;
+      color:var(--ink); margin-bottom:8px;
+    }
+    .emp-login .caption-block p{
+      font-family:'Inter', sans-serif; font-weight:500; font-size:14px; line-height:1.5; color:var(--ink);
+    }
+
+    .emp-login .accessory-col{
+      position:absolute; left:24px; bottom:24px; width:200px; height:190px;
+      display:flex; flex-direction:column; gap:10px; z-index:3;
+    }
+    .emp-login .accessory-col .tile{ flex:1; overflow:hidden; border-radius:2px; }
+    .emp-login .accessory-col .tile img{ width:100%; height:100%; object-fit:cover; display:block; }
+
+    .emp-login .info-row{
+      position:absolute; left:244px; right:24px; bottom:24px; z-index:3;
+      display:flex; gap:34px;
+    }
+    .emp-login .info-row .info{ flex:1; }
+    .emp-login .info-row .info .label{
+      font-size:11px; font-weight:600; letter-spacing:.12em; text-transform:uppercase; color:var(--ink); margin-bottom:8px;
+    }
+    .emp-login .info-row .info h3{
+      font-family:'Fraunces', serif; font-weight:500; font-size:19px; color:var(--ink); margin-bottom:8px;
+    }
+    .emp-login .info-row .info p{
+      font-family:'Fraunces', serif; font-weight:300; font-size:14.5px; line-height:1.5; color:var(--ink);
+    }
+    .emp-login .info-row .info.plain p{ font-family:'Inter', sans-serif; font-weight:500; font-size:13.5px; }
+
+    /* ---------------- RIGHT: login form ---------------- */
+    .emp-login .form-side{
+      display:flex; align-items:center; justify-content:center;
+      padding:40px; background:var(--card);
+    }
+    .emp-login .form-wrap{ width:100%; max-width:380px; }
+    .emp-login .brand{
+      font-family:'Fraunces', serif; font-weight:500; font-size:15px;
+      letter-spacing:.02em; color:var(--taupe); margin-bottom:8px;
+    }
+    .emp-login .brand span{ font-style:italic; font-weight:300; color:var(--clay); }
+    .emp-login .portal-tag{
+      display:inline-block; font-size:11px; letter-spacing:.1em; text-transform:uppercase;
+      color:var(--cream); background:var(--ink); padding:4px 10px; border-radius:2px; margin-bottom:22px;
+    }
+
+    .emp-login .form-wrap h1{
+      font-family:'Fraunces', serif; font-weight:500; font-size:34px; color:var(--umber); margin:0;
+    }
+    .emp-login .form-wrap p.sub{ color:var(--taupe); font-size:14px; margin-top:6px; margin-bottom:30px; }
+
+    .emp-login label{
+      display:block; font-size:12px; letter-spacing:.06em; text-transform:uppercase;
+      color:var(--umber); margin-bottom:7px; font-weight:500;
+    }
+    .emp-login .field{ margin-bottom:20px; }
+    .emp-login input[type=text], .emp-login input[type=password]{
+      width:100%; border:none; border-bottom:1.5px solid var(--hairline); background:transparent;
+      padding:10px 2px; font-size:15px; font-family:'Inter', sans-serif; color:var(--umber);
+      transition:border-color .2s ease;
+    }
+    .emp-login input[type=text]:focus, .emp-login input[type=password]:focus{ outline:none; border-bottom-color:var(--ink); box-shadow:none; }
+    .emp-login input::placeholder{ color:#B7AA96; }
+
+    .emp-login .row-between{ display:flex; align-items:center; justify-content:space-between; margin:22px 0 26px; font-size:13.5px; }
+    .emp-login .remember{ display:flex; align-items:center; gap:8px; color:var(--taupe); margin-bottom:0; text-transform:none; font-size:13.5px; letter-spacing:normal; font-weight:400; }
+    .emp-login .remember input{ accent-color:var(--ink); width:15px; height:15px; margin:0; }
+
+    .emp-login button.primary{
+      width:100%; background:var(--ink); color:var(--cream); border:none; padding:14px;
+      font-size:14px; letter-spacing:.06em; text-transform:uppercase; font-weight:600;
+      border-radius:3px; cursor:pointer; transition:background .2s ease;
+    }
+    .emp-login button.primary:hover{ background:#3A3226; color:var(--cream); }
+
+    .emp-login .divider{ display:flex; align-items:center; gap:12px; margin:22px 0; color:#B7AA96; font-size:11px; letter-spacing:.1em; }
+    .emp-login .divider::before, .emp-login .divider::after{ content:""; flex:1; height:1px; background:var(--hairline); }
+
+    .emp-login .btn-secondary-outline{
+      display:block; width:100%; background:transparent; border:1.5px solid var(--umber); color:var(--umber);
+      padding:13px; font-size:14px; letter-spacing:.06em; text-transform:uppercase; font-weight:500;
+      border-radius:3px; cursor:pointer; transition:all .2s ease; text-align:center; text-decoration:none;
+    }
+    .emp-login .btn-secondary-outline:hover{ background:var(--umber); color:var(--cream); }
+
+    .emp-login .helptext{ text-align:center; margin-top:26px; font-size:13px; color:var(--taupe); line-height:1.5; }
+    .emp-login .text-danger{ font-size:12.5px; }
+
+    @@media (max-width: 991px){
+      .emp-login .page{ grid-template-columns:1fr; }
+      .emp-login .poster-wrap{ display:none; }
+      .emp-login .form-side{ min-height:100vh; }
+    }
+</style>
+
+<div class="emp-login">
+    <div class="page">
+
+        <!-- LEFT: branding poster -->
+        <div class="poster-wrap">
+            <div class="poster">
+                <div class="photo">
+                    <img src="https://images.unsplash.com/photo-1509631179647-0177331693ae?w=900&amp;q=80" alt="">
+                </div>
+
+                <div class="headline">
+                    <div class="top">THE</div>
+                    <div class="mid">STAFF</div>
+                    <div class="bottom">Portal</div>
+                </div>
+
+                <div class="caption-block">
+                    <div class="label">Navigation</div>
+                    <p>Sign in with your staff credentials to access the till, catalogue, and reports.</p>
+                </div>
+
+                <div class="accessory-col">
+                    <div class="tile">
+                        
+                    </div>
+                    <div class="tile">
+                      
+                    </div>
+                </div>
+
+                <div class="info-row">
+                    <div class="info plain">
+                        <div class="label">Quick access</div>
+                       
+                    </div>
+                    <div class="info">
+                        
+                        
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT: login form -->
+        <div class="form-side">
+            <div class="form-wrap">
+                <div class="brand">Fashion <span>Fix</span></div>
+                <div class="portal-tag">Staff Portal</div>
+                <h1>Employee Login</h1>
+                <p class="sub">For Administrators, Managers, Employees &amp; Store Owners</p>
+
+                <form asp-controller="Account" asp-action="Login" method="post">
+                    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+                    <input type="hidden" asp-for="ReturnUrl" />
+                    <input type="hidden" asp-for="IsEmployeeLogin" value="true" />
+
+                    <div class="field">
+                        <label asp-for="Username"></label>
+                        <input asp-for="Username" type="text" placeholder="Enter your staff username" autofocus />
+                        <span asp-validation-for="Username" class="text-danger"></span>
+                    </div>
+
+                    <div class="field">
+                        <label asp-for="Password"></label>
+                        <input asp-for="Password" type="password" placeholder="Enter your password" />
+                        <span asp-validation-for="Password" class="text-danger"></span>
+                    </div>
+
+                    <div class="row-between">
+                        <label class="remember"><input asp-for="RememberMe" type="checkbox" /> Remember me</label>
+                    </div>
+
+                    <button type="submit" class="primary">Login</button>
+                </form>
+
+                <div class="divider">OR</div>
+
+                <a asp-controller="Home" asp-action="Index" class="btn-secondary-outline">
+                    Login as Customer
+                </a>
+
+                <p class="helptext">
+                    Staff accounts are created by an Administrator — contact yours if you need access.
+                </p>
+            </div>
+        </div>
+
+    </div>
+</div>

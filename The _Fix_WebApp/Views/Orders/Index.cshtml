@@ -1,0 +1,87 @@
+@model List<Order>
+@{
+    ViewData["Title"] = "Orders";
+    var selectedStatus = ViewBag.SelectedStatus as OrderStatus?;
+    var selectedType = ViewBag.SelectedType as OrderType?;
+}
+<div class="container-fluid py-4">
+    <h2>Orders</h2>
+    <p class="text-muted">Move online orders through Processing &rarr; Shipped &rarr; Delivered, or cancel one that can't be fulfilled.</p>
+
+    <form asp-controller="Orders" asp-action="Index" method="get" class="row g-2 mb-3">
+        <div class="col-auto">
+            <select name="status" class="form-select" onchange="this.form.submit()">
+                <option value="">All Statuses</option>
+                @foreach (OrderStatus s in Enum.GetValues(typeof(OrderStatus)))
+                {
+                    <option value="@s" selected="@(selectedStatus == s)">@s</option>
+                }
+            </select>
+        </div>
+        <div class="col-auto">
+            <select name="type" class="form-select" onchange="this.form.submit()">
+                <option value="">All Types</option>
+                @foreach (OrderType t in Enum.GetValues(typeof(OrderType)))
+                {
+                    <option value="@t" selected="@(selectedType == t)">@t</option>
+                }
+            </select>
+        </div>
+    </form>
+
+    @if (!Model.Any())
+    {
+        <div class="alert alert-info">No orders match this filter.</div>
+    }
+    else
+    {
+        <table class="table table-hover align-middle">
+            <thead><tr><th>Order #</th><th>Type</th><th>Customer</th><th>Items</th><th>Total</th><th>Status</th><th>Placed</th><th></th></tr></thead>
+            <tbody>
+            @foreach (var o in Model)
+            {
+                var badgeClass = o.Status switch
+                {
+                    OrderStatus.Delivered or OrderStatus.Completed => "bg-success",
+                    OrderStatus.Cancelled or OrderStatus.Returned => "bg-danger",
+                    OrderStatus.Shipped => "bg-info text-dark",
+                    OrderStatus.Processing => "bg-warning text-dark",
+                    _ => "bg-secondary"
+                };
+                var canAdvance = o.Status is OrderStatus.Pending or OrderStatus.Processing or OrderStatus.Shipped;
+                var canCancel = o.Status is OrderStatus.Pending or OrderStatus.Processing or OrderStatus.Shipped;
+                var nextLabel = o.Status switch
+                {
+                    OrderStatus.Pending => "Start Processing",
+                    OrderStatus.Processing => "Mark Shipped",
+                    OrderStatus.Shipped => "Mark Delivered",
+                    _ => ""
+                };
+                <tr>
+                    <td><a asp-controller="Orders" asp-action="Details" asp-route-id="@o.OrderId">@o.OrderNumber</a></td>
+                    <td>@o.OrderType</td>
+                    <td>@(o.Customer?.FullName ?? "Walk-in")</td>
+                    <td>@o.OrderItems.Sum(i => i.Quantity) item(s)</td>
+                    <td>@o.GrandTotal.ToString("C")</td>
+                    <td><span class="badge @badgeClass">@o.Status</span></td>
+                    <td>@o.DateCreated.ToLocalTime().ToString("dd MMM, HH:mm")</td>
+                    <td class="text-end text-nowrap">
+                        @if (canAdvance)
+                        {
+                            <form asp-controller="Orders" asp-action="AdvanceStatus" asp-route-id="@o.OrderId" method="post" class="d-inline">
+                                <button type="submit" class="btn btn-sm btn-outline-primary">@nextLabel</button>
+                            </form>
+                        }
+                        @if (canCancel)
+                        {
+                            <form asp-controller="Orders" asp-action="Cancel" asp-route-id="@o.OrderId" method="post" class="d-inline">
+                                <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Cancel this order and restock its items?');">Cancel</button>
+                            </form>
+                        }
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    }
+</div>
