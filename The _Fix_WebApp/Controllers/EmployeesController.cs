@@ -31,6 +31,7 @@ public class EmployeesController : Controller
     [Authorize(Policy = Permissions.EmployeesManage)]
     public async Task<IActionResult> Index()
     {
+<<<<<<< HEAD
         // Staff = any user NOT solely in the Customer role. Previously this called
         // GetRolesAsync per user (twice - once to filter, once to build the label), which is
         // 2N+1 round trips for N users. One joined query gets every user's roles at once.
@@ -51,6 +52,24 @@ public class EmployeesController : Controller
         var roleLookup = employees.ToDictionary(
             e => e.Id,
             e => string.Join(", ", rolesByUserId.TryGetValue(e.Id, out var roles) ? roles : new List<string>()));
+=======
+        // Staff = any user NOT solely in the Customer role.
+        var allUsers = await _context.Users.OrderBy(u => u.FullName).ToListAsync();
+        var employees = new List<ApplicationUser>();
+        foreach (var u in allUsers)
+        {
+            var roles = await _userManager.GetRolesAsync(u);
+            if (roles.Any(r => r != "Customer"))
+                employees.Add(u);
+        }
+
+        var roleLookup = new Dictionary<string, string>();
+        foreach (var employee in employees)
+        {
+            var roles = await _userManager.GetRolesAsync(employee);
+            roleLookup[employee.Id] = string.Join(", ", roles);
+        }
+>>>>>>> origin/SprintPresent
         ViewBag.Roles = roleLookup;
         ViewBag.AssignableRoles = await GetAssignableRoleNamesAsync();
 
@@ -126,7 +145,11 @@ public class EmployeesController : Controller
         }
 
         await _userManager.AddToRoleAsync(user, model.Role);
+<<<<<<< HEAD
       
+=======
+
+>>>>>>> origin/SprintPresent
         _context.AuditLogs.Add(new AuditLog
         {
             UserId = _userManager.GetUserId(User),
@@ -323,6 +346,7 @@ public class EmployeesController : Controller
         return RedirectToAction(nameof(Index));
     }
 
+<<<<<<< HEAD
     // GET: /Employees/AuditLogs - admin-only audit trail (NFR-11).
     [Authorize(Policy = Permissions.AuditLogsView)]
     [HttpGet]
@@ -336,4 +360,6 @@ public class EmployeesController : Controller
 
         return View(logs);
     }
+=======
+>>>>>>> origin/SprintPresent
 }

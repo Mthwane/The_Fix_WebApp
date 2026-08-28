@@ -47,7 +47,10 @@ public class OrdersController : Controller
     public async Task<IActionResult> Index(OrderStatus? status, OrderType? type)
     {
         var query = _context.Orders
+<<<<<<< HEAD
             .AsNoTracking()
+=======
+>>>>>>> origin/SprintPresent
             .Include(o => o.Customer)
             .Include(o => o.OrderItems)
             .AsQueryable();
@@ -149,10 +152,15 @@ public class OrdersController : Controller
         {
             order.Status = OrderStatus.Cancelled;
 
+<<<<<<< HEAD
             // One round trip for every item on the order, instead of one per line.
             await _inventoryService.IncrementStockBatchAsync(
                 order.OrderItems.Select(i => (i.ProductId, i.Quantity)),
                 InventoryChangeReason.OrderCancelled);
+=======
+            foreach (var item in order.OrderItems)
+                await _inventoryService.IncrementStockAsync(item.ProductId, item.Quantity, InventoryChangeReason.OrderCancelled);
+>>>>>>> origin/SprintPresent
 
             _context.AuditLogs.Add(new AuditLog
             {

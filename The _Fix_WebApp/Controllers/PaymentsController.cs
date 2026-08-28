@@ -6,7 +6,10 @@ using FashionFix.Web.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+<<<<<<< HEAD
 using Microsoft.EntityFrameworkCore;
+=======
+>>>>>>> origin/SprintPresent
 using The__Fix_WebApp.Services;
 using System.Net;
 
@@ -77,6 +80,7 @@ public class PaymentsController : Controller
         }
 
         // Final stock re-check - time has passed while the customer was on Paystack's page.
+<<<<<<< HEAD
         // One IN-clause query for the whole cart instead of one FindAsync per line.
         var checkoutProductIds = cart.Lines.Select(l => l.ProductId).Distinct().ToList();
         var checkoutProducts = await _context.Products
@@ -87,6 +91,12 @@ public class PaymentsController : Controller
         foreach (var line in cart.Lines)
         {
             if (!checkoutProducts.TryGetValue(line.ProductId, out var product) || !product.IsActive || product.StockQuantity < line.Quantity)
+=======
+        foreach (var line in cart.Lines)
+        {
+            var product = await _context.Products.FindAsync(line.ProductId);
+            if (product is null || !product.IsActive || product.StockQuantity < line.Quantity)
+>>>>>>> origin/SprintPresent
             {
                 _logger.LogError(
                     "Payment {Reference} verified for {Amount:C} but stock check failed for product {ProductId}.",
@@ -132,6 +142,7 @@ public class PaymentsController : Controller
         _context.Orders.Add(order);
         await _context.SaveChangesAsync();
 
+<<<<<<< HEAD
         // One round trip and one commit for the whole cart, instead of one query + one
         // commit per line item.
         var updatedProducts = await _inventoryService.DecrementStockBatchAsync(
@@ -142,6 +153,15 @@ public class PaymentsController : Controller
             .Where(l => lowStockProductIds.Contains(l.ProductId))
             .Select(l => l.Name)
             .ToList();
+=======
+        var newlyLowStock = new List<string>();
+        foreach (var line in cart.Lines)
+        {
+            await _inventoryService.DecrementStockAsync(line.ProductId, line.Quantity);
+            if (await _inventoryService.IsLowStockAsync(line.ProductId))
+                newlyLowStock.Add(line.Name);
+        }
+>>>>>>> origin/SprintPresent
 
         _context.AuditLogs.Add(new AuditLog
         {
