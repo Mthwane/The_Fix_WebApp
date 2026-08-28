@@ -1,6 +1,23 @@
 @model Order
 @{
     ViewData["Title"] = $"Order {Model.OrderNumber}";
+    var badgeClass = Model.Status switch
+    {
+        OrderStatus.Delivered or OrderStatus.Completed => "bg-success",
+        OrderStatus.Cancelled or OrderStatus.Returned => "bg-danger",
+        OrderStatus.Shipped => "bg-info text-dark",
+        OrderStatus.Processing => "bg-warning text-dark",
+        _ => "bg-secondary"
+    };
+    var statusIcon = Model.Status switch
+    {
+        OrderStatus.Delivered or OrderStatus.Completed => "bi-check-circle",
+        OrderStatus.Cancelled => "bi-x-circle",
+        OrderStatus.Returned => "bi-arrow-return-left",
+        OrderStatus.Shipped => "bi-truck",
+        OrderStatus.Processing => "bi-gear",
+        _ => "bi-hourglass-split"
+    };
 }
 <div class="container py-4" style="max-width:720px;">
     <a asp-controller="Orders" asp-action="Index" class="btn btn-outline-secondary btn-sm mb-3">&larr; All Orders</a>
@@ -10,7 +27,7 @@
             <h2 class="mb-0">Order @Model.OrderNumber</h2>
             <div class="text-muted">@Model.DateCreated.ToLocalTime().ToString("dd MMM yyyy, HH:mm") &middot; @Model.OrderType</div>
         </div>
-        <span class="badge bg-secondary fs-6">@Model.Status</span>
+        <span class="badge @badgeClass fs-6"><i class="bi @statusIcon"></i> @Model.Status</span>
     </div>
 
     <dl class="row">

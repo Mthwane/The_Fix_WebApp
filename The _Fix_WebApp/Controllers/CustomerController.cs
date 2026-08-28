@@ -1,3 +1,4 @@
+
 using FashionFix.Web.Data;
 using FashionFix.Web.Models.Entities;
 using FashionFix.Web.Models.ViewModels;
@@ -37,17 +38,45 @@ public class CustomerController : Controller
         _logger = logger;
     }
 
-    // GET: /Customer/Orders - purchase history with live order status (US-12, US-13).
+    // GET: /Customer/Orders?category=&search= - purchase history with live order status (US-12, US-13).
     [HttpGet]
-    public async Task<IActionResult> Orders()
+    public async Task<IActionResult> Orders(OrderCategory? category, string? search)
     {
         var userId = _userManager.GetUserId(User);
 
-        var orders = await _context.Orders
+        var query = _context.Orders
+            .AsNoTracking()
             .Where(o => o.CustomerId == userId)
             .Include(o => o.OrderItems).ThenInclude(oi => oi.Product)
-            .OrderByDescending(o => o.DateCreated)
-            .ToListAsync();
+            .AsQueryable();
+
+        if (category.HasValue)
+        {
+            var statuses = OrderCategorizer.StatusesFor[category.Value];
+            query = query.Where(o => statuses.Contains(o.Status));
+        }
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            query = query.Where(o => o.OrderNumber.Contains(term));
+        }
+
+        // Tab counts computed from the customer's full order history (ignoring the search box,
+        // so the badges always reflect "how many of mine are in this state" regardless of
+        // whatever's currently typed in the search field).
+        var allOrders = _context.Orders.AsNoTracking().Where(o => o.CustomerId == userId);
+        ViewBag.CategoryCounts = new Dictionary<OrderCategory, int>
+        {
+            [OrderCategory.Pending] = await allOrders.CountAsync(o => OrderCategorizer.StatusesFor[OrderCategory.Pending].Contains(o.Status)),
+            [OrderCategory.Completed] = await allOrders.CountAsync(o => OrderCategorizer.StatusesFor[OrderCategory.Completed].Contains(o.Status)),
+            [OrderCategory.Past] = await allOrders.CountAsync(o => OrderCategorizer.StatusesFor[OrderCategory.Past].Contains(o.Status)),
+        };
+        ViewBag.AllCount = await allOrders.CountAsync();
+        ViewBag.SelectedCategory = category;
+        ViewBag.Search = search;
+
+        var orders = await query.OrderByDescending(o => o.DateCreated).ToListAsync();
 
         ViewBag.CancellableStatuses = CustomerCancellableStatuses;
         return View(orders);
@@ -76,14 +105,10 @@ public class CustomerController : Controller
         {
             order.Status = OrderStatus.Cancelled;
 
-
+            // One round trip for every item on the order, instead of one per line.
             await _inventoryService.IncrementStockBatchAsync(
                 order.OrderItems.Select(i => (i.ProductId, i.Quantity)),
                 InventoryChangeReason.OrderCancelled);
-
-            foreach (var item in order.OrderItems)
-                await _inventoryService.IncrementStockAsync(item.ProductId, item.Quantity, InventoryChangeReason.OrderCancelled);
-
 
             _context.AuditLogs.Add(new AuditLog
             {
@@ -171,3 +196,4 @@ public class CustomerController : Controller
         return RedirectToAction(nameof(Profile));
     }
 }
+

@@ -42,23 +42,63 @@ public class OrdersController : Controller
         _logger = logger;
     }
 
-    // GET: /Orders?status=&type=
+    // GET: /Orders?category=&status=&type=&search=
     [HttpGet]
-    public async Task<IActionResult> Index(OrderStatus? status, OrderType? type)
+    public async Task<IActionResult> Index(OrderCategory? category, OrderStatus? status, OrderType? type, string? search)
     {
         var query = _context.Orders
-
             .AsNoTracking()
-
             .Include(o => o.Customer)
             .Include(o => o.OrderItems)
             .AsQueryable();
 
-        if (status.HasValue) query = query.Where(o => o.Status == status);
+        // Quick-filter tab takes priority over (and is mutually exclusive with) the
+        // detailed status dropdown - picking a tab clears any single-status selection.
+        if (category.HasValue)
+        {
+            var statuses = OrderCategorizer.StatusesFor[category.Value];
+            query = query.Where(o => statuses.Contains(o.Status));
+        }
+        else if (status.HasValue)
+        {
+            query = query.Where(o => o.Status == status);
+        }
+
         if (type.HasValue) query = query.Where(o => o.OrderType == type);
 
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            query = query.Where(o =>
+                o.OrderNumber.Contains(term) ||
+                (o.Customer != null && o.Customer.FullName.Contains(term)) ||
+                (o.Customer != null && o.Customer.Email != null && o.Customer.Email.Contains(term)));
+        }
+
+        ViewBag.SelectedCategory = category;
         ViewBag.SelectedStatus = status;
         ViewBag.SelectedType = type;
+        ViewBag.Search = search;
+
+        // Counts for the tab badges - computed from the same base filters (type/search)
+        // so the numbers stay accurate no matter what else the user has selected.
+        var baseQuery = _context.Orders.AsNoTracking().AsQueryable();
+        if (type.HasValue) baseQuery = baseQuery.Where(o => o.OrderType == type);
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            baseQuery = baseQuery.Where(o =>
+                o.OrderNumber.Contains(term) ||
+                (o.Customer != null && o.Customer.FullName.Contains(term)) ||
+                (o.Customer != null && o.Customer.Email != null && o.Customer.Email.Contains(term)));
+        }
+        ViewBag.CategoryCounts = new Dictionary<OrderCategory, int>
+        {
+            [OrderCategory.Pending] = await baseQuery.CountAsync(o => OrderCategorizer.StatusesFor[OrderCategory.Pending].Contains(o.Status)),
+            [OrderCategory.Completed] = await baseQuery.CountAsync(o => OrderCategorizer.StatusesFor[OrderCategory.Completed].Contains(o.Status)),
+            [OrderCategory.Past] = await baseQuery.CountAsync(o => OrderCategorizer.StatusesFor[OrderCategory.Past].Contains(o.Status)),
+        };
+        ViewBag.AllCount = await baseQuery.CountAsync();
 
         var orders = await query.OrderByDescending(o => o.DateCreated).Take(200).ToListAsync();
         return View(orders);
@@ -114,7 +154,7 @@ public class OrdersController : Controller
         await _context.SaveChangesAsync();
 
         this.ToastSuccess($"Order {order.OrderNumber} is now {order.Status}.");
-        
+
 
         // Best-effort customer notification on each status change.
         if (order.Customer is not null && !string.IsNullOrWhiteSpace(order.Customer.Email))
@@ -151,12 +191,10 @@ public class OrdersController : Controller
         {
             order.Status = OrderStatus.Cancelled;
 
-
             // One round trip for every item on the order, instead of one per line.
             await _inventoryService.IncrementStockBatchAsync(
                 order.OrderItems.Select(i => (i.ProductId, i.Quantity)),
                 InventoryChangeReason.OrderCancelled);
-
 
             _context.AuditLogs.Add(new AuditLog
             {
@@ -186,3 +224,4 @@ public class OrdersController : Controller
         return RedirectToAction(nameof(Index));
     }
 }
+
