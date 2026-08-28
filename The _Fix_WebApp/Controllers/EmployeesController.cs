@@ -122,7 +122,7 @@ public class EmployeesController : Controller
         }
 
         await _userManager.AddToRoleAsync(user, model.Role);
-      
+
         _context.AuditLogs.Add(new AuditLog
         {
             UserId = _userManager.GetUserId(User),
@@ -319,17 +319,4 @@ public class EmployeesController : Controller
         return RedirectToAction(nameof(Index));
     }
 
-    // GET: /Employees/AuditLogs - admin-only audit trail (NFR-11).
-    [Authorize(Policy = Permissions.AuditLogsView)]
-    [HttpGet]
-    public async Task<IActionResult> AuditLogs()
-    {
-        var logs = await _context.AuditLogs
-            .Include(a => a.User)
-            .OrderByDescending(a => a.Timestamp)
-            .Take(200)
-            .ToListAsync();
-
-        return View(logs);
-    }
 }
