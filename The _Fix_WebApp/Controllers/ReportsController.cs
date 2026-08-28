@@ -26,7 +26,10 @@ public class ReportsController : Controller
         var end = (to ?? DateTime.UtcNow).Date.AddDays(1).AddTicks(-1);
 
         var orders = await _context.Orders
+<<<<<<< HEAD
             .AsNoTracking()
+=======
+>>>>>>> origin/SprintPresent
             .Include(o => o.OrderItems).ThenInclude(oi => oi.Product)
             .Where(o => o.DateCreated >= start && o.DateCreated <= end)
             .ToListAsync();
@@ -70,7 +73,10 @@ public class ReportsController : Controller
         var end = (to ?? DateTime.UtcNow).Date.AddDays(1).AddTicks(-1);
 
         var orders = await _context.Orders
+<<<<<<< HEAD
             .AsNoTracking()
+=======
+>>>>>>> origin/SprintPresent
             .Where(o => o.DateCreated >= start && o.DateCreated <= end)
             .OrderBy(o => o.DateCreated)
             .ToListAsync();

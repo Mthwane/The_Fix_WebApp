@@ -27,7 +27,11 @@ public class ProductsController : Controller
     [HttpGet]
     public async Task<IActionResult> Index(ProductFilterViewModel filter)
     {
+<<<<<<< HEAD
         var query = _context.Products.AsNoTracking().Where(p => p.IsActive).AsQueryable();
+=======
+        var query = _context.Products.Where(p => p.IsActive).AsQueryable();
+>>>>>>> origin/SprintPresent
 
         if (!string.IsNullOrWhiteSpace(filter.SearchTerm))
         {
