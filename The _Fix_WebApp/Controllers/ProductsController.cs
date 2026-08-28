@@ -6,7 +6,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.Mvc.Rendering;
 
 namespace FashionFix.Web.Controllers;
 
@@ -28,7 +27,6 @@ public class ProductsController : Controller
     public async Task<IActionResult> Index(ProductFilterViewModel filter)
     {
         var query = _context.Products.AsNoTracking().Where(p => p.IsActive).AsQueryable();
-
 
         if (!string.IsNullOrWhiteSpace(filter.SearchTerm))
         {
@@ -56,9 +54,9 @@ public class ProductsController : Controller
     }
     // GET: /Products/Create
     [HttpGet]
-    public IActionResult Create()
+    public async Task<IActionResult> Create()
     {
-        PopulateDropdowns();
+        await PopulateDropdownsAsync();
         return View(new ProductViewModel());
     }
 
@@ -71,9 +69,17 @@ public class ProductsController : Controller
         // so clear whatever ModelState has for it and re-validate without it.
         ModelState.Remove(nameof(ProductViewModel.SKU));
 
+        // Category/Colour are a closed list on a real <select>, but nothing stops a
+        // crafted POST from sending a value outside that list - reject it here rather
+        // than trusting the browser to have enforced it.
+        if (!ProductViewModel.Categories.Contains(model.Category))
+            ModelState.AddModelError(nameof(model.Category), "Please choose a category from the list.");
+        if (!string.IsNullOrEmpty(model.Color) && !ProductViewModel.Colors.Contains(model.Color))
+            ModelState.AddModelError(nameof(model.Color), "Please choose a colour from the list.");
+
         if (!ModelState.IsValid)
         {
-            PopulateDropdowns();
+            await PopulateDropdownsAsync();
             return View(model);
         }
 
@@ -109,8 +115,8 @@ public class ProductsController : Controller
     {
         var product = await _context.Products.FindAsync(id);
         if (product is null) return NotFound();
-        
-        PopulateDropdowns();
+
+        await PopulateDropdownsAsync();
 
         var model = new ProductViewModel
         {
@@ -143,9 +149,14 @@ public class ProductsController : Controller
         // SKU is read-only on Edit - never overwrite it from the posted form.
         ModelState.Remove(nameof(ProductViewModel.SKU));
 
+        if (!ProductViewModel.Categories.Contains(model.Category))
+            ModelState.AddModelError(nameof(model.Category), "Please choose a category from the list.");
+        if (!string.IsNullOrEmpty(model.Color) && !ProductViewModel.Colors.Contains(model.Color))
+            ModelState.AddModelError(nameof(model.Color), "Please choose a colour from the list.");
+
         if (!ModelState.IsValid)
         {
-            PopulateDropdowns();
+            await PopulateDropdownsAsync();
             return View(model);
         }
 
@@ -193,10 +204,28 @@ public class ProductsController : Controller
         return RedirectToAction(nameof(Index));
     }
 
-    private void PopulateDropdowns()
+    /// <summary>
+    /// Builds the four attribute dropdowns. Category and Colour are a closed list - always
+    /// exactly ProductViewModel.Categories / .Colors, picked from a real &lt;select&gt;, so no
+    /// junk value typed on one product can ever leak into another product's dropdown. Size
+    /// and Brand stay "self-sustaining": the seed list unioned with whatever's already used
+    /// on existing products, so typing a new one there still works itself into future
+    /// suggestions without a separate admin screen.
+    /// </summary>
+    private async Task PopulateDropdownsAsync()
     {
-        ViewBag.Categories = new SelectList(ProductViewModel.Categories);
-        ViewBag.Colors = new SelectList(ProductViewModel.Colors);
+        ViewBag.Categories = ProductViewModel.Categories.ToList();
+        ViewBag.Colors = ProductViewModel.Colors.ToList();
+
+        var dbSizes = await _context.Products.AsNoTracking()
+            .Where(p => p.Size != null && p.Size != "").Select(p => p.Size!).Distinct().ToListAsync();
+        var dbBrands = await _context.Products.AsNoTracking()
+            .Where(p => p.Brand != null && p.Brand != "").Select(p => p.Brand!).Distinct().ToListAsync();
+
+        ViewBag.Sizes = ProductViewModel.Sizes.Union(dbSizes, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(s => s, StringComparer.OrdinalIgnoreCase).ToList();
+        ViewBag.Brands = ProductViewModel.Brands.Union(dbBrands, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(b => b, StringComparer.OrdinalIgnoreCase).ToList();
     }
 
     /// <summary>

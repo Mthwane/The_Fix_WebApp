@@ -90,6 +90,7 @@ builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection("Email
 builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
 builder.Services.Configure<PaystackOptions>(builder.Configuration.GetSection("Paystack"));
 builder.Services.AddHttpClient<IPaymentService, PaystackPaymentService>();
+builder.Services.AddScoped<IOrderFulfillmentService, OrderFulfillmentService>();
 
 // --- Session (backs the customer's shopping cart - no new DB table needed) ---
 builder.Services.AddDistributedMemoryCache();

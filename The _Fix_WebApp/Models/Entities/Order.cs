@@ -62,6 +62,31 @@ public class Order
     public DateTime DateCreated { get; set; } = DateTime.UtcNow;
     public DateTime? DateFulfilled { get; set; }
 
+    // --- Delivery address (Online orders only - null for in-store POS sales) ---
+    // Snapshotted from the customer's chosen CustomerAddress at checkout time, not a
+    // foreign key to it, so editing or deleting that saved address later never rewrites
+    // where a past order actually shipped to.
+    [MaxLength(100)]
+    public string? DeliveryRecipientName { get; set; }
+
+    [MaxLength(20)]
+    public string? DeliveryPhoneNumber { get; set; }
+
+    [MaxLength(200)]
+    public string? DeliveryAddressLine1 { get; set; }
+
+    [MaxLength(200)]
+    public string? DeliveryAddressLine2 { get; set; }
+
+    [MaxLength(100)]
+    public string? DeliveryCity { get; set; }
+
+    [MaxLength(100)]
+    public string? DeliveryProvince { get; set; }
+
+    [MaxLength(10)]
+    public string? DeliveryPostalCode { get; set; }
+
     // --- Navigation ---
     public ICollection<OrderItem> OrderItems { get; set; } = new List<OrderItem>();
 }

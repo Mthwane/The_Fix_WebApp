@@ -22,4 +22,6 @@ public class ApplicationUser : IdentityUser
     // --- Navigation ---
     public ICollection<Order> Orders { get; set; } = new List<Order>();
     public ICollection<AuditLog> AuditLogs { get; set; } = new List<AuditLog>();
+    public ICollection<CustomerAddress> Addresses { get; set; } = new List<CustomerAddress>();
+    public ICollection<CustomerPaymentMethod> PaymentMethods { get; set; } = new List<CustomerPaymentMethod>();
 }

@@ -21,21 +21,15 @@ namespace FashionFix.Web.Controllers;
 public class ShopController : Controller
 {
     private readonly ApplicationDbContext _context;
-    private readonly IInventoryService _inventoryService;
-    private readonly IEmailSender _emailSender;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly ILogger<ShopController> _logger;
 
     public ShopController(
         ApplicationDbContext context,
-        IInventoryService inventoryService,
-        IEmailSender emailSender,
         UserManager<ApplicationUser> userManager,
         ILogger<ShopController> logger)
     {
         _context = context;
-        _inventoryService = inventoryService;
-        _emailSender = emailSender;
         _userManager = userManager;
         _logger = logger;
     }
@@ -44,9 +38,7 @@ public class ShopController : Controller
     [HttpGet]
     public async Task<IActionResult> Index(string? search, string? category)
     {
-
         var query = _context.Products.AsNoTracking().Where(p => p.IsActive && p.StockQuantity > 0);
-
 
         if (!string.IsNullOrWhiteSpace(search))
             query = query.Where(p => p.Name.Contains(search) || p.SKU.Contains(search));
@@ -55,9 +47,7 @@ public class ShopController : Controller
             query = query.Where(p => p.Category == category);
 
         ViewBag.Categories = await _context.Products
-
             .AsNoTracking()
-
             .Where(p => p.IsActive)
             .Select(p => p.Category)
             .Distinct()
@@ -77,9 +67,7 @@ public class ShopController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> AddToCart(int productId, int quantity = 1)
     {
-
         var product = await _context.Products.AsNoTracking().FirstOrDefaultAsync(p => p.ProductId == productId && p.IsActive);
-
         if (product is null)
         {
             this.ToastError("That product is no longer available.");
@@ -169,34 +157,66 @@ public class ShopController : Controller
 
     // GET: /Shop/Checkout
     [HttpGet]
-    public IActionResult Checkout()
+    public async Task<IActionResult> Checkout()
     {
         var cart = SessionCart.Get(HttpContext.Session);
         if (cart.Lines.Count == 0) return RedirectToAction(nameof(Index));
 
-        return View(new CheckoutViewModel { Cart = cart });
+        var userId = _userManager.GetUserId(User);
+        var model = await BuildCheckoutViewModelAsync(userId!, cart);
+        return View(model);
     }
 
-    // POST: /Shop/Checkout - validates the cart, then hands off to Paystack.
-    // No Order is created here. The Order only gets created once payment is verified,
-    // in PaymentsController.Callback.
+    /// <summary>Loads the customer's saved addresses/cards and pre-selects their defaults - shared by the GET and the POST-with-errors path so both show the same picker.</summary>
+    private async Task<CheckoutViewModel> BuildCheckoutViewModelAsync(string userId, CartViewModel cart)
+    {
+        var addresses = await _context.CustomerAddresses
+            .AsNoTracking()
+            .Where(a => a.CustomerId == userId)
+            .OrderByDescending(a => a.IsDefault)
+            .ThenBy(a => a.Label)
+            .ToListAsync();
+
+        var savedCards = await _context.CustomerPaymentMethods
+            .AsNoTracking()
+            .Where(p => p.CustomerId == userId)
+            .OrderByDescending(p => p.IsDefault)
+            .ToListAsync();
+
+        return new CheckoutViewModel
+        {
+            Cart = cart,
+            Addresses = addresses,
+            SavedCards = savedCards,
+            SelectedAddressId = addresses.FirstOrDefault(a => a.IsDefault)?.CustomerAddressId ?? addresses.FirstOrDefault()?.CustomerAddressId,
+            SelectedPaymentMethodId = savedCards.FirstOrDefault(p => p.IsDefault)?.CustomerPaymentMethodId ?? savedCards.FirstOrDefault()?.CustomerPaymentMethodId
+        };
+    }
+
+    // POST: /Shop/Checkout - either charges a saved card instantly, or hands off to Paystack
+    // for a brand-new one. Either way, no Order is created here until the money has actually
+    // moved: the instant-charge path creates it right after Paystack confirms success; the
+    // redirect path creates it in PaymentsController.Callback once the customer comes back.
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Checkout(CheckoutViewModel model, [FromServices] IPaymentService payments)
+    public async Task<IActionResult> Checkout(CheckoutViewModel model, [FromServices] IPaymentService payments, [FromServices] IOrderFulfillmentService orderFulfillment)
     {
         var cart = SessionCart.Get(HttpContext.Session);
         if (cart.Lines.Count == 0) return RedirectToAction(nameof(Index));
 
         model.Cart = cart;
+        var userId = _userManager.GetUserId(User)!;
 
         if (!ModelState.IsValid)
         {
-            this.ToastError("Please choose a payment method to complete your order.");
+            var rebuilt = await BuildCheckoutViewModelAsync(userId, cart);
+            model.Addresses = rebuilt.Addresses;
+            model.SavedCards = rebuilt.SavedCards;
+            this.ToastError("Please choose a delivery address and payment method to complete your order.");
             return View(model);
         }
 
         // Re-check stock before we ever send the customer to pay - no point charging them
-
         // for something that's gone. One query for the whole cart instead of one per line.
         var checkoutProductIds = cart.Lines.Select(l => l.ProductId).Distinct().ToList();
         var checkoutProducts = await _context.Products
@@ -207,7 +227,6 @@ public class ShopController : Controller
         foreach (var line in cart.Lines)
         {
             if (!checkoutProducts.TryGetValue(line.ProductId, out var product) || !product.IsActive)
-
                 ModelState.AddModelError(string.Empty, $"'{line.Name}' is no longer available. Please remove it from your cart.");
             else if (product.StockQuantity < line.Quantity)
                 ModelState.AddModelError(string.Empty, $"Only {product.StockQuantity} of '{line.Name}' left in stock - please update the quantity.");
@@ -215,6 +234,9 @@ public class ShopController : Controller
 
         if (!ModelState.IsValid)
         {
+            var rebuilt = await BuildCheckoutViewModelAsync(userId, cart);
+            model.Addresses = rebuilt.Addresses;
+            model.SavedCards = rebuilt.SavedCards;
             this.ToastError("Some items in your cart changed - please review and try again.");
             return View(model);
         }
@@ -223,6 +245,20 @@ public class ShopController : Controller
         if (user is null || string.IsNullOrWhiteSpace(user.Email))
         {
             this.ToastError("Your account needs a valid email address before you can pay online.");
+            var rebuilt = await BuildCheckoutViewModelAsync(userId, cart);
+            model.Addresses = rebuilt.Addresses;
+            model.SavedCards = rebuilt.SavedCards;
+            return View(model);
+        }
+
+        var deliveryAddress = await _context.CustomerAddresses
+            .FirstOrDefaultAsync(a => a.CustomerAddressId == model.SelectedAddressId && a.CustomerId == userId);
+        if (deliveryAddress is null)
+        {
+            this.ToastError("Please choose (or add) a delivery address before checking out.");
+            var rebuilt = await BuildCheckoutViewModelAsync(userId, cart);
+            model.Addresses = rebuilt.Addresses;
+            model.SavedCards = rebuilt.SavedCards;
             return View(model);
         }
 
@@ -230,21 +266,62 @@ public class ShopController : Controller
         var grandTotal = cart.SubTotal + vat;
         var reference = $"WEB-{DateTime.UtcNow:yyyyMMddHHmmssfff}";
 
-        var callbackUrl = Url.Action(nameof(PaymentsController.Callback), "Payments", null, Request.Scheme)!;
+        // --- Path 1: paying with a card already on file - charge it directly, no redirect,
+        // no re-entering card details at all. ---
+        if (model.SelectedPaymentMethodId.HasValue)
+        {
+            var savedCard = await _context.CustomerPaymentMethods
+                .FirstOrDefaultAsync(p => p.CustomerPaymentMethodId == model.SelectedPaymentMethodId && p.CustomerId == userId);
 
+            if (savedCard is null)
+            {
+                this.ToastError("That saved card is no longer available - please choose another or add a new one.");
+                var rebuilt = await BuildCheckoutViewModelAsync(userId, cart);
+                model.Addresses = rebuilt.Addresses;
+                model.SavedCards = rebuilt.SavedCards;
+                return View(model);
+            }
+
+            var chargeResult = await payments.ChargeAuthorizationAsync(user.Email, grandTotal, savedCard.AuthorizationCode, reference);
+
+            if (!chargeResult.Success)
+            {
+                this.ToastError($"Your saved card was declined: {chargeResult.ErrorMessage}. Please try another card.");
+                var rebuilt = await BuildCheckoutViewModelAsync(userId, cart);
+                model.Addresses = rebuilt.Addresses;
+                model.SavedCards = rebuilt.SavedCards;
+                return View(model);
+            }
+
+            var order = await orderFulfillment.CreateOnlineOrderAsync(user, cart, model.PaymentMethod, reference, deliveryAddress);
+            SessionCart.Clear(HttpContext.Session);
+
+            this.ToastSuccess($"Payment confirmed - order {order.OrderNumber} placed for {order.GrandTotal:C}.");
+            return RedirectToAction(nameof(Confirmation), new { id = order.OrderId });
+        }
+
+        // --- Path 2: paying with a brand-new card - hand off to Paystack's hosted page as
+        // before. The Order only gets created in PaymentsController.Callback once Paystack
+        // confirms the payment actually went through. ---
+        var callbackUrl = Url.Action(nameof(PaymentsController.Callback), "Payments", null, Request.Scheme)!;
         var initResult = await payments.InitializeTransactionAsync(user.Email, grandTotal, reference, callbackUrl);
 
         if (!initResult.Success)
         {
             this.ToastError($"Could not start payment: {initResult.ErrorMessage}");
+            var rebuilt = await BuildCheckoutViewModelAsync(userId, cart);
+            model.Addresses = rebuilt.Addresses;
+            model.SavedCards = rebuilt.SavedCards;
             return View(model);
         }
 
         // Stash what the callback will need to rebuild the order once payment is verified.
-        // The cart itself is already in Session - we just remember which payment method
-        // and which reference this attempt belongs to.
+        // The cart itself is already in Session - we just remember which payment method,
+        // delivery address, reference, and "save this card?" choice this attempt belongs to.
         HttpContext.Session.SetString("PendingPaymentReference", reference);
         HttpContext.Session.SetString("PendingPaymentMethod", model.PaymentMethod.ToString());
+        HttpContext.Session.SetInt32("PendingAddressId", deliveryAddress.CustomerAddressId);
+        HttpContext.Session.SetString("PendingSaveCard", model.SaveCard ? "true" : "false");
 
         return Redirect(initResult.AuthorizationUrl!);
     }

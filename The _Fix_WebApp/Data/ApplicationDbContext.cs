@@ -16,6 +16,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
     public DbSet<InventoryTransaction> InventoryTransactions => Set<InventoryTransaction>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<CustomerAddress> CustomerAddresses => Set<CustomerAddress>();
+    public DbSet<CustomerPaymentMethod> CustomerPaymentMethods => Set<CustomerPaymentMethod>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -29,7 +31,6 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         builder.Entity<Order>()
             .HasIndex(o => o.OrderNumber)
             .IsUnique();
-
 
         // --- Performance indexes: cover the columns that are actually filtered/sorted on ---
         // Products.Index / Shop.Index filter on IsActive + Category (and friends) and always
@@ -49,7 +50,6 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 
         builder.Entity<Order>()
             .HasIndex(o => new { o.Status, o.OrderType });
-
 
         // --- Order relationships ---
         builder.Entity<Order>()
@@ -75,6 +75,32 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             .WithMany(p => p.OrderItems)
             .HasForeignKey(oi => oi.ProductId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        // --- Customer addresses / saved cards ---
+        // Both are owned by exactly one customer and should disappear if that account is
+        // deleted (unlike Orders, which are kept for financial history via Restrict).
+        builder.Entity<CustomerAddress>()
+            .HasOne(a => a.Customer)
+            .WithMany(u => u.Addresses)
+            .HasForeignKey(a => a.CustomerId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<CustomerAddress>()
+            .HasIndex(a => a.CustomerId);
+
+        builder.Entity<CustomerPaymentMethod>()
+            .HasOne(p => p.Customer)
+            .WithMany(u => u.PaymentMethods)
+            .HasForeignKey(p => p.CustomerId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<CustomerPaymentMethod>()
+            .HasIndex(p => p.CustomerId);
+
+        // A customer should never end up with the exact same saved card twice.
+        builder.Entity<CustomerPaymentMethod>()
+            .HasIndex(p => new { p.CustomerId, p.AuthorizationCode })
+            .IsUnique();
 
         // --- Decimal precision guards (belt-and-braces alongside [Column] attributes) ---
         builder.Entity<Product>().Property(p => p.CostPrice).HasPrecision(18, 2);

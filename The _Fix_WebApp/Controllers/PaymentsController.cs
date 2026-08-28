@@ -6,9 +6,7 @@ using FashionFix.Web.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-
 using Microsoft.EntityFrameworkCore;
-
 using The__Fix_WebApp.Services;
 using System.Net;
 
@@ -18,26 +16,25 @@ namespace FashionFix.Web.Controllers;
 /// Handles the Paystack redirect back into the app. This is where an Order actually
 /// gets created - never in ShopController.Checkout - so nothing is marked paid,
 /// and no stock is decremented, until the gateway has confirmed the money moved.
+/// (The other place an Order can be created is ShopController.Checkout itself, but only
+/// for the "charge a saved card instantly" path, which never leaves this app at all.)
 /// </summary>
 [Authorize(Roles = "Customer")]
 public class PaymentsController : Controller
 {
     private readonly ApplicationDbContext _context;
-    private readonly IInventoryService _inventoryService;
-    private readonly IEmailSender _emailSender;
+    private readonly IOrderFulfillmentService _orderFulfillment;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly ILogger<PaymentsController> _logger;
 
     public PaymentsController(
         ApplicationDbContext context,
-        IInventoryService inventoryService,
-        IEmailSender emailSender,
+        IOrderFulfillmentService orderFulfillment,
         UserManager<ApplicationUser> userManager,
         ILogger<PaymentsController> logger)
     {
         _context = context;
-        _inventoryService = inventoryService;
-        _emailSender = emailSender;
+        _orderFulfillment = orderFulfillment;
         _userManager = userManager;
         _logger = logger;
     }
@@ -51,6 +48,8 @@ public class PaymentsController : Controller
         var actualReference = reference ?? trxref;
         var pendingReference = HttpContext.Session.GetString("PendingPaymentReference");
         var pendingMethodRaw = HttpContext.Session.GetString("PendingPaymentMethod");
+        var pendingAddressId = HttpContext.Session.GetInt32("PendingAddressId");
+        var pendingSaveCard = HttpContext.Session.GetString("PendingSaveCard") == "true";
 
         if (string.IsNullOrEmpty(actualReference) || actualReference != pendingReference)
         {
@@ -79,7 +78,6 @@ public class PaymentsController : Controller
         }
 
         // Final stock re-check - time has passed while the customer was on Paystack's page.
-
         // One IN-clause query for the whole cart instead of one FindAsync per line.
         var checkoutProductIds = cart.Lines.Select(l => l.ProductId).Distinct().ToList();
         var checkoutProducts = await _context.Products
@@ -90,7 +88,6 @@ public class PaymentsController : Controller
         foreach (var line in cart.Lines)
         {
             if (!checkoutProducts.TryGetValue(line.ProductId, out var product) || !product.IsActive || product.StockQuantity < line.Quantity)
-
             {
                 _logger.LogError(
                     "Payment {Reference} verified for {Amount:C} but stock check failed for product {ProductId}.",
@@ -100,90 +97,52 @@ public class PaymentsController : Controller
             }
         }
 
-        var userId = _userManager.GetUserId(User)!;
         var user = await _userManager.GetUserAsync(User);
+        if (user is null) return NotFound();
 
         var paymentMethod = Enum.TryParse<PaymentMethod>(pendingMethodRaw, out var pm)
             ? pm
             : PaymentMethod.CreditCard;
 
-        var vat = TaxSettings.CalculateVat(cart.SubTotal);
+        CustomerAddress? deliveryAddress = pendingAddressId.HasValue
+            ? await _context.CustomerAddresses.FirstOrDefaultAsync(a => a.CustomerAddressId == pendingAddressId && a.CustomerId == user.Id)
+            : null;
 
-        var order = new Order
-        {
-            OrderNumber = actualReference,
-            OrderType = OrderType.Online,
-            Status = OrderStatus.Processing,
-            PaymentMethod = paymentMethod,
-            CustomerId = userId,
-            SubTotal = cart.SubTotal,
-            DiscountTotal = 0,
-            TaxTotal = vat,
-            GrandTotal = cart.SubTotal + vat
-        };
+        var order = await _orderFulfillment.CreateOnlineOrderAsync(user, cart, paymentMethod, actualReference, deliveryAddress);
 
-        foreach (var line in cart.Lines)
+        // If the customer ticked "save this card" and the bank allows the card to be
+        // charged again later, remember it for next time - dedup by AuthorizationCode so
+        // paying with the same card twice doesn't create two entries.
+        if (pendingSaveCard && verifyResult.Authorization is { Reusable: true } auth)
         {
-            order.OrderItems.Add(new OrderItem
+            var alreadySaved = await _context.CustomerPaymentMethods
+                .AnyAsync(p => p.CustomerId == user.Id && p.AuthorizationCode == auth.AuthorizationCode);
+
+            if (!alreadySaved)
             {
-                ProductId = line.ProductId,
-                Quantity = line.Quantity,
-                UnitPrice = line.UnitPrice,
-                LineTotal = line.LineTotal
-            });
+                var hasAnyCard = await _context.CustomerPaymentMethods.AnyAsync(p => p.CustomerId == user.Id);
+                _context.CustomerPaymentMethods.Add(new CustomerPaymentMethod
+                {
+                    CustomerId = user.Id,
+                    AuthorizationCode = auth.AuthorizationCode,
+                    Last4 = auth.Last4,
+                    CardType = auth.CardType,
+                    ExpiryMonth = auth.ExpiryMonth,
+                    ExpiryYear = auth.ExpiryYear,
+                    Bank = auth.Bank,
+                    IsDefault = !hasAnyCard // first saved card becomes the default automatically
+                });
+                await _context.SaveChangesAsync();
+            }
         }
-
-        _context.Orders.Add(order);
-        await _context.SaveChangesAsync();
-
-
-        // One round trip and one commit for the whole cart, instead of one query + one
-        // commit per line item.
-        var updatedProducts = await _inventoryService.DecrementStockBatchAsync(
-            cart.Lines.Select(l => (l.ProductId, l.Quantity)));
-
-        var lowStockProductIds = updatedProducts.Where(p => p.IsLowStock).Select(p => p.ProductId).ToHashSet();
-        var newlyLowStock = cart.Lines
-            .Where(l => lowStockProductIds.Contains(l.ProductId))
-            .Select(l => l.Name)
-            .ToList();
-
-
-        _context.AuditLogs.Add(new AuditLog
-        {
-            UserId = userId,
-            Action = "OnlineOrderPlaced",
-            Details = $"Placed order {order.OrderNumber} for {order.GrandTotal:C} ({cart.Lines.Count} line item(s)) via Paystack."
-        });
-        await _context.SaveChangesAsync();
 
         SessionCart.Clear(HttpContext.Session);
         HttpContext.Session.Remove("PendingPaymentReference");
         HttpContext.Session.Remove("PendingPaymentMethod");
-
-        if (user is not null && !string.IsNullOrWhiteSpace(user.Email))
-        {
-            var itemsHtml = string.Join("", cart.Lines.Select(l =>
-                $"<tr><td>{l.Name}</td><td>{l.Quantity}</td><td>{l.UnitPrice:C}</td><td>{l.LineTotal:C}</td></tr>"));
-
-            var body = $@"
-                <h2>Thanks for your order, {user.FullName}!</h2>
-                <p>Order <strong>{order.OrderNumber}</strong> has been received and is being processed.</p>
-                <table border='1' cellpadding='6' cellspacing='0' style='border-collapse:collapse;'>
-                    <thead><tr><th>Item</th><th>Qty</th><th>Unit Price</th><th>Line Total</th></tr></thead>
-                    <tbody>{itemsHtml}</tbody>
-                </table>
-                <p>Subtotal: {order.SubTotal:C}<br/>VAT (15%): {order.TaxTotal:C}<br/>
-                <strong>Total: {order.GrandTotal:C}</strong></p>
-                <p>You can track this order any time under My Orders.</p>";
-
-            await _emailSender.SendAsync(user.Email, $"Order Confirmation - {order.OrderNumber}", body);
-        }
+        HttpContext.Session.Remove("PendingAddressId");
+        HttpContext.Session.Remove("PendingSaveCard");
 
         this.ToastSuccess($"Payment confirmed - order {order.OrderNumber} placed for {order.GrandTotal:C}.");
-
-        if (newlyLowStock.Count > 0)
-            _logger.LogInformation("Online order pushed these products into low stock: {Products}", string.Join(", ", newlyLowStock));
 
         return RedirectToAction("Confirmation", "Shop", new { id = order.OrderId });
     }
