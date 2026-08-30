@@ -123,11 +123,13 @@ public class RolesController : Controller
         var role = await _roleManager.FindByIdAsync(id);
         if (role is null) return NotFound();
 
-        // The Administrator role always keeps every permission, so an admin can never
-        // accidentally lock every admin (including themselves) out of the system.
-        if (role.Name == "Administrator")
+        // The Administrator role can have any other permission removed, but RolesManage
+        // itself can never be unchecked - that's the one permission that guarantees an
+        // Administrator can always get back into this screen and grant permissions back,
+        // even after removing everything else from the role.
+        if (role.Name == "Administrator" && !model.SelectedPermissions.Contains(Permissions.RolesManage))
         {
-            model.SelectedPermissions = Permissions.All.Keys.ToList();
+            model.SelectedPermissions.Add(Permissions.RolesManage);
         }
 
         var existingClaims = await _roleManager.GetClaimsAsync(role);
