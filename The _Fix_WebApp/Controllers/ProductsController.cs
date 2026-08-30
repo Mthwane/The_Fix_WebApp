@@ -2,6 +2,7 @@ using FashionFix.Web.Data;
 using FashionFix.Web.Models.Entities;
 using FashionFix.Web.Models.ViewModels;
 using FashionFix.Web.Security;
+using FashionFix.Web.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -14,11 +15,29 @@ public class ProductsController : Controller
 {
     private readonly ApplicationDbContext _context;
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly IInventoryService _inventoryService;
 
-    public ProductsController(ApplicationDbContext context, UserManager<ApplicationUser> userManager)
+    public ProductsController(ApplicationDbContext context, UserManager<ApplicationUser> userManager, IInventoryService inventoryService)
     {
         _context = context;
         _userManager = userManager;
+        _inventoryService = inventoryService;
+    }
+
+    // GET: /Products/LowStock - dedicated restock queue. Reached by clicking the "Low Stock"
+    // card/table on the Dashboard. Same [Authorize(Permissions.ProductsManage)] as the rest of
+    // this controller, so it's available to whichever roles that permission is granted to
+    // (Manager and Administrator by default) - see Security/Permissions.cs.
+    [HttpGet]
+    public async Task<IActionResult> LowStock()
+    {
+        var products = await _context.Products
+            .AsNoTracking()
+            .Where(p => p.IsActive && p.StockQuantity <= p.LowStockThreshold)
+            .OrderBy(p => p.StockQuantity)
+            .ToListAsync();
+
+        return View(products);
     }
 
     // GET: /Products?SearchTerm=&Category=&Size=&Color=&InStockOnly=
@@ -175,10 +194,22 @@ public class ProductsController : Controller
         product.ImageUrl = model.ImageUrl;
         product.LowStockThreshold = model.LowStockThreshold;
         product.DateUpdated = DateTime.UtcNow;
-        // NOTE: StockQuantity is intentionally NOT edited here directly - it should
-        // only change via InventoryService (sales, returns, PO receipts, adjustments).
 
         await _context.SaveChangesAsync();
+
+        // Stock is the one field that doesn't just get overwritten - it goes through
+        // InventoryService so the change is logged in InventoryTransactions (same audit
+        // trail a sale or a return would create), instead of silently vanishing into an
+        // untracked UPDATE. This is what lets a manager restock straight from this form.
+        var stockDelta = model.StockQuantity - product.StockQuantity;
+        if (stockDelta > 0)
+        {
+            await _inventoryService.IncrementStockAsync(product.ProductId, stockDelta, InventoryChangeReason.ManualAdjustment);
+        }
+        else if (stockDelta < 0)
+        {
+            await _inventoryService.DecrementStockAsync(product.ProductId, -stockDelta, InventoryChangeReason.ManualAdjustment);
+        }
 
         await LogAuditAsync("ProductUpdated", $"Updated product '{product.Name}' (SKU {product.SKU}).");
         this.ToastSuccess($"'{product.Name}' was updated.");
