@@ -13,7 +13,7 @@
         @foreach (var item in Model.OrderItems)
         {
             <tr>
-                <td>@item.Product.Name (x@item.Quantity)</td>
+                <td>@item.Product.Name @if (item.ProductVariant != null) { <span class="text-muted small">(@item.ProductVariant.Size/@item.ProductVariant.Color)</span> } (x@item.Quantity)</td>
                 <td class="text-end">@item.LineTotal.ToString("C")</td>
             </tr>
         }

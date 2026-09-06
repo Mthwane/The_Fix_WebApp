@@ -1,0 +1,58 @@
+@model List<ProductImage>
+@{
+    var product = ViewBag.Product as Product;
+    ViewData["Title"] = $"Images - {product?.Name}";
+    Layout = "_StaffLayout";
+}
+<div class="stf-content">
+    <span class="stf-eyebrow">Catalogue</span>
+    <h1 style="margin-bottom:6px;">Image Gallery: @product?.Name</h1>
+    <p style="color:var(--stf-on-surface-variant);margin-bottom:4px;">Additional photos for this product's detail page. The main product photo (used on cards/grids) is still set on the product's own Edit screen.</p>
+    <a asp-action="Edit" asp-route-id="@product?.ProductId" style="font-size:0.85rem;color:var(--stf-secondary);">&larr; Back to Product</a>
+
+    <form asp-action="AddImage" method="post" class="stf-card" style="display:flex;gap:14px;align-items:flex-end;margin:20px 0;">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="productId" value="@product?.ProductId" />
+        <div style="flex:1;">
+            <label style="font-size:0.82rem;display:block;margin-bottom:6px;">Image URL</label>
+            <input name="imageUrl" required placeholder="https://..." style="width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:8px 12px;font-size:0.88rem;" />
+        </div>
+        <label style="font-size:0.82rem;display:flex;align-items:center;gap:6px;">
+            <input type="checkbox" name="isPrimary" value="true" id="isPrimaryCheck" /> Set as primary gallery image
+        </label>
+        <button type="submit" class="stf-btn stf-btn-primary">+ Add</button>
+    </form>
+
+    @if (!Model.Any())
+    {
+        <div class="stf-card" style="text-align:center;padding:40px 20px;color:var(--stf-on-surface-variant);">No gallery images yet - the product page will just show the main product photo.</div>
+    }
+    else
+    {
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;">
+            @foreach (var img in Model)
+            {
+                <div class="stf-card" style="padding:0;overflow:hidden;">
+                    <img src="@img.ImageUrl" style="width:100%;aspect-ratio:1;object-fit:cover;" alt="" />
+                    <div style="padding:14px;">
+                        @if (img.IsPrimary)
+                        {
+                            <span class="stf-badge stf-badge-active" style="margin-bottom:8px;display:inline-block;">Primary</span>
+                        }
+                        else
+                        {
+                            <form asp-action="SetPrimaryImage" asp-route-id="@img.ProductImageId" method="post" style="margin-bottom:8px;">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="stf-btn stf-btn-outline" style="width:100%;justify-content:center;padding:6px 10px;font-size:0.75rem;">Make Primary</button>
+                            </form>
+                        }
+                        <form asp-action="RemoveImage" asp-route-id="@img.ProductImageId" method="post">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="stf-btn stf-btn-danger-outline" style="width:100%;justify-content:center;padding:6px 10px;font-size:0.75rem;" onclick="return confirm('Remove this image?');">Remove</button>
+                        </form>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>

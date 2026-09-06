@@ -1,89 +1,228 @@
 @model DashboardViewModel
 @{
     ViewData["Title"] = "Dashboard";
+    Layout = "_StaffLayout";
     bool Can(string permission) => User.HasClaim(FashionFix.Web.Security.Permissions.ClaimType, permission);
-    var canManageProducts = Can(FashionFix.Web.Security.Permissions.ProductsManage);
+    string Money(decimal v) => v.ToString("C");
 }
 
-<div class="container py-4">
-    <h1>Dashboard</h1>
+<div class="stf-content">
+    <div class="stf-page-head">
+        <div>
+            <span class="stf-eyebrow">Operations Core</span>
+            <h1>Dashboard</h1>
+            <p>Live from the ledger, refreshed automatically every 20 seconds - no caching, no sockets, just polling.</p>
+        </div>
+    </div>
 
-    <div class="row g-3 mb-4">
-        <div class="col-md-3">
-            <div class="card">
-                <div class="card-body">
-                    <h6 class="text-muted">Today's Sales</h6>
-                    <h3>@Model.TodaysSales.ToString("C")</h3>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card">
-                <div class="card-body">
-                    <h6 class="text-muted">Today's Orders</h6>
-                    <h3>@Model.TodaysOrderCount</h3>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card">
-                <div class="card-body">
-                    <h6 class="text-muted">Month-to-Date Revenue</h6>
-                    <h3>@Model.MonthToDateRevenue.ToString("C")</h3>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            @if (canManageProducts)
+    @if (Model.AttentionItems.Any())
+    {
+        <div class="stf-card" style="margin-bottom:24px;padding:0;overflow:hidden;">
+            <div style="padding:14px 20px;font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--stf-outline);border-bottom:1px solid var(--stf-surface-container);">Needs Your Attention</div>
+            @foreach (var item in Model.AttentionItems)
             {
-                <a asp-controller="Products" asp-action="LowStock" class="text-decoration-none">
-                    <div class="card border-warning h-100" style="cursor:pointer;">
-                        <div class="card-body">
-                            <h6 class="text-muted">Low Stock Items</h6>
-                            <h3 class="text-warning-emphasis">@Model.LowStockCount</h3>
-                            <div class="small text-muted">Click to view &amp; restock &rarr;</div>
-                        </div>
-                    </div>
+                var color = item.Severity == "danger" ? "var(--stf-error)" : item.Severity == "warning" ? "var(--stf-secondary)" : "var(--stf-on-surface-variant)";
+                <a href="@item.Url" style="display:flex;justify-content:space-between;align-items:center;padding:12px 20px;border-bottom:1px solid var(--stf-surface-container);text-decoration:none;color:inherit;">
+                    <span style="font-size:0.88rem;">@item.Label</span>
+                    <span class="stf-badge" style="background:transparent;color:@color;border:1px solid @color;">@item.Count</span>
                 </a>
             }
-            else
-            {
-                <div class="card border-warning">
-                    <div class="card-body">
-                        <h6 class="text-muted">Low Stock Items</h6>
-                        <h3>@Model.LowStockCount</h3>
-                    </div>
-                </div>
-            }
         </div>
-    </div>
+    }
 
-    <div class="d-flex justify-content-between align-items-center">
-        <h5>Low Stock Alerts</h5>
-        @if (canManageProducts && Model.LowStockProducts.Any())
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px;">
+        <div class="stf-card">
+            <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--stf-secondary);font-weight:600;">Today's Sales</div>
+            <div id="kpi-todaysSales" style="font-family:'Newsreader',serif;font-size:1.7rem;margin-top:6px;">@Money(Model.TodaysSales)</div>
+        </div>
+        <div class="stf-card">
+            <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--stf-secondary);font-weight:600;">Today's Orders</div>
+            <div id="kpi-todaysOrderCount" style="font-family:'Newsreader',serif;font-size:1.7rem;margin-top:6px;">@Model.TodaysOrderCount</div>
+            <div style="font-size:0.75rem;color:var(--stf-on-surface-variant);margin-top:4px;">Avg <span id="kpi-aov">@Money(Model.AverageOrderValueToday)</span></div>
+        </div>
+        <div class="stf-card">
+            <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--stf-secondary);font-weight:600;">Month-to-Date Revenue</div>
+            <div id="kpi-mtd" style="font-family:'Newsreader',serif;font-size:1.7rem;margin-top:6px;">@Money(Model.MonthToDateRevenue)</div>
+        </div>
+        @if (Can(FashionFix.Web.Security.Permissions.ProductsManage))
         {
-            <a asp-controller="Products" asp-action="LowStock" class="btn btn-sm btn-outline-warning">View all &amp; restock</a>
+            <a asp-controller="Products" asp-action="LowStock" class="stf-card" style="@(Model.LowStockCount > 0 ? "background:var(--stf-secondary-container);" : "") display:block;">
+                <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--stf-secondary);font-weight:600;">Low Stock Items</div>
+                <div id="kpi-lowStock" style="font-family:'Newsreader',serif;font-size:1.7rem;margin-top:6px;">@Model.LowStockCount</div>
+                <div style="font-size:0.75rem;color:var(--stf-on-surface-variant);margin-top:4px;">@Model.OutOfStockCount out of stock &rarr;</div>
+            </a>
+        }
+        else
+        {
+            <div class="stf-card">
+                <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--stf-secondary);font-weight:600;">Best Seller</div>
+                <div style="font-size:1.1rem;margin-top:6px;">@(Model.BestSellers.FirstOrDefault()?.Name ?? "-")</div>
+            </div>
         }
     </div>
-    <table class="table table-sm @(canManageProducts ? "table-hover" : "")">
-        <thead><tr><th>Product</th><th>SKU</th><th>Stock</th><th>Threshold</th></tr></thead>
-        <tbody>
-            @foreach (var p in Model.LowStockProducts)
+
+    <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:20px;align-items:start;">
+        <div>
+            @if (Can(FashionFix.Web.Security.Permissions.OrdersManage))
             {
-                if (canManageProducts)
+                <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:0 0 12px;">Recent Orders</h5>
+                @if (!Model.RecentOrders.Any())
                 {
-                    <tr style="cursor:pointer;" onclick="window.location='@Url.Action("Edit", "Products", new { id = p.ProductId })'">
-                        <td>@p.Name</td>
-                        <td>@p.SKU</td>
-                        <td>@p.StockQuantity</td>
-                        <td>@p.LowStockThreshold</td>
-                    </tr>
+                    <div class="stf-card" style="color:var(--stf-on-surface-variant);margin-bottom:20px;">No orders yet.</div>
                 }
                 else
                 {
-                    <tr><td>@p.Name</td><td>@p.SKU</td><td>@p.StockQuantity</td><td>@p.LowStockThreshold</td></tr>
+                    <table class="stf-table" style="margin-bottom:20px;">
+                        <thead><tr><th>Order #</th><th>Type</th><th>Total</th><th>Status</th><th>Placed</th></tr></thead>
+                        <tbody>
+                            @foreach (var o in Model.RecentOrders)
+                            {
+                                <tr onclick="window.location='@Url.Action("Details", "Orders", new { id = o.OrderId })'" style="cursor:pointer;">
+                                    <td style="font-weight:600;">@o.OrderNumber</td>
+                                    <td>@o.OrderType</td>
+                                    <td>@Money(o.GrandTotal)</td>
+                                    <td><span class="stf-badge stf-badge-muted">@o.Status</span></td>
+                                    <td style="font-size:0.8rem;color:var(--stf-on-surface-variant);">@o.DateCreated.ToLocalTime().ToString("dd MMM, HH:mm")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
                 }
             }
-        </tbody>
-    </table>
+
+            @if (Can(FashionFix.Web.Security.Permissions.ReportsView) && Model.RevenueByDepartment.Any())
+            {
+                <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:0 0 12px;">Revenue by Department (MTD)</h5>
+                <div class="stf-card" style="margin-bottom:20px;">
+                    @foreach (var d in Model.RevenueByDepartment)
+                    {
+                        <div style="margin-bottom:10px;">
+                            <div style="display:flex;justify-content:space-between;font-size:0.85rem;margin-bottom:4px;">
+                                <span>@d.DepartmentName</span><span>@Money(d.Revenue) (@d.Percentage%)</span>
+                            </div>
+                            <div style="height:6px;background:var(--stf-surface-container);border-radius:3px;overflow:hidden;">
+                                <div style="height:100%;width:@d.Percentage%;background:var(--stf-primary);"></div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+
+            @if (Can(FashionFix.Web.Security.Permissions.AuditLogsView) && Model.RecentActivity.Any())
+            {
+                <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:0 0 12px;">Recent Activity</h5>
+                <div class="stf-card" style="padding:0;">
+                    @foreach (var log in Model.RecentActivity)
+                    {
+                        <div style="padding:10px 16px;border-bottom:1px solid var(--stf-surface-container);font-size:0.82rem;">
+                            <strong>@(log.User?.FullName ?? "System")</strong> - @log.Action
+                            @if (!string.IsNullOrWhiteSpace(log.Details)) { <div style="color:var(--stf-on-surface-variant);font-size:0.78rem;">@log.Details</div> }
+                            <div style="color:var(--stf-outline);font-size:0.72rem;margin-top:2px;">@log.Timestamp.ToLocalTime().ToString("dd MMM, HH:mm")</div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        <div>
+            @if (Can(FashionFix.Web.Security.Permissions.ProductsManage))
+            {
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                    <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:0;">Restock Watchlist</h5>
+                    @if (Model.LowStockVariants.Any())
+                    {
+                        <a asp-controller="Products" asp-action="LowStock" style="font-size:0.78rem;color:var(--stf-secondary);">View all &rarr;</a>
+                    }
+                </div>
+                @if (!Model.LowStockVariants.Any())
+                {
+                    <div class="stf-card" style="color:var(--stf-on-surface-variant);margin-bottom:20px;">Nothing is low on stock right now.</div>
+                }
+                else
+                {
+                    <div class="stf-card" style="padding:0;margin-bottom:20px;">
+                        @foreach (var v in Model.LowStockVariants.Take(6))
+                        {
+                            <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--stf-surface-container);">
+                                <div>
+                                    <div style="font-weight:600;font-size:0.88rem;">@v.Product.Name</div>
+                                    <div style="font-size:0.78rem;color:var(--stf-on-surface-variant);">@v.Size/@v.Color</div>
+                                </div>
+                                <span class="stf-badge @(v.StockQuantity == 0 ? "stf-badge-danger" : "")" style="@(v.StockQuantity > 0 ? "background:var(--stf-secondary-container);color:var(--stf-secondary);" : "")">@v.StockQuantity left</span>
+                            </div>
+                        }
+                    </div>
+                }
+            }
+
+            @if (Can(FashionFix.Web.Security.Permissions.SuppliersManage) || Can(FashionFix.Web.Security.Permissions.PurchaseOrdersManage))
+            {
+                <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:0 0 12px;">Supply Chain</h5>
+                <div class="stf-card" style="margin-bottom:20px;">
+                    @foreach (var kv in Model.PurchaseOrdersByStatus)
+                    {
+                        <div style="display:flex;justify-content:space-between;font-size:0.85rem;padding:4px 0;"><span>@kv.Key</span><strong>@kv.Value</strong></div>
+                    }
+                    @if (Model.UpcomingDeliveries.Any())
+                    {
+                        <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--stf-surface-container);font-size:0.8rem;color:var(--stf-on-surface-variant);">
+                            @Model.UpcomingDeliveries.Count expected in the next 7 days
+                        </div>
+                    }
+                </div>
+            }
+
+            @if (Can(FashionFix.Web.Security.Permissions.ReturnsProcess))
+            {
+                <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:0 0 12px;">Returns</h5>
+                <div class="stf-card" style="margin-bottom:20px;">
+                    <div style="display:flex;justify-content:space-between;font-size:0.85rem;padding:4px 0;"><span>Today</span><strong>@Model.ReturnsToday</strong></div>
+                    <div style="display:flex;justify-content:space-between;font-size:0.85rem;padding:4px 0;"><span>This week</span><strong>@Model.ReturnsThisWeek (@Money(Model.RefundTotalThisWeek))</strong></div>
+                    @if (Model.ResalablePercentageThisWeek.HasValue)
+                    {
+                        <div style="display:flex;justify-content:space-between;font-size:0.85rem;padding:4px 0;"><span>Resalable</span><strong>@Model.ResalablePercentageThisWeek.Value.ToString("0")%</strong></div>
+                    }
+                </div>
+            }
+
+            @if (Can(FashionFix.Web.Security.Permissions.PosUse) && Model.CurrentShift is not null)
+            {
+                <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:0 0 12px;">Your Shift</h5>
+                <div class="stf-card" style="margin-bottom:20px;">
+                    <div style="font-size:0.85rem;">Opened @Model.CurrentShift.DateOpened.ToLocalTime().ToString("HH:mm") with @Money(Model.CurrentShift.OpeningFloat)</div>
+                    <div style="font-size:0.85rem;margin-top:4px;">Expected cash now: <strong>@Money(Model.CurrentShiftExpectedCash ?? 0)</strong></div>
+                    <a asp-controller="Pos" asp-action="EndShift" class="stf-btn stf-btn-outline" style="margin-top:10px;padding:6px 14px;font-size:0.78rem;">End Shift</a>
+                </div>
+            }
+
+            @if (Can(FashionFix.Web.Security.Permissions.EmployeesManage))
+            {
+                <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:0 0 12px;">Staff</h5>
+                <div class="stf-card">
+                    <div style="display:flex;justify-content:space-between;font-size:0.85rem;padding:4px 0;"><span>Active staff</span><strong>@Model.ActiveStaffCount</strong></div>
+                    <div style="display:flex;justify-content:space-between;font-size:0.85rem;padding:4px 0;"><span>Without 2FA</span><strong>@Model.StaffWithout2FA</strong></div>
+                </div>
+            }
+        </div>
+    </div>
 </div>
+
+@section Scripts {
+    <script>
+        (function () {
+            function money(v) { return 'R' + Number(v).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+            function refresh() {
+                fetch('@Url.Action("DashboardData", "Home")').then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+                    if (!d) return;
+                    var s = function (id, val) { var el = document.getElementById(id); if (el) el.textContent = val; };
+                    s('kpi-todaysSales', money(d.todaysSales));
+                    s('kpi-todaysOrderCount', d.todaysOrderCount);
+                    s('kpi-aov', money(d.averageOrderValueToday));
+                    s('kpi-mtd', money(d.monthToDateRevenue));
+                    s('kpi-lowStock', d.lowStockCount);
+                }).catch(function () { /* best-effort - a failed poll just tries again next cycle */ });
+            }
+            setInterval(refresh, 20000);
+        })();
+    </script>
+}

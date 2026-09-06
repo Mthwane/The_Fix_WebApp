@@ -4,12 +4,17 @@ using FashionFix.Web.Models.Entities;
 namespace FashionFix.Web.Models.ViewModels;
 
 /// <summary>One line in a customer's in-progress shopping cart, kept in Session (not the DB)
-/// until checkout actually creates an Order - so browsing never touches stock or the database.</summary>
+/// until checkout actually creates an Order - so browsing never touches stock or the database.
+/// Keyed to a specific ProductVariant (an exact size/colour), not just a Product, since that's
+/// what actually carries a SKU and stock now.</summary>
 public class CartLineViewModel
 {
     public int ProductId { get; set; }
+    public int VariantId { get; set; }
     public string Name { get; set; } = string.Empty;
     public string SKU { get; set; } = string.Empty;
+    public string? Size { get; set; }
+    public string? Color { get; set; }
     public string? ImageUrl { get; set; }
     public decimal UnitPrice { get; set; }
     public int Quantity { get; set; }

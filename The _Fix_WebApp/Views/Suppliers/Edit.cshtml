@@ -1,0 +1,75 @@
+﻿@model Supplier
+@{
+    ViewData["Title"] = "Edit Supplier";
+    Layout = "_StaffLayout";
+}
+
+<div class="stf-content" style="max-width:640px;">
+    <span class="stf-eyebrow">Supply Chain</span>
+    <h1 style="margin-bottom:20px;">Edit Supplier</h1>
+
+    <form asp-action="Edit" asp-route-id="@Model.SupplierId" method="post" class="stf-card">
+        <input type="hidden" asp-for="SupplierId" />
+        @Html.AntiForgeryToken()
+        <div asp-validation-summary="ModelOnly" style="color:var(--stf-error);margin-bottom:10px;"></div>
+
+        @{ string L = "font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;"; string F = "width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:9px 14px;font-size:0.9rem;margin-bottom:14px;"; }
+
+        <label asp-for="Name" style="@L"></label>
+        <input asp-for="Name" style="@F" />
+        <span asp-validation-for="Name" style="color:var(--stf-error);font-size:0.8rem;"></span>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+            <div>
+                <label asp-for="ContactName" style="@L"></label>
+                <input asp-for="ContactName" style="@F" />
+            </div>
+            <div>
+                <label asp-for="LeadTimeDays" style="@L"></label>
+                <input asp-for="LeadTimeDays" style="@F" />
+            </div>
+            <div>
+                <label asp-for="ContactEmail" style="@L"></label>
+                <input asp-for="ContactEmail" type="email" style="@F" />
+            </div>
+            <div>
+                <label asp-for="ContactPhone" style="@L"></label>
+                <input asp-for="ContactPhone" style="@F" />
+            </div>
+        </div>
+
+        <h5 style="font-family:'Newsreader',serif;font-size:1.05rem;margin:8px 0 12px;">Collection Address</h5>
+
+        <label asp-for="StreetAddress" style="@L"></label>
+        <input asp-for="StreetAddress" style="@F" />
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+            <div>
+                <label asp-for="LocalArea" style="@L"></label>
+                <input asp-for="LocalArea" style="@F" />
+            </div>
+            <div>
+                <label asp-for="City" style="@L"></label>
+                <input asp-for="City" style="@F" />
+            </div>
+            <div>
+                <label asp-for="Province" style="@L"></label>
+                <input asp-for="Province" style="@F" />
+            </div>
+            <div>
+                <label asp-for="PostalCode" style="@L"></label>
+                <input asp-for="PostalCode" style="@F" />
+            </div>
+        </div>
+
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:18px;">
+            <input asp-for="IsActive" />
+            <label asp-for="IsActive" style="font-size:0.88rem;margin:0;"></label>
+        </div>
+
+        <div style="display:flex;gap:10px;">
+            <button type="submit" class="stf-btn stf-btn-primary">Save Changes</button>
+            <a asp-action="Index" style="font-size:0.85rem;color:var(--stf-on-surface-variant);align-self:center;">Cancel</a>
+        </div>
+    </form>
+</div>

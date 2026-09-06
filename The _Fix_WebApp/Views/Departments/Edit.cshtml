@@ -1,0 +1,109 @@
+@model DepartmentViewModel
+@{
+    ViewData["Title"] = "Edit Department";
+    Layout = "_StaffLayout";
+}
+<div class="stf-content" style="max-width:900px;">
+    <span class="stf-eyebrow">Storefront</span>
+    <h1 style="margin-bottom:20px;">Edit Department</h1>
+
+    <form asp-action="Edit" asp-route-id="@Model.DepartmentId" method="post" class="stf-card">
+        <input type="hidden" asp-for="DepartmentId" />
+        <div asp-validation-summary="ModelOnly" style="color:var(--stf-error);margin-bottom:10px;"></div>
+        @{ string L = "font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;"; string F = "width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:9px 14px;font-size:0.9rem;"; }
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+            <div>
+                <label asp-for="Name" style="@L"></label>
+                <input asp-for="Name" style="@F" />
+                <span asp-validation-for="Name" style="color:var(--stf-error);font-size:0.8rem;"></span>
+            </div>
+            <div>
+                <label asp-for="Slug" style="@L"></label>
+                <input asp-for="Slug" style="@F" />
+                <div style="font-size:0.75rem;color:var(--stf-on-surface-variant);margin-top:4px;">Changing this breaks any bookmarked/shared links to the old one.</div>
+                <span asp-validation-for="Slug" style="color:var(--stf-error);font-size:0.8rem;"></span>
+            </div>
+            <div>
+                <label asp-for="DisplayOrder" style="@L"></label>
+                <input asp-for="DisplayOrder" style="@F" />
+            </div>
+            <div style="display:flex;align-items:flex-end;">
+                <label style="font-size:0.85rem;display:flex;align-items:center;gap:8px;">
+                    <input asp-for="IsActive" /> Visible on storefront
+                </label>
+            </div>
+            <div>
+                <label asp-for="HeroImageUrl" style="@L"></label>
+                <input asp-for="HeroImageUrl" style="@F" />
+            </div>
+            <div>
+                <label asp-for="TileImageUrl" style="@L"></label>
+                <input asp-for="TileImageUrl" style="@F" />
+            </div>
+            <div>
+                <label asp-for="HeroHeadline" style="@L"></label>
+                <input asp-for="HeroHeadline" style="@F" />
+            </div>
+            <div>
+                <label asp-for="HeroSubheadline" style="@L"></label>
+                <input asp-for="HeroSubheadline" style="@F" />
+            </div>
+        </div>
+
+        <hr style="border-color:var(--stf-outline-variant);margin:20px 0;" />
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:0;">Subcategories</h5>
+            <button type="button" id="addSubRow" class="stf-btn stf-btn-outline" style="padding:6px 14px;font-size:0.78rem;">+ Add Subcategory</button>
+        </div>
+        <p style="font-size:0.8rem;color:var(--stf-on-surface-variant);">Checking "Remove" deletes that subcategory on save (a real delete, not a deactivate).</p>
+
+        <table class="stf-table" id="subTable" style="margin-bottom:16px;">
+            <thead><tr><th>Name</th><th>Slug</th><th style="width:100px;">Order</th><th style="width:90px;"></th></tr></thead>
+            <tbody id="subRows">
+                @for (var i = 0; i < Model.SubCategories.Count; i++)
+                {
+                    var s = Model.SubCategories[i];
+                    <tr>
+                        <td>
+                            <input type="hidden" name="SubCategories[@i].DepartmentSubCategoryId" value="@s.DepartmentSubCategoryId" />
+                            <input name="SubCategories[@i].Name" value="@s.Name" style="width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:6px 10px;" />
+                        </td>
+                        <td><input name="SubCategories[@i].Slug" value="@s.Slug" style="width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:6px 10px;" /></td>
+                        <td><input type="number" name="SubCategories[@i].DisplayOrder" value="@s.DisplayOrder" style="width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:6px 10px;" /></td>
+                        <td>
+                            <label style="font-size:0.78rem;color:var(--stf-error);display:flex;align-items:center;gap:4px;">
+                                <input type="checkbox" name="SubCategories[@i].Remove" value="true" /> Remove
+                            </label>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        <div style="display:flex;gap:10px;">
+            <button type="submit" class="stf-btn stf-btn-primary">Save Changes</button>
+            <a asp-action="Index" style="font-size:0.85rem;color:var(--stf-on-surface-variant);align-self:center;">Cancel</a>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <script>
+        (function () {
+            var rowIndex = @Model.SubCategories.Count;
+            document.getElementById('addSubRow').addEventListener('click', function () {
+                var tr = document.createElement('tr');
+                var inp = 'style="width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:6px 10px;"';
+                tr.innerHTML =
+                    '<td><input name="SubCategories[' + rowIndex + '].Name" ' + inp + ' /></td>' +
+                    '<td><input name="SubCategories[' + rowIndex + '].Slug" ' + inp + ' placeholder="e.g. trail-running" /></td>' +
+                    '<td><input type="number" name="SubCategories[' + rowIndex + '].DisplayOrder" value="' + rowIndex + '" ' + inp + ' /></td>' +
+                    '<td><button type="button" class="stf-btn stf-btn-danger-outline remove-row-btn" style="padding:6px 10px;font-size:0.75rem;">Remove</button></td>';
+                document.getElementById('subRows').appendChild(tr);
+                tr.querySelector('.remove-row-btn').addEventListener('click', function () { tr.remove(); });
+                rowIndex++;
+            });
+        })();
+    </script>
+}

@@ -1,0 +1,62 @@
+@model PricingSettingsViewModel
+@{
+    ViewData["Title"] = "Pricing";
+    Layout = "_StaffLayout";
+}
+<div class="stf-content" style="max-width:800px;">
+    <span class="stf-eyebrow">Catalogue</span>
+    <h1 style="margin-bottom:6px;">Pricing</h1>
+    <p style="color:var(--stf-on-surface-variant);margin-bottom:20px;">
+        Controls the "Auto-calculate from markup" option on the Product form - Selling Price = Cost Price &times; (1 + markup%). A category with no override below just uses the store default.
+    </p>
+
+    <div class="stf-card" style="margin-bottom:24px;">
+        <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--stf-outline);margin-bottom:10px;">Store Default</div>
+        <form asp-action="SaveDefault" method="post" style="display:flex;gap:10px;align-items:center;">
+            @Html.AntiForgeryToken()
+            <input type="number" name="markupPercentage" value="@Model.DefaultMarkupPercentage" min="0" max="1000" step="0.5"
+                   style="width:120px;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:9px 14px;font-size:0.9rem;" />
+            <span style="font-size:0.9rem;">%</span>
+            <button type="submit" class="stf-btn stf-btn-primary">Save Default</button>
+            <span style="font-size:0.8rem;color:var(--stf-on-surface-variant);">e.g. cost R100 at 60% = R160 selling price</span>
+        </form>
+    </div>
+
+    <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:0 0 12px;">Category Overrides</h5>
+    <table class="stf-table">
+        <thead><tr><th>Category</th><th style="width:160px;">Effective Markup</th><th style="width:220px;"></th></tr></thead>
+        <tbody>
+            @foreach (var row in Model.CategoryRules)
+            {
+                <tr>
+                    <td style="font-weight:600;">
+                        @row.Category
+                        @if (!row.HasOverride)
+                        {
+                            <span class="stf-badge stf-badge-muted" style="margin-left:6px;">Using default</span>
+                        }
+                    </td>
+                    <td>
+                        <form asp-action="SaveCategoryRule" method="post" style="display:flex;gap:8px;align-items:center;">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="category" value="@row.Category" />
+                            <input type="number" name="markupPercentage" value="@(row.Rule?.MarkupPercentage ?? Model.DefaultMarkupPercentage)" min="0" max="1000" step="0.5"
+                                   style="width:90px;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:6px 10px;font-size:0.85rem;" />
+                            <span style="font-size:0.85rem;">%</span>
+                            <button type="submit" class="stf-btn stf-btn-outline" style="padding:6px 14px;font-size:0.78rem;">Save</button>
+                        </form>
+                    </td>
+                    <td style="text-align:right;">
+                        @if (row.HasOverride)
+                        {
+                            <form asp-action="DeleteCategoryRule" asp-route-id="@row.Rule!.CategoryPricingRuleId" method="post" style="display:inline;">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="stf-btn stf-btn-danger-outline" style="padding:6px 14px;font-size:0.78rem;" onclick="return confirm('Remove the override for @row.Category? It will fall back to the store default.');">Reset</button>
+                            </form>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>

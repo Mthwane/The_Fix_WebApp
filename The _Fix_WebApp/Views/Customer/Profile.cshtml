@@ -1,172 +1,166 @@
 @model CustomerProfileViewModel
 @{
     ViewData["Title"] = "My Profile";
+    Layout = "_StorefrontLayout";
+    var addresses = (List<CustomerAddress>)(ViewBag.Addresses ?? new List<CustomerAddress>());
+    var paymentMethods = (List<CustomerPaymentMethod>)(ViewBag.PaymentMethods ?? new List<CustomerPaymentMethod>());
 }
 
-<div class="container py-4" style="max-width: 900px;">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2 class="mb-0">My Profile</h2>
-        <div class="d-flex gap-2">
-            <a asp-controller="Customer" asp-action="Orders" class="btn btn-outline-secondary btn-sm">&larr; My Orders</a>
-            <a asp-controller="Shop" asp-action="Index" class="btn btn-danger btn-sm"><i class="bi bi-cart3"></i> Shop Now</a>
-        </div>
-    </div>
-
-    @if (TempData["ProfileMessage"] is string msg)
-    {
-        <div class="alert alert-success">@msg</div>
-    }
-
-    <div class="mb-4" style="max-width: 500px;">
-        <label class="form-label">Customer ID</label>
-        <div class="input-group">
-            <input type="text" id="customerIdField" class="form-control" value="@Model.CustomerId" readonly />
-            <button type="button" class="btn btn-outline-secondary" onclick="navigator.clipboard.writeText(document.getElementById('customerIdField').value); this.textContent='Copied!'; setTimeout(() => this.textContent='Copy', 1500);">Copy</button>
-        </div>
-        <div class="form-text">Give this to store staff at checkout so a purchase links to your account and order history.</div>
-    </div>
-
-    <form asp-controller="Customer" asp-action="Profile" method="post" style="max-width: 500px;">
-        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
-
-        <div class="mb-3">
-            <label asp-for="FullName" class="form-label"></label>
-            <input asp-for="FullName" class="form-control" />
-            <span asp-validation-for="FullName" class="text-danger"></span>
+<section class="ffs-section" style="padding-top:32px;">
+    <div class="ffs-container" style="max-width:760px;">
+        <div class="ffs-section-head">
+            <div>
+                <span class="ffs-eyebrow">Account</span>
+                <h1 style="font-family:'Fraunces',serif;font-size:1.9rem;">My Profile</h1>
+            </div>
+            <div style="display:flex;gap:10px;">
+                <a asp-controller="Customer" asp-action="Orders" class="ffs-btn ffs-btn-outline">&larr; My Orders</a>
+                <a asp-controller="Shop" asp-action="Index" class="ffs-btn ffs-btn-forest">Shop Now</a>
+            </div>
         </div>
 
-        <div class="mb-3">
-            <label asp-for="Email" class="form-label"></label>
-            <input asp-for="Email" class="form-control" type="email" />
-            <span asp-validation-for="Email" class="text-danger"></span>
+        @if (TempData["ProfileMessage"] is string msg)
+        {
+            <div style="background:var(--ffs-sage);color:var(--ffs-sage-text);border-radius:var(--ffs-radius);padding:12px 18px;font-size:0.88rem;margin-bottom:20px;">@msg</div>
+        }
+
+        <div style="margin-bottom:28px;">
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;">Customer ID</label>
+            <div style="display:flex;gap:8px;">
+                <input type="text" id="customerIdField" readonly value="@Model.CustomerId"
+                       style="flex:1;border:1px solid var(--ffs-border);border-radius:8px;padding:9px 14px;font-size:0.85rem;background:var(--ffs-cream-alt);" />
+                <button type="button" class="ffs-btn ffs-btn-outline" style="padding:9px 16px;font-size:0.8rem;"
+                        onclick="navigator.clipboard.writeText(document.getElementById('customerIdField').value); this.textContent='Copied!'; setTimeout(() => this.textContent='Copy', 1500);">Copy</button>
+            </div>
+            <div style="font-size:0.78rem;color:var(--ffs-ink-muted);margin-top:4px;">Give this to store staff at checkout so a purchase links to your account and order history.</div>
         </div>
 
-        <div class="mb-3">
-            <label asp-for="PhoneNumber" class="form-label"></label>
-            <input asp-for="PhoneNumber" class="form-control" />
-            <span asp-validation-for="PhoneNumber" class="text-danger"></span>
+        <form asp-controller="Customer" asp-action="Profile" method="post" style="margin-bottom:32px;">
+            @Html.AntiForgeryToken()
+            <div asp-validation-summary="ModelOnly" style="color:var(--ffs-clay);margin-bottom:10px;"></div>
+
+            <div style="margin-bottom:14px;">
+                <label asp-for="FullName" class="form-label" style="font-size:0.85rem;font-weight:600;"></label>
+                <input asp-for="FullName" style="width:100%;border:1px solid var(--ffs-border);border-radius:8px;padding:9px 14px;font-size:0.88rem;" />
+                <span asp-validation-for="FullName" style="color:var(--ffs-clay);font-size:0.8rem;"></span>
+            </div>
+            <div style="margin-bottom:14px;">
+                <label asp-for="Email" class="form-label" style="font-size:0.85rem;font-weight:600;"></label>
+                <input asp-for="Email" type="email" style="width:100%;border:1px solid var(--ffs-border);border-radius:8px;padding:9px 14px;font-size:0.88rem;" />
+                <span asp-validation-for="Email" style="color:var(--ffs-clay);font-size:0.8rem;"></span>
+            </div>
+            <div style="margin-bottom:18px;">
+                <label asp-for="PhoneNumber" class="form-label" style="font-size:0.85rem;font-weight:600;"></label>
+                <input asp-for="PhoneNumber" style="width:100%;border:1px solid var(--ffs-border);border-radius:8px;padding:9px 14px;font-size:0.88rem;" />
+                <span asp-validation-for="PhoneNumber" style="color:var(--ffs-clay);font-size:0.8rem;"></span>
+            </div>
+
+            <button type="submit" class="ffs-btn ffs-btn-forest">Save Changes</button>
+        </form>
+
+        <hr style="border-color:var(--ffs-border);margin:28px 0;" />
+
+        <div class="ffs-section-head" style="margin-bottom:14px;">
+            <h4 style="font-family:'Fraunces',serif;font-size:1.2rem;margin:0;">Delivery Addresses</h4>
+            <a asp-controller="Customer" asp-action="AddAddress" class="ffs-btn ffs-btn-outline" style="padding:7px 14px;font-size:0.8rem;">+ Add Address</a>
         </div>
 
-        <button type="submit" class="btn btn-danger">Save Changes</button>
-    </form>
-
-    <hr class="my-4" />
-
-    <!-- Saved delivery addresses - picked at checkout so the customer never retypes an
-         address. First one added becomes the default automatically. -->
-    <div class="d-flex justify-content-between align-items-center mb-2">
-        <h4 class="mb-0"><i class="bi bi-geo-alt"></i> Delivery Addresses</h4>
-        <a asp-controller="Customer" asp-action="AddAddress" class="btn btn-sm btn-outline-danger"><i class="bi bi-plus-lg"></i> Add Address</a>
-    </div>
-
-    @{
-        var addresses = (List<CustomerAddress>)(ViewBag.Addresses ?? new List<CustomerAddress>());
-    }
-    @if (!addresses.Any())
-    {
-        <div class="alert alert-light border">No saved addresses yet. Add one so checkout can skip straight to payment next time.</div>
-    }
-    else
-    {
-        <div class="row g-2 mb-2">
-            @foreach (var address in addresses)
-            {
-                <div class="col-12 col-md-6">
-                    <div class="card h-100 @(address.IsDefault ? "border-danger" : "")">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-start">
-                                <h6 class="card-title mb-1">
-                                    @address.Label
-                                    @if (address.IsDefault)
-                                    {
-                                        <span class="badge bg-danger ms-1">Default</span>
-                                    }
-                                </h6>
-                            </div>
-                            <p class="card-text small text-muted mb-2">
-                                @address.RecipientName &middot; @address.PhoneNumber<br />
-                                @address.AddressLine1
-                                @if (!string.IsNullOrWhiteSpace(address.AddressLine2))
-                                {
-                                    <text>, @address.AddressLine2</text>
-                                }
-                                <br />
-                                @address.City, @address.Province @address.PostalCode
-                            </p>
-                            <div class="d-flex gap-2">
-                                <a asp-controller="Customer" asp-action="EditAddress" asp-route-id="@address.CustomerAddressId" class="btn btn-sm btn-outline-secondary">Edit</a>
-                                @if (!address.IsDefault)
-                                {
-                                    <form asp-controller="Customer" asp-action="SetDefaultAddress" asp-route-id="@address.CustomerAddressId" method="post" class="d-inline">
-                                        <button type="submit" class="btn btn-sm btn-outline-primary">Make Default</button>
-                                    </form>
-                                }
-                                <form asp-controller="Customer" asp-action="DeleteAddress" asp-route-id="@address.CustomerAddressId" method="post" class="d-inline">
-                                    <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Remove this address?');">Remove</button>
+        @if (!addresses.Any())
+        {
+            <div style="background:var(--ffs-cream-alt);border-radius:var(--ffs-radius);padding:14px 18px;font-size:0.85rem;color:var(--ffs-ink-muted);margin-bottom:8px;">
+                No saved addresses yet. Add one so checkout can skip straight to payment next time.
+            </div>
+        }
+        else
+        {
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:8px;">
+                @foreach (var address in addresses)
+                {
+                    <div style="border:1px solid @(address.IsDefault ? "var(--ffs-forest)" : "var(--ffs-border)");border-radius:var(--ffs-radius);padding:14px;">
+                        <div style="font-weight:600;margin-bottom:6px;">
+                            @address.Label
+                            @if (address.IsDefault)
+                            {
+                                <span class="ffs-product-badge" style="position:static;font-size:0.6rem;margin-left:6px;">Default</span>
+                            }
+                        </div>
+                        <p style="font-size:0.82rem;color:var(--ffs-ink-muted);margin-bottom:10px;">
+                            @address.RecipientName &middot; @address.PhoneNumber<br />
+                            @address.AddressLine1
+                            @if (!string.IsNullOrWhiteSpace(address.AddressLine2))
+                            {
+                                <text>, @address.AddressLine2</text>
+                            }
+                            <br />
+                            @address.City, @address.Province @address.PostalCode
+                        </p>
+                        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                            <a asp-controller="Customer" asp-action="EditAddress" asp-route-id="@address.CustomerAddressId" class="ffs-btn ffs-btn-outline" style="padding:5px 12px;font-size:0.75rem;">Edit</a>
+                            @if (!address.IsDefault)
+                            {
+                                <form asp-controller="Customer" asp-action="SetDefaultAddress" asp-route-id="@address.CustomerAddressId" method="post" style="display:inline;">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="ffs-btn ffs-btn-outline" style="padding:5px 12px;font-size:0.75rem;">Make Default</button>
                                 </form>
-                            </div>
+                            }
+                            <form asp-controller="Customer" asp-action="DeleteAddress" asp-route-id="@address.CustomerAddressId" method="post" style="display:inline;">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="ffs-btn ffs-btn-outline" style="padding:5px 12px;font-size:0.75rem;color:var(--ffs-clay);border-color:var(--ffs-clay);" onclick="return confirm('Remove this address?');">Remove</button>
+                            </form>
                         </div>
                     </div>
-                </div>
-            }
-        </div>
-    }
+                }
+            </div>
+        }
 
-    <hr class="my-4" />
+        <hr style="border-color:var(--ffs-border);margin:28px 0;" />
 
-    <!-- Saved cards. Only ever populated automatically - after a checkout where the customer
-         ticked "save this card" - never typed in here, since a real card number is only ever
-         seen by Paystack, not this app. -->
-    <div class="d-flex justify-content-between align-items-center mb-2">
-        <h4 class="mb-0"><i class="bi bi-credit-card"></i> Saved Cards</h4>
-    </div>
+        <h4 style="font-family:'Fraunces',serif;font-size:1.2rem;margin-bottom:14px;">Saved Cards</h4>
 
-    @{
-        var paymentMethods = (List<CustomerPaymentMethod>)(ViewBag.PaymentMethods ?? new List<CustomerPaymentMethod>());
-    }
-    @if (!paymentMethods.Any())
-    {
-        <div class="alert alert-light border">No saved cards yet. Tick "Save this card for next time" during checkout and it'll show up here.</div>
-    }
-    else
-    {
-        <div class="row g-2">
-            @foreach (var card in paymentMethods)
-            {
-                <div class="col-12 col-md-6">
-                    <div class="card h-100 @(card.IsDefault ? "border-danger" : "")">
-                        <div class="card-body d-flex justify-content-between align-items-center">
-                            <div>
-                                <div class="fw-semibold text-capitalize">
-                                    <i class="bi bi-credit-card-2-front"></i> @(card.CardType ?? "Card") ending in @card.Last4
-                                    @if (card.IsDefault)
-                                    {
-                                        <span class="badge bg-danger ms-1">Default</span>
-                                    }
-                                </div>
-                                <div class="small text-muted">
-                                    Expires @(card.ExpiryMonth?.ToString("00") ?? "--")/@(card.ExpiryYear?.ToString() ?? "----")
-                                    @if (!string.IsNullOrWhiteSpace(card.Bank))
-                                    {
-                                        <text>&middot; @card.Bank</text>
-                                    }
-                                </div>
-                            </div>
-                            <div class="d-flex flex-column gap-1">
-                                @if (!card.IsDefault)
+        @if (!paymentMethods.Any())
+        {
+            <div style="background:var(--ffs-cream-alt);border-radius:var(--ffs-radius);padding:14px 18px;font-size:0.85rem;color:var(--ffs-ink-muted);">
+                No saved cards yet. Tick "Save this card for next time" during checkout and it'll show up here.
+            </div>
+        }
+        else
+        {
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                @foreach (var card in paymentMethods)
+                {
+                    <div style="border:1px solid @(card.IsDefault ? "var(--ffs-forest)" : "var(--ffs-border)");border-radius:var(--ffs-radius);padding:14px;display:flex;justify-content:space-between;align-items:center;">
+                        <div>
+                            <div style="font-weight:600;text-transform:capitalize;font-size:0.9rem;">
+                                @(card.CardType ?? "Card") ending in @card.Last4
+                                @if (card.IsDefault)
                                 {
-                                    <form asp-controller="Customer" asp-action="SetDefaultPaymentMethod" asp-route-id="@card.CustomerPaymentMethodId" method="post">
-                                        <button type="submit" class="btn btn-sm btn-outline-primary">Make Default</button>
-                                    </form>
+                                    <span class="ffs-product-badge" style="position:static;font-size:0.6rem;margin-left:6px;">Default</span>
                                 }
-                                <form asp-controller="Customer" asp-action="RemovePaymentMethod" asp-route-id="@card.CustomerPaymentMethodId" method="post">
-                                    <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Remove this card?');">Remove</button>
-                                </form>
+                            </div>
+                            <div style="font-size:0.78rem;color:var(--ffs-ink-muted);">
+                                Expires @(card.ExpiryMonth?.ToString("00") ?? "--")/@(card.ExpiryYear?.ToString() ?? "----")
+                                @if (!string.IsNullOrWhiteSpace(card.Bank))
+                                {
+                                    <text>&middot; @card.Bank</text>
+                                }
                             </div>
                         </div>
+                        <div style="display:flex;flex-direction:column;gap:6px;">
+                            @if (!card.IsDefault)
+                            {
+                                <form asp-controller="Customer" asp-action="SetDefaultPaymentMethod" asp-route-id="@card.CustomerPaymentMethodId" method="post">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="ffs-btn ffs-btn-outline" style="padding:5px 12px;font-size:0.72rem;">Make Default</button>
+                                </form>
+                            }
+                            <form asp-controller="Customer" asp-action="RemovePaymentMethod" asp-route-id="@card.CustomerPaymentMethodId" method="post">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="ffs-btn ffs-btn-outline" style="padding:5px 12px;font-size:0.72rem;color:var(--ffs-clay);border-color:var(--ffs-clay);" onclick="return confirm('Remove this card?');">Remove</button>
+                            </form>
+                        </div>
                     </div>
-                </div>
-            }
-        </div>
-    }
-</div>
+                }
+            </div>
+        }
+    </div>
+</section>

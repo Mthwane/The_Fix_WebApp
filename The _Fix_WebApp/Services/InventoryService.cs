@@ -6,8 +6,10 @@ using Microsoft.EntityFrameworkCore;
 namespace FashionFix.Web.Services;
 
 /// <summary>
-/// Central place for all stock-count changes so every code path (POS sale,
-/// PO receipt, return, manual adjustment) goes through the same auditing logic.
+/// Central place for all stock-count changes so every code path (POS sale, online order,
+/// PO receipt, return, manual adjustment) goes through the same auditing logic. Stock lives
+/// on ProductVariant (one row per size/colour) rather than on Product itself, so every
+/// method here takes a variantId, not a productId.
 /// </summary>
 public class InventoryService : IInventoryService
 {
@@ -28,23 +30,24 @@ public class InventoryService : IInventoryService
         _logger = logger;
     }
 
-    public async Task DecrementStockAsync(int productId, int quantity, InventoryChangeReason reason = InventoryChangeReason.Sale)
+    public async Task DecrementStockAsync(int variantId, int quantity, InventoryChangeReason reason = InventoryChangeReason.Sale)
     {
-        var product = await _context.Products.FindAsync(productId)
-            ?? throw new InvalidOperationException($"Product {productId} not found.");
+        var variant = await _context.ProductVariants.Include(v => v.Product).FirstOrDefaultAsync(v => v.ProductVariantId == variantId)
+            ?? throw new InvalidOperationException($"Product variant {variantId} not found.");
         if (quantity <= 0)
             throw new ArgumentOutOfRangeException(nameof(quantity), "Decrement quantity must be positive.");
-        if (product.StockQuantity < quantity)
-            throw new InvalidOperationException($"Cannot decrement stock for '{product.Name}' below zero (have {product.StockQuantity}, need {quantity}).");
+        if (variant.StockQuantity < quantity)
+            throw new InvalidOperationException($"Cannot decrement stock for '{variant.Product.Name} ({variant.Size}/{variant.Color})' below zero (have {variant.StockQuantity}, need {quantity}).");
 
-        var wasLowStock = product.IsLowStock;
+        var wasLowStock = variant.IsLowStock;
 
-        product.StockQuantity -= quantity;
-        product.DateUpdated = DateTime.UtcNow;
+        variant.StockQuantity -= quantity;
+        variant.DateUpdated = DateTime.UtcNow;
 
         _context.InventoryTransactions.Add(new InventoryTransaction
         {
-            ProductId = productId,
+            ProductId = variant.ProductId,
+            ProductVariantId = variantId,
             QuantityChange = -quantity,
             Reason = reason
         });
@@ -54,23 +57,24 @@ public class InventoryService : IInventoryService
         // Only notify the moment stock CROSSES INTO low-stock territory, not on every
         // sale after it's already low - otherwise managers get spammed with one email
         // per sale of an already-known-low item.
-        if (product.IsLowStock && !wasLowStock)
-            await NotifyManagersOfLowStockAsync(new List<Product> { product });
+        if (variant.IsLowStock && !wasLowStock)
+            await NotifyManagersOfLowStockAsync(new List<ProductVariant> { variant });
     }
 
-    public async Task IncrementStockAsync(int productId, int quantity, InventoryChangeReason reason = InventoryChangeReason.PurchaseOrderReceived)
+    public async Task IncrementStockAsync(int variantId, int quantity, InventoryChangeReason reason = InventoryChangeReason.PurchaseOrderReceived)
     {
-        var product = await _context.Products.FindAsync(productId)
-            ?? throw new InvalidOperationException($"Product {productId} not found.");
+        var variant = await _context.ProductVariants.FindAsync(variantId)
+            ?? throw new InvalidOperationException($"Product variant {variantId} not found.");
 
         if (quantity <= 0)
             throw new ArgumentOutOfRangeException(nameof(quantity), "Increment quantity must be positive.");
-        product.StockQuantity += quantity;
-        product.DateUpdated = DateTime.UtcNow;
+        variant.StockQuantity += quantity;
+        variant.DateUpdated = DateTime.UtcNow;
 
         _context.InventoryTransactions.Add(new InventoryTransaction
         {
-            ProductId = productId,
+            ProductId = variant.ProductId,
+            ProductVariantId = variantId,
             QuantityChange = quantity,
             Reason = reason
         });
@@ -78,49 +82,52 @@ public class InventoryService : IInventoryService
         await _context.SaveChangesAsync();
     }
 
-    public async Task<List<Product>> GetLowStockProductsAsync()
+    public async Task<List<ProductVariant>> GetLowStockVariantsAsync()
     {
-        return await _context.Products
-            .Where(p => p.IsActive && p.StockQuantity <= p.LowStockThreshold)
-            .OrderBy(p => p.StockQuantity)
+        return await _context.ProductVariants
+            .Include(v => v.Product)
+            .Where(v => v.IsActive && v.Product.IsActive && v.StockQuantity <= v.Product.LowStockThreshold)
+            .OrderBy(v => v.StockQuantity)
             .ToListAsync();
     }
 
-    public async Task<bool> IsLowStockAsync(int productId)
+    public async Task<bool> IsLowStockAsync(int variantId)
     {
-        var product = await _context.Products.FindAsync(productId);
-        return product is not null && product.IsLowStock;
+        var variant = await _context.ProductVariants.Include(v => v.Product).FirstOrDefaultAsync(v => v.ProductVariantId == variantId);
+        return variant is not null && variant.IsLowStock;
     }
 
-    public async Task<List<Product>> DecrementStockBatchAsync(IEnumerable<(int ProductId, int Quantity)> lines, InventoryChangeReason reason = InventoryChangeReason.Sale)
+    public async Task<List<ProductVariant>> DecrementStockBatchAsync(IEnumerable<(int VariantId, int Quantity)> lines, InventoryChangeReason reason = InventoryChangeReason.Sale)
     {
         var linesList = lines.ToList();
-        if (linesList.Count == 0) return new List<Product>();
+        if (linesList.Count == 0) return new List<ProductVariant>();
 
-        // One query for every product in the cart instead of one query per line.
-        var productIds = linesList.Select(l => l.ProductId).Distinct().ToList();
-        var products = await _context.Products
-            .Where(p => productIds.Contains(p.ProductId))
-            .ToDictionaryAsync(p => p.ProductId);
+        // One query for every variant in the cart instead of one query per line.
+        var variantIds = linesList.Select(l => l.VariantId).Distinct().ToList();
+        var variants = await _context.ProductVariants
+            .Include(v => v.Product)
+            .Where(v => variantIds.Contains(v.ProductVariantId))
+            .ToDictionaryAsync(v => v.ProductVariantId);
 
         // Snapshot "already low" BEFORE mutating, so we can tell who just crossed the line.
-        var wasLowStockIds = products.Values.Where(p => p.IsLowStock).Select(p => p.ProductId).ToHashSet();
+        var wasLowStockIds = variants.Values.Where(v => v.IsLowStock).Select(v => v.ProductVariantId).ToHashSet();
 
-        foreach (var (productId, quantity) in linesList)
+        foreach (var (variantId, quantity) in linesList)
         {
-            if (!products.TryGetValue(productId, out var product))
-                throw new InvalidOperationException($"Product {productId} not found.");
+            if (!variants.TryGetValue(variantId, out var variant))
+                throw new InvalidOperationException($"Product variant {variantId} not found.");
             if (quantity <= 0)
                 throw new ArgumentOutOfRangeException(nameof(quantity), "Decrement quantity must be positive.");
-            if (product.StockQuantity < quantity)
-                throw new InvalidOperationException($"Cannot decrement stock for '{product.Name}' below zero (have {product.StockQuantity}, need {quantity}).");
+            if (variant.StockQuantity < quantity)
+                throw new InvalidOperationException($"Cannot decrement stock for '{variant.Product.Name} ({variant.Size}/{variant.Color})' below zero (have {variant.StockQuantity}, need {quantity}).");
 
-            product.StockQuantity -= quantity;
-            product.DateUpdated = DateTime.UtcNow;
+            variant.StockQuantity -= quantity;
+            variant.DateUpdated = DateTime.UtcNow;
 
             _context.InventoryTransactions.Add(new InventoryTransaction
             {
-                ProductId = productId,
+                ProductId = variant.ProductId,
+                ProductVariantId = variantId,
                 QuantityChange = -quantity,
                 Reason = reason
             });
@@ -129,36 +136,38 @@ public class InventoryService : IInventoryService
         // One commit for the whole basket instead of one commit per line.
         await _context.SaveChangesAsync();
 
-        var newlyLowStock = products.Values.Where(p => p.IsLowStock && !wasLowStockIds.Contains(p.ProductId)).ToList();
+        var newlyLowStock = variants.Values.Where(v => v.IsLowStock && !wasLowStockIds.Contains(v.ProductVariantId)).ToList();
         if (newlyLowStock.Count > 0)
             await NotifyManagersOfLowStockAsync(newlyLowStock);
 
-        return products.Values.ToList();
+        return variants.Values.ToList();
     }
 
-    public async Task<List<Product>> IncrementStockBatchAsync(IEnumerable<(int ProductId, int Quantity)> lines, InventoryChangeReason reason = InventoryChangeReason.PurchaseOrderReceived)
+    public async Task<List<ProductVariant>> IncrementStockBatchAsync(IEnumerable<(int VariantId, int Quantity)> lines, InventoryChangeReason reason = InventoryChangeReason.PurchaseOrderReceived)
     {
         var linesList = lines.ToList();
-        if (linesList.Count == 0) return new List<Product>();
+        if (linesList.Count == 0) return new List<ProductVariant>();
 
-        var productIds = linesList.Select(l => l.ProductId).Distinct().ToList();
-        var products = await _context.Products
-            .Where(p => productIds.Contains(p.ProductId))
-            .ToDictionaryAsync(p => p.ProductId);
+        var variantIds = linesList.Select(l => l.VariantId).Distinct().ToList();
+        var variants = await _context.ProductVariants
+            .Include(v => v.Product)
+            .Where(v => variantIds.Contains(v.ProductVariantId))
+            .ToDictionaryAsync(v => v.ProductVariantId);
 
-        foreach (var (productId, quantity) in linesList)
+        foreach (var (variantId, quantity) in linesList)
         {
-            if (!products.TryGetValue(productId, out var product))
-                throw new InvalidOperationException($"Product {productId} not found.");
+            if (!variants.TryGetValue(variantId, out var variant))
+                throw new InvalidOperationException($"Product variant {variantId} not found.");
             if (quantity <= 0)
                 throw new ArgumentOutOfRangeException(nameof(quantity), "Increment quantity must be positive.");
 
-            product.StockQuantity += quantity;
-            product.DateUpdated = DateTime.UtcNow;
+            variant.StockQuantity += quantity;
+            variant.DateUpdated = DateTime.UtcNow;
 
             _context.InventoryTransactions.Add(new InventoryTransaction
             {
-                ProductId = productId,
+                ProductId = variant.ProductId,
+                ProductVariantId = variantId,
                 QuantityChange = quantity,
                 Reason = reason
             });
@@ -166,19 +175,19 @@ public class InventoryService : IInventoryService
 
         await _context.SaveChangesAsync();
 
-        return products.Values.ToList();
+        return variants.Values.ToList();
     }
 
     /// <summary>
     /// Emails everyone in the "Manager" role - and only that role, by design - whenever one
-    /// or more products just crossed into low-stock territory. Deliberately narrower than
+    /// or more variants just crossed into low-stock territory. Deliberately narrower than
     /// "every staff member with product-management access" (which would also include
     /// Administrators): if you want Administrators/Owners notified too, add their role names
     /// to the array below.
     /// </summary>
-    private async Task NotifyManagersOfLowStockAsync(List<Product> products)
+    private async Task NotifyManagersOfLowStockAsync(List<ProductVariant> variants)
     {
-        if (products.Count == 0) return;
+        if (variants.Count == 0) return;
 
         try
         {
@@ -188,26 +197,26 @@ public class InventoryService : IInventoryService
             if (recipients.Count == 0)
             {
                 _logger.LogWarning(
-                    "{Count} product(s) just went low on stock, but no active Manager has an email address to notify.",
-                    products.Count);
+                    "{Count} variant(s) just went low on stock, but no active Manager has an email address to notify.",
+                    variants.Count);
                 return;
             }
 
-            var rows = string.Join("", products.Select(p =>
-                $"<tr><td>{p.Name}</td><td>{p.SKU}</td><td>{p.StockQuantity}</td><td>{p.LowStockThreshold}</td></tr>"));
+            var rows = string.Join("", variants.Select(v =>
+                $"<tr><td>{v.Product.Name}</td><td>{v.Size}/{v.Color}</td><td>{v.SKU}</td><td>{v.StockQuantity}</td><td>{v.Product.LowStockThreshold}</td></tr>"));
 
             var body = $@"
                 <h2>Low stock alert</h2>
-                <p>{products.Count} product(s) just dropped to or below their restock threshold:</p>
+                <p>{variants.Count} variant(s) just dropped to or below their restock threshold:</p>
                 <table border='1' cellpadding='6' cellspacing='0' style='border-collapse:collapse;'>
-                    <thead><tr><th>Product</th><th>SKU</th><th>Current Stock</th><th>Threshold</th></tr></thead>
+                    <thead><tr><th>Product</th><th>Size/Colour</th><th>SKU</th><th>Current Stock</th><th>Threshold</th></tr></thead>
                     <tbody>{rows}</tbody>
                 </table>
                 <p>Log in to the dashboard's Low Stock page to review and restock.</p>";
 
-            var subject = products.Count == 1
-                ? $"Low stock alert - {products[0].Name}"
-                : $"Low stock alert - {products.Count} items need restocking";
+            var subject = variants.Count == 1
+                ? $"Low stock alert - {variants[0].Product.Name} ({variants[0].Size}/{variants[0].Color})"
+                : $"Low stock alert - {variants.Count} variants need restocking";
 
             foreach (var manager in recipients)
                 await _emailSender.SendAsync(manager.Email!, subject, body);

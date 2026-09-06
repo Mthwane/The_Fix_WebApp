@@ -1,5 +1,6 @@
 using FashionFix.Web.Data;
 using FashionFix.Web.Models.Entities;
+using Microsoft.EntityFrameworkCore;
 using FashionFix.Web.Models.ViewModels;
 using FashionFix.Web.Security;
 using Microsoft.AspNetCore.Authorization;
@@ -19,6 +20,10 @@ namespace FashionFix.Web.Controllers;
 public class RolesController : Controller
 {
     private static readonly string[] ProtectedRoles = { "Administrator", "Customer" };
+    /// <summary>Hard ceiling on the total number of roles the system carries at once (built-in
+    /// + custom combined). Keeps the permission matrix and the staff-facing role picker from
+    /// growing unbounded - delete an unused role to make room for a new one.</summary>
+    private const int MaxRoles = 5;
 
     private readonly RoleManager<IdentityRole> _roleManager;
     private readonly UserManager<ApplicationUser> _userManager;
@@ -34,33 +39,104 @@ public class RolesController : Controller
         _context = context;
     }
 
-    // GET: /Roles
+    // GET: /Roles - the full permission matrix (every role x every permission, edited and
+    // saved together). Replaces the old one-row-per-role list; Edit/{id} still exists for
+    // any code that links to it, but this is the primary screen now.
     [HttpGet]
     public async Task<IActionResult> Index()
     {
-        var roles = new List<RoleListItemViewModel>();
+        var model = new PermissionMatrixViewModel();
 
         foreach (var role in _roleManager.Roles.OrderBy(r => r.Name))
         {
             var claims = await _roleManager.GetClaimsAsync(role);
             var memberCount = (await _userManager.GetUsersInRoleAsync(role.Name!)).Count;
 
-            roles.Add(new RoleListItemViewModel
+            model.Roles.Add(new RoleMatrixColumnViewModel
             {
                 Id = role.Id,
                 Name = role.Name!,
-                PermissionCount = claims.Count(c => c.Type == Permissions.ClaimType),
+                IsProtected = ProtectedRoles.Contains(role.Name),
                 MemberCount = memberCount,
-                IsProtected = ProtectedRoles.Contains(role.Name)
+                GrantedPermissions = claims.Where(c => c.Type == Permissions.ClaimType).Select(c => c.Value).ToHashSet()
             });
         }
 
-        return View(roles);
+        ViewBag.MaxRoles = MaxRoles;
+        ViewBag.AtRoleCap = model.Roles.Count >= MaxRoles;
+        return View(model);
+    }
+
+    // POST: /Roles/SaveMatrix - applies every role's checkbox state in one pass. Customer and
+    // Administrator columns are locked in the UI (Customer has no staff permissions to grant;
+    // Administrator always keeps every permission), and both are re-enforced here too, since
+    // a disabled checkbox in the browser is a UI courtesy, not a security boundary.
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SaveMatrix(List<string> roleIds, List<string> selections)
+    {
+        selections ??= new List<string>();
+        var changedRoles = new List<string>();
+
+        foreach (var roleId in roleIds.Distinct())
+        {
+            var role = await _roleManager.FindByIdAsync(roleId);
+            if (role is null) continue;
+
+            var desired = selections
+                .Where(s => s.StartsWith(roleId + ":", StringComparison.Ordinal))
+                .Select(s => s[(roleId.Length + 1)..])
+                .ToHashSet();
+
+            // Administrator always has every permission, and Customer (self-service, not a
+            // staff role) always has none - the matrix shows both as locked, but the rule is
+            // enforced here regardless of what the client actually submitted.
+            if (role.Name == "Administrator")
+                desired = Permissions.All.Keys.ToHashSet();
+            else if (role.Name == "Customer")
+                desired = new HashSet<string>();
+
+            var existingClaims = await _roleManager.GetClaimsAsync(role);
+            var existingPermissions = existingClaims.Where(c => c.Type == Permissions.ClaimType).ToList();
+
+            var toRemove = existingPermissions.Where(c => !desired.Contains(c.Value)).ToList();
+            var toAdd = desired.Where(p => !existingPermissions.Any(c => c.Value == p)).ToList();
+
+            if (toRemove.Count == 0 && toAdd.Count == 0) continue;
+
+            foreach (var claim in toRemove)
+                await _roleManager.RemoveClaimAsync(role, claim);
+            foreach (var permission in toAdd)
+                await _roleManager.AddClaimAsync(role, new System.Security.Claims.Claim(Permissions.ClaimType, permission));
+
+            changedRoles.Add(role.Name!);
+        }
+
+        if (changedRoles.Count > 0)
+        {
+            await LogAuditAsync("RolePermissionsUpdated", $"Updated permissions for: {string.Join(", ", changedRoles)}.");
+            this.ToastSuccess($"Permissions updated for {changedRoles.Count} role(s).");
+        }
+        else
+        {
+            this.ToastSuccess("No changes to save.");
+        }
+
+        return RedirectToAction(nameof(Index));
     }
 
     // GET: /Roles/Create
     [HttpGet]
-    public IActionResult Create() => View(new RoleEditViewModel());
+    public async Task<IActionResult> Create()
+    {
+        if (await _roleManager.Roles.CountAsync() >= MaxRoles)
+        {
+            this.ToastError($"You've reached the maximum of {MaxRoles} roles. Delete an unused role before creating a new one.");
+            return RedirectToAction(nameof(Index));
+        }
+
+        return View(new RoleEditViewModel());
+    }
 
     // POST: /Roles/Create
     [HttpPost]
@@ -69,26 +145,29 @@ public class RolesController : Controller
     {
         if (!ModelState.IsValid) return View(model);
 
+        if (await _roleManager.Roles.CountAsync() >= MaxRoles)
+        {
+            ModelState.AddModelError(string.Empty, $"You've reached the maximum of {MaxRoles} roles. Delete an unused role before creating a new one.");
+            return View(model);
+        }
         if (await _roleManager.RoleExistsAsync(model.Name))
-        {
-            ModelState.AddModelError(nameof(model.Name), "A role with that name already exists.");
-            return View(model);
+        {  // ...rest of your existing method continues unchanged from here
+
+            var role = new IdentityRole(model.Name);
+            var createResult = await _roleManager.CreateAsync(role);
+            if (!createResult.Succeeded)
+            {
+                foreach (var error in createResult.Errors)
+                    ModelState.AddModelError(string.Empty, error.Description);
+                return View(model);
+            }
+
+            foreach (var permission in model.SelectedPermissions)
+                await _roleManager.AddClaimAsync(role, new System.Security.Claims.Claim(Permissions.ClaimType, permission));
+
+            await LogAuditAsync("RoleCreated", $"Created role '{role.Name}' with {model.SelectedPermissions.Count} permission(s).");
+            this.ToastSuccess($"Role '{role.Name}' was created.");
         }
-
-        var role = new IdentityRole(model.Name);
-        var createResult = await _roleManager.CreateAsync(role);
-        if (!createResult.Succeeded)
-        {
-            foreach (var error in createResult.Errors)
-                ModelState.AddModelError(string.Empty, error.Description);
-            return View(model);
-        }
-
-        foreach (var permission in model.SelectedPermissions)
-            await _roleManager.AddClaimAsync(role, new System.Security.Claims.Claim(Permissions.ClaimType, permission));
-
-        await LogAuditAsync("RoleCreated", $"Created role '{role.Name}' with {model.SelectedPermissions.Count} permission(s).");
-        this.ToastSuccess($"Role '{role.Name}' was created.");
 
         return RedirectToAction(nameof(Index));
     }

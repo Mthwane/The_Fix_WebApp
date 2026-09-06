@@ -1,74 +1,62 @@
 @model List<Product>
 @{
     ViewData["Title"] = "Products";
+    Layout = "_StaffLayout";
     var filter = ViewBag.Filter as ProductFilterViewModel ?? new ProductFilterViewModel();
 }
-<div class="container py-4">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2 class="mb-0">Master Catalogue</h2>
-        <a asp-controller="Products" asp-action="Create" class="btn btn-primary">+ Add Product</a>
+<div class="stf-content">
+    <div class="stf-page-head">
+        <div>
+            <span class="stf-eyebrow">Catalogue</span>
+            <h1>Master Catalogue</h1>
+        </div>
+        <a asp-controller="Products" asp-action="Create" class="stf-btn stf-btn-primary">+ Add Product</a>
     </div>
 
-    <form asp-controller="Products" asp-action="Index" method="get" class="row g-2 mb-4">
-        <div class="col-md-3">
-            <input type="text" name="SearchTerm" value="@filter.SearchTerm" class="form-control" placeholder="Search name or SKU" />
-        </div>
-        <div class="col-md-2">
-            <input type="text" name="Category" value="@filter.Category" class="form-control" placeholder="Category" />
-        </div>
-        <div class="col-md-2">
-            <input type="text" name="Size" value="@filter.Size" class="form-control" placeholder="Size" />
-        </div>
-        <div class="col-md-2">
-            <input type="text" name="Color" value="@filter.Color" class="form-control" placeholder="Colour" />
-        </div>
-        <div class="col-md-2 d-flex align-items-center">
-            <div class="form-check">
-                <input type="checkbox" name="InStockOnly" value="true" class="form-check-input" checked="@(filter.InStockOnly == true)" />
-                <label class="form-check-label">In stock only</label>
-            </div>
-        </div>
-        <div class="col-md-1">
-            <button type="submit" class="btn btn-outline-secondary w-100">Filter</button>
-        </div>
+    <form asp-controller="Products" asp-action="Index" method="get" class="stf-card" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:20px;">
+        @{ string F = "border:1px solid var(--stf-outline-variant);border-radius:8px;padding:8px 12px;font-size:0.85rem;"; }
+        <input type="text" name="SearchTerm" value="@filter.SearchTerm" placeholder="Search name or SKU" style="@F flex:1;min-width:180px;" />
+        <input type="text" name="Category" value="@filter.Category" placeholder="Category" style="@F width:140px;" />
+        <input type="text" name="Size" value="@filter.Size" placeholder="Size" style="@F width:100px;" />
+        <input type="text" name="Color" value="@filter.Color" placeholder="Colour" style="@F width:120px;" />
+        <label style="font-size:0.82rem;display:flex;align-items:center;gap:6px;">
+            <input type="checkbox" name="InStockOnly" value="true" checked="@(filter.InStockOnly == true)" /> In stock only
+        </label>
+        <button type="submit" class="stf-btn stf-btn-outline">Filter</button>
     </form>
 
     @if (!Model.Any())
     {
-        <div class="alert alert-info">No products match your search.</div>
+        <div class="stf-card" style="text-align:center;padding:40px 20px;color:var(--stf-on-surface-variant);">No products match your search.</div>
     }
     else
     {
-        <table class="table table-hover align-middle">
+        <table class="stf-table">
             <thead>
-                <tr>
-                    <th>Product</th>
-                    <th>SKU</th>
-                    <th>Category</th>
-                    <th>Size / Colour</th>
-                    <th>Price</th>
-                    <th>Stock</th>
-                    <th></th>
-                </tr>
+                <tr><th>Product</th><th>Style Code</th><th>Category</th><th>Sizes / Colours</th><th>Price</th><th>Stock</th><th></th></tr>
             </thead>
             <tbody>
             @foreach (var p in Model)
             {
-                <tr class="@(p.IsLowStock ? "table-warning" : "")">
-                    <td>@p.Name <div class="text-muted small">@p.Brand</div></td>
-                    <td>@p.SKU</td>
+                <tr style="@(p.HasLowStockVariant ? "background:var(--stf-secondary-container);" : "")">
+                    <td style="font-weight:600;">@p.Name <div style="font-size:0.78rem;color:var(--stf-on-surface-variant);font-weight:400;">@p.Brand</div></td>
+                    <td><code>@p.SKU</code></td>
                     <td>@p.Category</td>
-                    <td>@p.Size / @p.Color</td>
+                    <td>
+                        <span style="font-size:0.82rem;">@string.Join(", ", p.DistinctSizes)</span>
+                        <div style="font-size:0.78rem;color:var(--stf-on-surface-variant);">@string.Join(", ", p.DistinctColors)</div>
+                        <div style="font-size:0.78rem;color:var(--stf-on-surface-variant);">@p.Variants.Count(v => v.IsActive) variant(s)</div>
+                    </td>
                     <td>@p.SellingPrice.ToString("C")</td>
                     <td>
-                        @p.StockQuantity
-                        @if (p.IsLowStock)
+                        @p.TotalStockQuantity
+                        @if (p.HasLowStockVariant)
                         {
-                            <span class="badge bg-warning text-dark ms-1">Low</span>
+                            <span class="stf-badge" style="background:var(--stf-secondary-container);color:var(--stf-secondary);margin-left:4px;">Low</span>
                         }
                     </td>
-                    <td class="text-end">
-                        <a asp-controller="Products" asp-action="Edit" asp-route-id="@p.ProductId" class="btn btn-sm btn-outline-primary">Edit</a>
+                    <td style="text-align:right;">
+                        <a asp-controller="Products" asp-action="Edit" asp-route-id="@p.ProductId" class="stf-btn stf-btn-outline" style="padding:6px 14px;font-size:0.78rem;">Edit</a>
                     </td>
                 </tr>
             }

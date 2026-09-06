@@ -59,6 +59,36 @@ public class EmployeesController : Controller
         return View(employees);
     }
 
+    // GET: /Employees/ExportRoster - CSV download of the current staff directory.
+    [HttpGet]
+    [Authorize(Policy = Permissions.EmployeesManage)]
+    public async Task<IActionResult> ExportRoster()
+    {
+        var allUsers = await _context.Users.AsNoTracking().OrderBy(u => u.FullName).ToListAsync();
+        var rolesByUserId = (await (
+            from ur in _context.UserRoles
+            join r in _context.Roles on ur.RoleId equals r.Id
+            select new { ur.UserId, RoleName = r.Name }
+            ).ToListAsync())
+            .GroupBy(x => x.UserId)
+            .ToDictionary(g => g.Key, g => g.Select(x => x.RoleName ?? string.Empty).ToList());
+
+        var staff = allUsers.Where(u => rolesByUserId.TryGetValue(u.Id, out var roles) && roles.Any(r => r != "Customer"));
+
+        var csv = new System.Text.StringBuilder();
+        csv.AppendLine("FullName,Username,Email,Role,JobPosition,EmploymentStatus,DateHired,IsActive,TwoFactorEnabled");
+        foreach (var u in staff)
+        {
+            var role = rolesByUserId.TryGetValue(u.Id, out var roles) ? string.Join("/", roles.Where(r => r != "Customer")) : "";
+            string Csv(string? s) => "\"" + (s ?? "").Replace("\"", "\"\"") + "\"";
+            csv.AppendLine(string.Join(",", Csv(u.FullName), Csv(u.UserName), Csv(u.Email), Csv(role),
+                Csv(u.JobPosition), Csv(u.EmploymentStatus), Csv(u.DateHired?.ToString("yyyy-MM-dd")), u.IsActive, u.TwoFactorEnabled));
+        }
+
+        var bytes = System.Text.Encoding.UTF8.GetBytes(csv.ToString());
+        return File(bytes, "text/csv", $"staff-roster-{DateTime.UtcNow:yyyyMMdd}.csv");
+    }
+
     /// <summary>All roles except "Customer" - customers self-register and are never assigned via this screen.</summary>
     private async Task<List<string>> GetAssignableRoleNamesAsync()
     {

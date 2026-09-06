@@ -37,8 +37,11 @@ public class POSCheckoutViewModel
 public class POSCartLineViewModel
 {
     public int ProductId { get; set; }
+    public int VariantId { get; set; }
     public string ProductName { get; set; } = string.Empty;
     public string SKU { get; set; } = string.Empty;
+    public string? Size { get; set; }
+    public string? Color { get; set; }
 
     [Range(1, int.MaxValue, ErrorMessage = "Quantity must be at least 1")]
     public int Quantity { get; set; }

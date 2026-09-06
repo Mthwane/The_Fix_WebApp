@@ -1,0 +1,137 @@
+@model RestockBundle
+@{
+    ViewData["Title"] = $"Edit {Model.Name}";
+    Layout = "_StaffLayout";
+    var suppliers = (List<Supplier>)ViewBag.Suppliers;
+    var departments = (List<Department>)ViewBag.Departments;
+    var variants = (List<ProductVariant>)ViewBag.Variants;
+}
+
+<div class="stf-content" style="max-width:960px;">
+    <span class="stf-eyebrow">Supply Chain</span>
+    <h1 style="margin-bottom:20px;">Edit Bundle: @Model.Name</h1>
+
+    <form asp-action="Edit" asp-route-id="@Model.RestockBundleId" method="post" class="stf-card">
+        @Html.AntiForgeryToken()
+        <input type="hidden" asp-for="RestockBundleId" />
+        <div asp-validation-summary="ModelOnly" style="color:var(--stf-error);margin-bottom:10px;"></div>
+
+        @{ string L = "font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;"; string F = "width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:9px 14px;font-size:0.9rem;"; }
+
+        <label asp-for="Name" style="@L"></label>
+        <input asp-for="Name" style="@F margin-bottom:14px;" />
+        <span asp-validation-for="Name" style="color:var(--stf-error);font-size:0.8rem;"></span>
+
+        <label asp-for="Description" style="@L"></label>
+        <textarea asp-for="Description" rows="2" style="@F margin-bottom:14px;"></textarea>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:14px;">
+            <div>
+                <label style="@L">Season</label>
+                <select asp-for="Season" style="@F">
+                    @foreach (var s in Enum.GetValues<RestockSeason>())
+                    {
+                        <option value="@s">@s</option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label style="@L">Default Supplier</label>
+                <select asp-for="SupplierId" style="@F">
+                    <option value="">-- Ask at generation time --</option>
+                    @foreach (var s in suppliers)
+                    {
+                        <option value="@s.SupplierId">@s.Name</option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label style="@L">Department (scoping only)</label>
+                <select asp-for="DepartmentId" style="@F">
+                    <option value="">-- None --</option>
+                    @foreach (var d in departments)
+                    {
+                        <option value="@d.DepartmentId">@d.Name</option>
+                    }
+                </select>
+            </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px;">
+            <div>
+                <label asp-for="Brand" style="@L"></label>
+                <input asp-for="Brand" style="@F" />
+            </div>
+            <div>
+                <label style="@L">Status</label>
+                <select asp-for="IsActive" style="@F">
+                    <option value="true">Active</option>
+                    <option value="false">Archived</option>
+                </select>
+            </div>
+        </div>
+
+        <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:8px 0 12px;">Line Items</h5>
+
+        <table class="stf-table" style="margin-bottom:12px;">
+            <thead>
+                <tr>
+                    <th>Variant</th>
+                    <th style="width:130px;">Default Qty</th>
+                    <th style="width:150px;">Default Unit Cost</th>
+                    <th style="width:70px;"></th>
+                </tr>
+            </thead>
+            <tbody id="lineBody"></tbody>
+        </table>
+        <p style="font-size:0.78rem;color:var(--stf-on-surface-variant);margin-top:-6px;margin-bottom:12px;">Leave unit cost blank to use the variant's current cost price whenever an order is generated.</p>
+
+        <button type="button" id="addLine" class="stf-btn stf-btn-outline" style="margin-bottom:20px;">+ Add Line</button>
+
+        <div style="display:flex;gap:10px;">
+            <button type="submit" class="stf-btn stf-btn-primary">Save Changes</button>
+            <a asp-action="Details" asp-route-id="@Model.RestockBundleId" style="font-size:0.85rem;color:var(--stf-on-surface-variant);align-self:center;">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<script id="variantData" type="application/json">@Html.Raw(Json.Serialize(variants.Select(v => new { id = v.ProductVariantId, label = $"{v.Product.Name} - {v.Size}/{v.Color} ({v.SKU})" })))</script>
+<script id="existingLines" type="application/json">@Html.Raw(Json.Serialize(Model.Items.OrderBy(i => i.DisplayOrder).Select(i => new { variantId = i.ProductVariantId, qty = i.DefaultQuantity, cost = i.DefaultUnitCost })))</script>
+<script>
+    (function () {
+        var variants = JSON.parse(document.getElementById('variantData').textContent);
+        var existing = JSON.parse(document.getElementById('existingLines').textContent);
+        var body = document.getElementById('lineBody');
+
+        function optionsHtml(selectedId) {
+            return '<option value="">-- Choose a variant --</option>' +
+                variants.map(function (v) {
+                    var sel = (selectedId && v.id === selectedId) ? ' selected' : '';
+                    return '<option value="' + v.id + '"' + sel + '>' + v.label + '</option>';
+                }).join('');
+        }
+
+        function addRow(line) {
+            var row = document.createElement('tr');
+            var qty = line ? line.qty : 1;
+            var cost = line && line.cost !== null && line.cost !== undefined ? line.cost : '';
+            row.innerHTML =
+                '<td><select name="variantIds" style="width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:7px 10px;">' + optionsHtml(line ? line.variantId : null) + '</select></td>' +
+                '<td><input type="number" name="defaultQuantities" min="1" value="' + qty + '" style="width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:7px 10px;" /></td>' +
+                '<td><input type="number" name="defaultUnitCosts" step="0.01" min="0" value="' + cost + '" placeholder="current cost" style="width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:7px 10px;" /></td>' +
+                '<td><button type="button" class="stf-btn stf-btn-danger-outline remove-line" style="padding:6px 10px;font-size:0.75rem;">Remove</button></td>';
+            body.appendChild(row);
+            row.querySelector('.remove-line').addEventListener('click', function () {
+                if (document.querySelectorAll('#lineBody tr').length > 1) row.remove();
+            });
+        }
+
+        document.getElementById('addLine').addEventListener('click', function () { addRow(null); });
+
+        if (existing.length > 0) {
+            existing.forEach(function (l) { addRow(l); });
+        } else {
+            addRow(null);
+        }
+    })();
+</script>

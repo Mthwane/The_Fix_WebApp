@@ -1,0 +1,186 @@
+@model ProductViewModel
+@{
+    ViewData["Title"] = "Add Product";
+    Layout = "_StaffLayout";
+    var categories = (List<string>)ViewBag.Categories;
+    var sizes = (List<string>)ViewBag.Sizes;
+    var colors = (List<string>)ViewBag.Colors;
+    var brands = (List<string>)ViewBag.Brands;
+}
+<div class="stf-content" style="max-width:1100px;">
+    <span class="stf-eyebrow">Catalogue</span>
+    <h1 style="margin-bottom:20px;">Add New Product</h1>
+
+    <form asp-action="Create" method="post" id="productForm" class="stf-card">
+        <div asp-validation-summary="ModelOnly" style="color:var(--stf-error);margin-bottom:10px;"></div>
+        @{ string L = "font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;"; string F = "width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:9px 14px;font-size:0.9rem;"; string EV = "color:var(--stf-error);font-size:0.8rem;"; string HINT = "font-size:0.75rem;color:var(--stf-on-surface-variant);margin-top:4px;"; }
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+            <div>
+                <label asp-for="Name" style="@L"></label>
+                <input asp-for="Name" style="@F" />
+                <span asp-validation-for="Name" style="@EV"></span>
+            </div>
+            <div>
+                <label style="@L">Style Code</label>
+                <input type="text" value="Generated automatically after saving" disabled style="@F background:var(--stf-surface-container);" />
+                <div style="@HINT">Assigned from the category (e.g. "CLO-0001") once the product is created. Each size/colour below gets its own SKU built from this code.</div>
+            </div>
+        </div>
+
+        <label asp-for="Description" style="@L"></label>
+        <textarea asp-for="Description" rows="3" style="@F margin-bottom:14px;" placeholder="Shown to customers browsing the shop, and to staff on the POS scan popup"></textarea>
+        <span asp-validation-for="Description" style="@EV"></span>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:14px;margin-bottom:14px;">
+            <div>
+                <label asp-for="Category" style="@L"></label>
+                <select asp-for="Category" style="@F">
+                    <option value="">-- Choose a category --</option>
+                    @foreach (var c in categories) { <option value="@c">@c</option> }
+                </select>
+                <span asp-validation-for="Category" style="@EV"></span>
+            </div>
+            <div>
+                <label asp-for="Brand" style="@L"></label>
+                <input asp-for="Brand" style="@F" list="brandOptions" autocomplete="off" placeholder="Choose or type a new brand" />
+                <datalist id="brandOptions">@foreach (var b in brands) { <option value="@b"></option> }</datalist>
+                <span asp-validation-for="Brand" style="@EV"></span>
+            </div>
+            <div>
+                <label asp-for="CostPrice" style="@L"></label>
+                <input asp-for="CostPrice" style="@F" />
+                <span asp-validation-for="CostPrice" style="@EV"></span>
+            </div>
+            <div>
+                <label asp-for="SellingPrice" style="@L"></label>
+                <input asp-for="SellingPrice" style="@F" />
+                <span asp-validation-for="SellingPrice" style="@EV"></span>
+            </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:14px;">
+            <div>
+                <label asp-for="CompareAtPrice" style="@L"></label>
+                <input asp-for="CompareAtPrice" style="@F" />
+                <span asp-validation-for="CompareAtPrice" style="@EV"></span>
+            </div>
+            <div>
+                <label asp-for="ImageUrl" style="@L"></label>
+                <input asp-for="ImageUrl" style="@F" placeholder="https://..." />
+                <span asp-validation-for="ImageUrl" style="@EV"></span>
+            </div>
+            <div>
+                <label asp-for="LowStockThreshold" style="@L"></label>
+                <input asp-for="LowStockThreshold" style="@F" />
+                <span asp-validation-for="LowStockThreshold" style="@EV"></span>
+            </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:14px;margin-bottom:14px;">
+            <div>
+                <label asp-for="SubCategory" style="@L"></label>
+                <input asp-for="SubCategory" style="@F" placeholder="e.g. Trail & Running (optional)" />
+            </div>
+            <div>
+                <label asp-for="Material" style="@L"></label>
+                <input asp-for="Material" style="@F" placeholder="e.g. Organic Cotton (optional)" />
+            </div>
+            <div>
+                <label asp-for="Fit" style="@L"></label>
+                <input asp-for="Fit" style="@F" placeholder="e.g. Relaxed (optional)" />
+            </div>
+            <div>
+                <label asp-for="Badge" style="@L"></label>
+                <input asp-for="Badge" style="@F" placeholder="e.g. Bestseller (optional)" />
+            </div>
+        </div>
+
+        <label asp-for="DepartmentId" style="@L">Department</label>
+        <select asp-for="DepartmentId" style="@F">
+            <option value="">-- None --</option>
+            @foreach (var d in (List<Department>)ViewBag.Departments) { <option value="@d.DepartmentId">@d.Name</option> }
+        </select>
+        <div style="@HINT margin-bottom:20px;">Which storefront department (Women/Men/Kids/...) this style appears under. Optional - can be set later from the catalogue.</div>
+
+        <hr style="border-color:var(--stf-outline-variant);margin:16px 0;" />
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:0;">Sizes &amp; Colours</h5>
+            <button type="button" id="addVariantRow" class="stf-btn stf-btn-outline" style="padding:6px 14px;font-size:0.78rem;">+ Add Size/Colour</button>
+        </div>
+        <p style="font-size:0.8rem;color:var(--stf-on-surface-variant);">Every size/colour combination this style is sold in, each with its own stock count. At least one is required.</p>
+
+        <table class="stf-table" id="variantTable" style="margin-bottom:20px;">
+            <thead>
+                <tr><th>Size</th><th>Colour</th><th>Colour Hex (optional)</th><th>Stock</th><th>Price Override (optional)</th><th></th></tr>
+            </thead>
+            <tbody id="variantRows">
+                @for (var i = 0; i < Model.Variants.Count; i++)
+                {
+                    <tr class="variant-row">
+                        <td><input name="Variants[@i].Size" value="@Model.Variants[i].Size" style="@F" list="sizeOptions" autocomplete="off" placeholder="e.g. M" /></td>
+                        <td>
+                            <select name="Variants[@i].Color" style="@F">
+                                <option value="">-- Colour --</option>
+                                @foreach (var c in colors) { <option value="@c" selected="@(Model.Variants[i].Color == c)">@c</option> }
+                            </select>
+                        </td>
+                        <td><input name="Variants[@i].ColorHex" value="@Model.Variants[i].ColorHex" style="@F" placeholder="#000000" /></td>
+                        <td><input type="number" name="Variants[@i].StockQuantity" value="@Model.Variants[i].StockQuantity" style="@F" min="0" /></td>
+                        <td><input type="number" step="0.01" name="Variants[@i].PriceOverride" value="@Model.Variants[i].PriceOverride" style="@F" /></td>
+                        <td style="text-align:right;"><button type="button" class="stf-btn stf-btn-danger-outline remove-variant-row" style="padding:6px 10px;font-size:0.75rem;">Remove</button></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <datalist id="sizeOptions">@foreach (var s in sizes) { <option value="@s"></option> }</datalist>
+
+        <div style="display:flex;gap:10px;">
+            <button type="submit" class="stf-btn stf-btn-primary">Save Product</button>
+            <a asp-action="Index" style="font-size:0.85rem;color:var(--stf-on-surface-variant);align-self:center;">Cancel</a>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <script>
+        (function () {
+            var rowIndex = @Model.Variants.Count;
+            var colorOptions = @Html.Raw(Json.Serialize(colors));
+            var fieldStyle = 'width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:9px 14px;font-size:0.9rem;';
+
+            document.getElementById('addVariantRow').addEventListener('click', function () {
+                var tbody = document.getElementById('variantRows');
+                var colorSelectOptions = '<option value="">-- Colour --</option>' +
+                    colorOptions.map(function (c) { return '<option value="' + c + '">' + c + '</option>'; }).join('');
+
+                var row = document.createElement('tr');
+                row.className = 'variant-row';
+                row.innerHTML =
+                    '<td><input name="Variants[' + rowIndex + '].Size" style="' + fieldStyle + '" list="sizeOptions" autocomplete="off" placeholder="e.g. M" /></td>' +
+                    '<td><select name="Variants[' + rowIndex + '].Color" style="' + fieldStyle + '">' + colorSelectOptions + '</select></td>' +
+                    '<td><input name="Variants[' + rowIndex + '].ColorHex" style="' + fieldStyle + '" placeholder="#000000" /></td>' +
+                    '<td><input type="number" name="Variants[' + rowIndex + '].StockQuantity" value="0" style="' + fieldStyle + '" min="0" /></td>' +
+                    '<td><input type="number" step="0.01" name="Variants[' + rowIndex + '].PriceOverride" style="' + fieldStyle + '" /></td>' +
+                    '<td style="text-align:right;"><button type="button" class="stf-btn stf-btn-danger-outline remove-variant-row" style="padding:6px 10px;font-size:0.75rem;">Remove</button></td>';
+                tbody.appendChild(row);
+                rowIndex++;
+                wireRemoveButtons();
+            });
+
+            function wireRemoveButtons() {
+                document.querySelectorAll('.remove-variant-row').forEach(function (btn) {
+                    btn.onclick = function () {
+                        var rows = document.querySelectorAll('.variant-row');
+                        if (rows.length <= 1) {
+                            alert('A style needs at least one size/colour.');
+                            return;
+                        }
+                        btn.closest('tr').remove();
+                    };
+                });
+            }
+            wireRemoveButtons();
+        })();
+    </script>
+}

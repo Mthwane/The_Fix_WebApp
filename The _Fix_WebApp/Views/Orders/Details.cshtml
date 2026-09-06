@@ -1,69 +1,67 @@
 @model Order
 @{
     ViewData["Title"] = $"Order {Model.OrderNumber}";
-    var badgeClass = Model.Status switch
+    Layout = "_StaffLayout";
+    var (bg, fg) = Model.Status switch
     {
-        OrderStatus.Delivered or OrderStatus.Completed => "bg-success",
-        OrderStatus.Cancelled or OrderStatus.Returned => "bg-danger",
-        OrderStatus.Shipped => "bg-info text-dark",
-        OrderStatus.Processing => "bg-warning text-dark",
-        _ => "bg-secondary"
-    };
-    var statusIcon = Model.Status switch
-    {
-        OrderStatus.Delivered or OrderStatus.Completed => "bi-check-circle",
-        OrderStatus.Cancelled => "bi-x-circle",
-        OrderStatus.Returned => "bi-arrow-return-left",
-        OrderStatus.Shipped => "bi-truck",
-        OrderStatus.Processing => "bi-gear",
-        _ => "bi-hourglass-split"
+        OrderStatus.Delivered or OrderStatus.Completed => ("var(--stf-primary-fixed)", "var(--stf-primary)"),
+        OrderStatus.Cancelled or OrderStatus.Returned => ("var(--stf-error-container)", "var(--stf-error)"),
+        OrderStatus.Shipped => ("var(--stf-primary-container)", "var(--stf-on-primary-container)"),
+        OrderStatus.Processing => ("var(--stf-secondary-container)", "var(--stf-secondary)"),
+        _ => ("var(--stf-surface-container)", "var(--stf-on-surface-variant)")
     };
 }
-<div class="container py-4" style="max-width:720px;">
-    <a asp-controller="Orders" asp-action="Index" class="btn btn-outline-secondary btn-sm mb-3">&larr; All Orders</a>
+<div class="stf-content" style="max-width:760px;">
+    <a asp-controller="Orders" asp-action="Index" class="stf-btn stf-btn-outline" style="margin-bottom:16px;display:inline-flex;">&larr; All Orders</a>
 
-    <div class="d-flex justify-content-between align-items-start mb-3">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">
         <div>
-            <h2 class="mb-0">Order @Model.OrderNumber</h2>
-            <div class="text-muted">@Model.DateCreated.ToLocalTime().ToString("dd MMM yyyy, HH:mm") &middot; @Model.OrderType</div>
+            <span class="stf-eyebrow">Order</span>
+            <h1 style="margin-bottom:4px;">@Model.OrderNumber</h1>
+            <div style="color:var(--stf-on-surface-variant);font-size:0.85rem;">@Model.DateCreated.ToLocalTime().ToString("dd MMM yyyy, HH:mm") &middot; @Model.OrderType</div>
         </div>
-        <span class="badge @badgeClass fs-6"><i class="bi @statusIcon"></i> @Model.Status</span>
+        <span class="stf-badge" style="background:@bg;color:@fg;font-size:0.85rem;">@Model.Status</span>
     </div>
 
-    <dl class="row">
-        <dt class="col-sm-3">Customer</dt>
-        <dd class="col-sm-9">@(Model.Customer?.FullName ?? "Walk-in") @(Model.Customer?.Email is string e ? $"({e})" : "")</dd>
-        <dt class="col-sm-3">Processed By</dt>
-        <dd class="col-sm-9">@(Model.ProcessedByUser?.FullName ?? "-")</dd>
-        <dt class="col-sm-3">Payment Method</dt>
-        <dd class="col-sm-9">@Model.PaymentMethod</dd>
-    </dl>
+    <div class="stf-card" style="margin-bottom:16px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:0.88rem;">
+            <div><div style="color:var(--stf-outline);font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;">Customer</div>@(Model.Customer?.FullName ?? "Walk-in") @(Model.Customer?.Email is string e ? $"({e})" : "")</div>
+            <div><div style="color:var(--stf-outline);font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;">Processed By</div>@(Model.ProcessedByUser?.FullName ?? "-")</div>
+            <div><div style="color:var(--stf-outline);font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;">Payment Method</div>@Model.PaymentMethod</div>
+        </div>
+    </div>
 
-    <table class="table table-sm">
-        <thead><tr><th>Item</th><th>Qty</th><th>Unit Price</th><th>Total</th></tr></thead>
+    <table class="stf-table" style="margin-bottom:12px;">
+        <thead><tr><th>Item</th><th style="width:60px;">Qty</th><th style="width:100px;">Unit Price</th><th style="width:100px;">Total</th></tr></thead>
         <tbody>
         @foreach (var item in Model.OrderItems)
         {
-            <tr><td>@item.Product?.Name</td><td>@item.Quantity</td><td>@item.UnitPrice.ToString("C")</td><td>@item.LineTotal.ToString("C")</td></tr>
+            <tr>
+                <td>@item.Product?.Name @if (item.ProductVariant != null) { <span style="color:var(--stf-on-surface-variant);font-size:0.82rem;">(@item.ProductVariant.Size/@item.ProductVariant.Color)</span> }</td>
+                <td>@item.Quantity</td>
+                <td>@item.UnitPrice.ToString("C")</td>
+                <td>@item.LineTotal.ToString("C")</td>
+            </tr>
         }
         </tbody>
     </table>
-    <div class="text-end">
+
+    <div style="text-align:right;font-size:0.88rem;margin-bottom:20px;">
         <div>Subtotal: @Model.SubTotal.ToString("C")</div>
-        <div class="text-muted">VAT: @Model.TaxTotal.ToString("C")</div>
-        @if (Model.DiscountTotal > 0) { <div class="text-muted">Discount: -@Model.DiscountTotal.ToString("C")</div> }
-        <div class="fs-5"><strong>Total: @Model.GrandTotal.ToString("C")</strong></div>
+        <div style="color:var(--stf-on-surface-variant);">VAT: @Model.TaxTotal.ToString("C")</div>
+        @if (Model.DiscountTotal > 0) { <div style="color:var(--stf-on-surface-variant);">Discount: -@Model.DiscountTotal.ToString("C")</div> }
+        <div style="font-size:1.1rem;font-weight:600;margin-top:4px;">Total: @Model.GrandTotal.ToString("C")</div>
     </div>
 
-    <div class="mt-4 d-flex gap-2">
-        @if (Model.Status is OrderStatus.Pending or OrderStatus.Processing or OrderStatus.Shipped)
-        {
+    @if (Model.Status is OrderStatus.Pending or OrderStatus.Processing or OrderStatus.Shipped)
+    {
+        <div style="display:flex;gap:10px;">
             <form asp-controller="Orders" asp-action="AdvanceStatus" asp-route-id="@Model.OrderId" method="post">
-                <button type="submit" class="btn btn-primary">Advance Status</button>
+                <button type="submit" class="stf-btn stf-btn-primary">Advance Status</button>
             </form>
             <form asp-controller="Orders" asp-action="Cancel" asp-route-id="@Model.OrderId" method="post">
-                <button type="submit" class="btn btn-outline-danger" onclick="return confirm('Cancel this order and restock its items?');">Cancel Order</button>
+                <button type="submit" class="stf-btn stf-btn-danger-outline" onclick="return confirm('Cancel this order and restock its items?');">Cancel Order</button>
             </form>
-        }
-    </div>
+        </div>
+    }
 </div>

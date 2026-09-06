@@ -99,8 +99,17 @@ public class OrderItem
     public int OrderId { get; set; }
     public Order Order { get; set; } = null!;
 
+    // Denormalized onto the OrderItem (rather than reached only via the variant) so
+    // reporting/grouping by style never needs to join through ProductVariant, and so a
+    // historical order still resolves to a Product even in the rare case its variant is
+    // later deactivated.
     public int ProductId { get; set; }
     public Product Product { get; set; } = null!;
+
+    /// <summary>The exact size/colour sold. Nullable only so existing pre-variant historical
+    /// data (if any) still loads; every new sale always sets this.</summary>
+    public int? ProductVariantId { get; set; }
+    public ProductVariant? ProductVariant { get; set; }
 
     public int Quantity { get; set; }
 

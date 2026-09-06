@@ -1,0 +1,170 @@
+@using FashionFix.Web.Services
+@using Microsoft.EntityFrameworkCore
+@inject FashionFix.Web.Data.ApplicationDbContext DbContext
+@{
+    // Department nav links + cart badge are shared by every storefront page, so they live
+    // here in the layout instead of being re-queried/re-populated by every controller action.
+    var navDepartments = DbContext.Departments.AsNoTracking().Where(d => d.IsActive).OrderBy(d => d.DisplayOrder).ToList();
+    var cartItemCount = SessionCart.Get(Context.Session).ItemCount;
+    var currentAction = ViewContext.RouteData.Values["action"]?.ToString();
+    var currentController = ViewContext.RouteData.Values["controller"]?.ToString();
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>@(ViewData["Title"] != null ? $"{ViewData["Title"]} - Fashion Fix" : "Fashion Fix")</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,300;0,500;0,600;1,300&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="~/css/storefront.css" asp-append-version="true" />
+    @await RenderSectionAsync("Styles", required: false)
+</head>
+<body class="ffs-page">
+
+    <div class="ffs-utility-bar">
+        <div class="ffs-container">
+            <div class="ffs-utility-left">
+                <span>Cape Town Waterfront &bull; Sandton City</span>
+                <span>Customer Care: +27 21 000 4499</span>
+            </div>
+            <div class="ffs-utility-right">
+                <span>FixRewards: Earn 5% Back</span>
+                @if (User.Identity?.IsAuthenticated == true)
+                {
+                    <a asp-controller="Customer" asp-action="Orders">My Account</a>
+                    <form asp-controller="Account" asp-action="Logout" method="post" style="display:inline">
+                        @Html.AntiForgeryToken()
+                        <button type="submit" style="background:none;border:none;padding:0;font:inherit;color:inherit;cursor:pointer;">Sign Out</button>
+                    </form>
+                }
+                else
+                {
+                    <a asp-controller="Account" asp-action="Login">Sign In / Register</a>
+                }
+            </div>
+        </div>
+    </div>
+
+    <header class="ffs-header">
+        <div class="ffs-container">
+            <a class="ffs-logo" asp-controller="Home" asp-action="Index">
+                FASHION<span class="ffs-logo-dot">Fix</span>
+            </a>
+
+            <form class="ffs-search" asp-controller="Shop" asp-action="Index" method="get">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                <input type="text" name="search" placeholder="Search botanical linen, outerwear..." />
+            </form>
+
+            <nav class="ffs-nav">
+                <a asp-controller="Home" asp-action="Index" class="@(currentController == "Home" ? "active" : "")">Home</a>
+                @foreach (var dept in navDepartments)
+                {
+                    <a asp-controller="Shop" asp-action="Department" asp-route-slug="@dept.Slug"
+                       class="@(currentController == "Shop" && Context.Request.Query["dept"] == dept.Slug ? "active" : "")">@dept.Name</a>
+                }
+            </nav>
+
+            <div class="ffs-header-icons">
+                <a class="ffs-icon-link" asp-controller="Customer" asp-action="Wishlist" title="Wishlist">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z"/></svg>
+                </a>
+                <a class="ffs-icon-link" asp-controller="Shop" asp-action="Cart" title="Cart">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/></svg>
+                    @if (cartItemCount > 0)
+                    {
+                        <span class="ffs-icon-badge">@cartItemCount</span>
+                    }
+                </a>
+                <a class="ffs-icon-link ffs-icon-account" asp-controller="@(User.Identity?.IsAuthenticated == true ? "Customer" : "Account")" asp-action="@(User.Identity?.IsAuthenticated == true ? "Orders" : "Login")" title="Account">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21a8 8 0 1 0-16 0"/><circle cx="12" cy="7" r="4"/></svg>
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <div class="ffs-promo-strip">
+        <b>Complimentary Express Delivery</b> on orders exceeding R500 &bull; Members unlock 15% seasonal archive privileges
+    </div>
+
+    <main>
+        @RenderBody()
+    </main>
+
+    <footer class="ffs-footer">
+        <div class="ffs-container">
+            <div class="ffs-footer-grid">
+                <div class="ffs-footer-brand">
+                    <a class="ffs-logo" asp-controller="Home" asp-action="Index">FASHION<span class="ffs-logo-dot">Fix</span></a>
+                    <p>Cultivating mindful wardrobes rooted in natural fibers, tactile botanical dyes, and precision tailoring designed to endure generations.</p>
+                    <h5>Join the Conservatory Dispatch</h5>
+                    <form class="ffs-footer-newsletter" asp-controller="Newsletter" asp-action="Subscribe" method="post">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="returnUrl" value="@Context.Request.Path@Context.Request.QueryString" />
+                        <input type="email" name="email" placeholder="Enter your botanical address" required />
+                        <button type="submit" class="ffs-btn ffs-btn-forest">Subscribe</button>
+                    </form>
+                </div>
+                <div>
+                    <h5>Departments</h5>
+                    <ul>
+                        @foreach (var dept in navDepartments)
+                        {
+                            <li><a asp-controller="Shop" asp-action="Department" asp-route-slug="@dept.Slug">@dept.Name</a></li>
+                        }
+                    </ul>
+                </div>
+                <div>
+                    <h5>Customer Services</h5>
+                    <ul>
+                        <li><a asp-controller="Customer" asp-action="Orders">Track Your Order</a></li>
+                        <li><a href="#">Returns &amp; Exchanges</a></li>
+                        <li><a href="#">Boutique Concierge</a></li>
+                        <li><a href="#">Shipping &amp; Duties</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h5>Ethics &amp; Earth</h5>
+                    <ul>
+                        <li><a href="#">Regenerative Fibers</a></li>
+                        <li><a href="#">Microbiome-Safe Textiles</a></li>
+                        <li><a href="#">Laboratory Traceability</a></li>
+                        <li><a href="#">Circularity Pledge</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="ffs-footer-bottom">
+                <span>&copy; @DateTime.UtcNow.Year Fashion Fix Laboratory &amp; Apparel Pty Ltd. All scientific &amp; design rights reserved.</span>
+                <span>
+                    <a href="#">Privacy Policy</a>
+                    <a href="#">Terms of Service</a>
+                    <a href="#">Supply Chain Transparency</a>
+                </span>
+            </div>
+        </div>
+    </footer>
+
+    <div id="toastContainer" style="position:fixed; bottom:24px; right:24px; z-index:1080; display:flex; flex-direction:column; gap:10px;">
+        @if (TempData["ToastMessage"] is string toastMessage)
+        {
+            var toastType = TempData["ToastType"] as string ?? "success";
+            <div class="toast align-items-center text-bg-@toastType border-0" role="alert" data-toast-type="@toastType">
+                <div class="d-flex">
+                    <div class="toast-body">@toastMessage</div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+            </div>
+        }
+    </div>
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.querySelectorAll('#toastContainer .toast').forEach(function (el) {
+            new bootstrap.Toast(el, { delay: 5000 }).show();
+        });
+    </script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

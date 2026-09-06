@@ -1,0 +1,427 @@
+@model DepartmentPageViewModel
+@{
+    ViewData["Title"] = Model.Department.Name;
+    Layout = "_StorefrontLayout";
+    var dept = Model.Department;
+    var returnUrl = Context.Request.Path + Context.Request.QueryString;
+
+    string Ph(string label, int w = 900, int h = 500) => $"https://placehold.co/{w}x{h}/0F2A1C/FAF9F5?text={Uri.EscapeDataString(label)}";
+
+    var allSizes = Model.Products.SelectMany(p => p.DistinctSizes).Distinct().OrderBy(s => s).ToList();
+    var allColors = Model.Products.SelectMany(p => p.DistinctColors).Distinct().OrderBy(c => c).ToList();
+}
+
+<section class="ffs-section" style="padding-top:32px;padding-bottom:0;">
+    <div class="ffs-container">
+        <div class="ffs-hero-image" style="aspect-ratio:16/6;margin-bottom:28px;">
+            <img src="@(dept.HeroImageUrl ?? Ph(dept.Name))" alt="@dept.Name" />
+        </div>
+        <span class="ffs-eyebrow">@dept.Name Department</span>
+        <h1 style="font-size:2.1rem;margin-bottom:10px;">@(dept.HeroHeadline ?? $"{dept.Name}: Considered Essentials")</h1>
+        <p style="color:var(--ffs-ink-muted);max-width:640px;margin-bottom:24px;">@(dept.HeroSubheadline ?? "Precision-made pieces built on botanical fibers and quiet, durable craftsmanship.")</p>
+
+        @if (dept.SubCategories.Any())
+        {
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:24px;">
+                <a asp-action="Department" asp-route-slug="@dept.Slug" asp-route-size="@Model.SelectedSize" asp-route-color="@Model.SelectedColor"
+                   class="ffs-btn @(Model.SelectedSubCategory == null ? "ffs-btn-forest" : "ffs-btn-outline")" style="padding:8px 18px;font-size:0.8rem;">All @dept.Name</a>
+                @foreach (var sub in dept.SubCategories)
+                {
+                    <a asp-action="Department" asp-route-slug="@dept.Slug" asp-route-sub="@sub.Slug" asp-route-size="@Model.SelectedSize" asp-route-color="@Model.SelectedColor"
+                       class="ffs-btn @(Model.SelectedSubCategory == sub.Slug ? "ffs-btn-forest" : "ffs-btn-outline")" style="padding:8px 18px;font-size:0.8rem;">@sub.Name</a>
+                }
+            </div>
+        }
+    </div>
+</section>
+
+@if (dept.Slug == "footwear")
+{
+    <section class="ffs-section" style="padding-top:8px;">
+        <div class="ffs-container">
+            <div class="ffs-section-head" style="display:block;text-align:center;">
+                <span class="ffs-eyebrow">Anatomical Dissection</span>
+                <h2>Engineered Sole Architecture</h2>
+                <p style="margin:8px auto 0;">Select each stratum to examine how zero-petrochemical engineering yields superior plantar support and moisture-wicking endurance.</p>
+            </div>
+
+            <div class="ffs-accordion-grid" id="soleAccordion">
+                <div class="ffs-accordion-list">
+                    <button type="button" class="ffs-accordion-item active" data-layer="1">
+                        <span class="ffs-accordion-num">01</span>
+                        <div>
+                            <span class="ffs-accordion-tag">Midsole</span>
+                            <h5>Recycled Portuguese Cork</h5>
+                            <p>Harvested every 9 years from Quercus suber trees in Alentejo.</p>
+                        </div>
+                    </button>
+                    <button type="button" class="ffs-accordion-item" data-layer="2">
+                        <span class="ffs-accordion-num">02</span>
+                        <div>
+                            <span class="ffs-accordion-tag">Traction</span>
+                            <h5>Natural Hevea Rubber Outsole</h5>
+                            <p>Direct vulcanized milky sap with multidirectional siping treads.</p>
+                        </div>
+                    </button>
+                    <button type="button" class="ffs-accordion-item" data-layer="3">
+                        <span class="ffs-accordion-num">03</span>
+                        <div>
+                            <span class="ffs-accordion-tag">Upper Layer</span>
+                            <h5>Organic Linen Footbed Lining</h5>
+                            <p>Cooling flax fibers woven with natural antibacterial enzymes.</p>
+                        </div>
+                    </button>
+                    <button type="button" class="ffs-accordion-item" data-layer="4">
+                        <span class="ffs-accordion-num">04</span>
+                        <div>
+                            <span class="ffs-accordion-tag">Support</span>
+                            <h5>Orthopedic Arch Pod</h5>
+                            <p>Reinforced dense cork-latex stabilizer providing active plantar cradling.</p>
+                        </div>
+                    </button>
+                </div>
+
+                <div class="ffs-accordion-panel active" data-panel="1">
+                    <span class="ffs-eyebrow">Layer 01 &bull; Core Midsole &bull; Origin: Coruche, Portugal</span>
+                    <h4>Recycled Portuguese Cork Composite</h4>
+                    <p>Harvested exclusively from living cork oaks without chopping trees. Each harvest absorbs up to 5x more carbon dioxide while regenerating bark over a 9-year cycle. Yields lightweight viscoelastic shock dissipation.</p>
+                    <div class="ffs-accordion-chips">
+                        <span class="ffs-accordion-chip">Biodegradable Core</span>
+                        <span class="ffs-accordion-chip">Thermal Isolating</span>
+                        <span class="ffs-accordion-chip">Moisture Dissipation</span>
+                    </div>
+                </div>
+                <div class="ffs-accordion-panel" data-panel="2">
+                    <span class="ffs-eyebrow">Layer 02 &bull; Traction &bull; Origin: Southern Africa</span>
+                    <h4>Natural Hevea Rubber Outsole</h4>
+                    <p>Milky sap direct-vulcanized without synthetic accelerants, then siped in multiple directions for grip across wet sandstone, pavement, and trail surfaces alike.</p>
+                    <div class="ffs-accordion-chips">
+                        <span class="ffs-accordion-chip">Wet-Grip Rated</span>
+                        <span class="ffs-accordion-chip">Zero Synthetic Accelerant</span>
+                    </div>
+                </div>
+                <div class="ffs-accordion-panel" data-panel="3">
+                    <span class="ffs-eyebrow">Layer 03 &bull; Upper Layer &bull; Origin: Coastal Flax Fields</span>
+                    <h4>Organic Linen Footbed Lining</h4>
+                    <p>Cooling flax fibers woven with natural antibacterial enzymes regulate in-shoe microclimates, keeping feet dry and odour-free across a full day of wear.</p>
+                    <div class="ffs-accordion-chips">
+                        <span class="ffs-accordion-chip">Antibacterial</span>
+                        <span class="ffs-accordion-chip">Breathable Weave</span>
+                    </div>
+                </div>
+                <div class="ffs-accordion-panel" data-panel="4">
+                    <span class="ffs-eyebrow">Layer 04 &bull; Support &bull; Origin: Alentejo, Portugal</span>
+                    <h4>Orthopedic Arch Pod</h4>
+                    <p>A reinforced dense cork-latex stabilizer cradles the plantar fascia actively through the gait cycle, without relying on synthetic shanks or foam wedges.</p>
+                    <div class="ffs-accordion-chips">
+                        <span class="ffs-accordion-chip">Podiatrist Endorsed</span>
+                        <span class="ffs-accordion-chip">Synthetic-Free</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="ffs-section" style="padding-top:0;">
+        <div class="ffs-container">
+            <div class="ffs-boutique-banner" style="align-items:flex-start;flex-direction:column;background:var(--ffs-cream-alt);">
+                <div style="margin-bottom:18px;">
+                    <span class="ffs-eyebrow">Precision Ergonomics</span>
+                    <h4 style="font-size:1.3rem;">Find Your Natural Kinetic Fit</h4>
+                    <p>Fashion Fix shoes use a slightly wider anatomical toe-box. Select your typical UK size below.</p>
+                </div>
+                <div id="sizeFinder" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+                    @{ var ukSizes = new[] { "4", "5", "6", "7", "8", "9", "10", "11" }; }
+                    @foreach (var size in ukSizes)
+                    {
+                        <button type="button" class="ffs-btn @(size == "7" ? "ffs-btn-forest" : "ffs-btn-outline")" data-uk="@size" style="padding:8px 16px;font-size:0.82rem;" onclick="selectShoeSize(this)">UK @size</button>
+                    }
+                </div>
+                <p id="sizeFinderResult" style="font-size:0.85rem;color:var(--ffs-ink-muted);margin:0;">
+                    <b style="color:var(--ffs-ink);">UK 7 (EU 41 &bull; 25.6 cm)</b> &mdash; recommended toe room: 8mm.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <script>
+        (function () {
+            var sizeMap = { '4': '37 \u2022 22.9', '5': '38 \u2022 24.1', '6': '39 \u2022 24.8', '7': '41 \u2022 25.6', '8': '42 \u2022 26.4', '9': '43 \u2022 27.1', '10': '44 \u2022 27.9', '11': '45 \u2022 28.6' };
+
+            document.querySelectorAll('#soleAccordion .ffs-accordion-item').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    document.querySelectorAll('#soleAccordion .ffs-accordion-item').forEach(function (b) { b.classList.remove('active'); });
+                    document.querySelectorAll('#soleAccordion .ffs-accordion-panel').forEach(function (p) { p.classList.remove('active'); });
+                    btn.classList.add('active');
+                    document.querySelector('#soleAccordion .ffs-accordion-panel[data-panel="' + btn.dataset.layer + '"]').classList.add('active');
+                });
+            });
+
+            window.selectShoeSize = function (btn) {
+                document.querySelectorAll('#sizeFinder .ffs-btn').forEach(function (b) {
+                    b.classList.remove('ffs-btn-forest'); b.classList.add('ffs-btn-outline');
+                });
+                btn.classList.remove('ffs-btn-outline'); btn.classList.add('ffs-btn-forest');
+                var uk = btn.dataset.uk;
+                document.getElementById('sizeFinderResult').innerHTML =
+                    '<b style="color:var(--ffs-ink);">UK ' + uk + ' (EU ' + sizeMap[uk] + ' cm)</b> &mdash; recommended toe room: 8mm.';
+            };
+        })();
+    </script>
+}
+
+<section class="ffs-section" style="padding-top:20px;">
+    <div class="ffs-container">
+        <div class="ffs-section-head">
+            <form method="get" asp-action="Department" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+                <input type="hidden" name="slug" value="@dept.Slug" />
+                <input type="hidden" name="sub" value="@Model.SelectedSubCategory" />
+                @if (allSizes.Count > 0)
+                {
+                    <select name="size" class="ffs-search-chip" style="border:1px solid var(--ffs-border);border-radius:999px;padding:8px 14px;background:var(--ffs-card);" onchange="this.form.submit()">
+                        <option value="">Size: All</option>
+                        @foreach (var s in allSizes)
+                        {
+                            <option value="@s" selected="@(Model.SelectedSize == s)">@s</option>
+                        }
+                    </select>
+                }
+                @if (allColors.Count > 0)
+                {
+                    <select name="color" class="ffs-search-chip" style="border:1px solid var(--ffs-border);border-radius:999px;padding:8px 14px;background:var(--ffs-card);" onchange="this.form.submit()">
+                        <option value="">Colour: All</option>
+                        @foreach (var c in allColors)
+                        {
+                            <option value="@c" selected="@(Model.SelectedColor == c)">@c</option>
+                        }
+                    </select>
+                }
+                @if (!string.IsNullOrWhiteSpace(Model.SelectedSize) || !string.IsNullOrWhiteSpace(Model.SelectedColor))
+                {
+                    <a asp-action="Department" asp-route-slug="@dept.Slug" asp-route-sub="@Model.SelectedSubCategory" style="font-size:0.8rem;color:var(--ffs-ink-muted);">Clear filters</a>
+                }
+            </form>
+            <p style="margin:0;">Showing @Model.Products.Count style(s)</p>
+        </div>
+
+        @if (Model.Products.Count == 0)
+        {
+            <div class="text-center text-muted py-5">
+                <p>No styles match those filters right now.</p>
+                <a asp-action="Department" asp-route-slug="@dept.Slug" class="ffs-btn ffs-btn-outline">Reset filters</a>
+            </div>
+        }
+        else
+        {
+            <div class="ffs-product-grid">
+                @foreach (var product in Model.Products)
+                {
+                    var variants = product.Variants.Where(v => v.IsActive && v.StockQuantity > 0).ToList();
+                    <div class="ffs-product-card">
+                        <a asp-controller="Shop" asp-action="Product" asp-route-id="@product.ProductId" class="ffs-product-img-wrap" style="display:block;">
+                            <img src="@(product.ImageUrl ?? Ph(product.Name, 500, 650))" alt="@product.Name" />
+                            @if (!string.IsNullOrWhiteSpace(product.Badge))
+                            {
+                                <span class="ffs-product-badge @(product.IsOnSale ? "ffs-badge-clay" : "")">@product.Badge</span>
+                            }
+                        </a>
+                        <button type="button" class="ffs-wishlist-btn" title="Save to wishlist" onclick="location.href='@Url.Action("Login", "Account", new { returnUrl })'">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z"/></svg>
+                        </button>
+                        <div class="ffs-product-meta">
+                            @if (product.ReviewCount > 0)
+                            {
+                                <div class="ffs-product-rating"><span class="star">&#9733;</span> @product.AverageRating.ToString("0.0") <span>(@product.ReviewCount)</span></div>
+                            }
+                            <a asp-controller="Shop" asp-action="Product" asp-route-id="@product.ProductId" class="ffs-product-name" style="display:block;">@product.Name</a>
+                            @if (!string.IsNullOrWhiteSpace(product.Material))
+                            {
+                                <div class="ffs-product-desc">@product.Material@(string.IsNullOrWhiteSpace(product.Fit) ? "" : $" &middot; {product.Fit}")</div>
+                            }
+                            <div class="ffs-product-price-row">
+                                <span class="ffs-price">@product.SellingPrice.ToString("N0")</span>
+                                @if (product.IsOnSale)
+                                {
+                                    <span class="ffs-price-was">@product.CompareAtPrice!.Value.ToString("N0")</span>
+                                }
+                            </div>
+
+                            @{ var swatches = variants.Where(v => v.Color != null).GroupBy(v => v.Color).Select(g => g.First()).Take(5).ToList(); }
+                            @if (swatches.Count > 0)
+                            {
+                                <div class="ffs-swatches">
+                                    @foreach (var v in swatches)
+                                    {
+                                        <span class="ffs-swatch" style="background:@(v.ColorHex ?? v.Color);" title="@v.Color"></span>
+                                    }
+                                </div>
+                            }
+
+                            @if (variants.Count > 0)
+                            {
+                                <form asp-controller="Shop" asp-action="AddToCart" method="post" style="display:flex;gap:6px;margin-top:10px;">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="returnUrl" value="@returnUrl" />
+                                    <select name="variantId" class="form-select form-select-sm" style="font-size:0.78rem;">
+                                        @foreach (var v in variants)
+                                        {
+                                            <option value="@v.ProductVariantId">@v.Size / @v.Color &mdash; @v.StockQuantity left</option>
+                                        }
+                                    </select>
+                                    <button type="submit" class="ffs-btn ffs-btn-forest" style="padding:8px 14px;font-size:0.78rem;white-space:nowrap;">Add</button>
+                                </form>
+                            }
+                            else
+                            {
+                                <div class="ffs-btn ffs-btn-outline" style="margin-top:10px;padding:8px 14px;font-size:0.78rem;text-align:center;opacity:.6;">Out of stock</div>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</section>
+
+@if (dept.Slug == "men")
+{
+    <section class="ffs-section ffs-section-alt">
+        <div class="ffs-container">
+            <span class="ffs-eyebrow">Fashion Fix Botanical Editorial</span>
+            <h2 style="margin-bottom:6px;">The Art of Layering</h2>
+            <p style="color:var(--ffs-ink-muted);font-size:0.9rem;margin-bottom:28px;max-width:520px;">Select a pin on the garment below to inspect construction details, thermal grading, and curated companion items.</p>
+
+            <div class="ffs-hotspot-grid" id="layeringDiagram">
+                <div class="ffs-hotspot-image-wrap">
+                    <img src="@Ph("Layered Outfit", 700, 900)" alt="Layered outfit" />
+                    <button type="button" class="ffs-hotspot-pin active" style="top:28%;left:52%;" data-node="1" title="Outer layer">1</button>
+                    <button type="button" class="ffs-hotspot-pin" style="top:55%;left:46%;" data-node="2" title="Base layer">2</button>
+                    <button type="button" class="ffs-hotspot-pin" style="top:82%;left:50%;" data-node="3" title="Foundation">3</button>
+                </div>
+
+                <div>
+                    <div class="ffs-hotspot-panel active" data-panel="1">
+                        <span class="ffs-eyebrow">Outer Foundation &bull; Node 01 &bull; 450 GSM</span>
+                        <h4>Botanical Studio Oversized Hoodie</h4>
+                        <p>The cornerstone layer of SS26. Dyed in micro-batches using regenerative sage extract and sun-dried in low humidity. Features unbleached cotton twill pullcords with natural wooden stops.</p>
+                        <div class="ffs-hotspot-meta-row"><span>Thermal Comfort Index</span><span>12&deg;C &ndash; 22&deg;C (Spring Optimum)</span></div>
+                        <div class="ffs-hotspot-meta-row"><span>Specimen Price</span><span style="font-family:'Fraunces',serif;font-weight:600;">R1,799</span></div>
+                    </div>
+                    <div class="ffs-hotspot-panel" data-panel="2">
+                        <span class="ffs-eyebrow">Mid Layer &bull; Node 02 &bull; 280 GSM Hemp</span>
+                        <h4>Boxy Heavyweight Hemp Tee</h4>
+                        <p>Naturally thermo-regulating bast fibers softened through repeated bio-enzyme washes, worn close to the skin beneath the outer hoodie for a structured silhouette.</p>
+                        <div class="ffs-hotspot-meta-row"><span>Thermal Comfort Index</span><span>16&deg;C &ndash; 26&deg;C</span></div>
+                        <div class="ffs-hotspot-meta-row"><span>Specimen Price</span><span style="font-family:'Fraunces',serif;font-weight:600;">R750</span></div>
+                    </div>
+                    <div class="ffs-hotspot-panel" data-panel="3">
+                        <span class="ffs-eyebrow">Foundation &bull; Node 03 &bull; Organic Cotton</span>
+                        <h4>Structured French Terry Jogger</h4>
+                        <p>Tapered architectural rib ankle cuffs and deep interior pocket bags anchor the layering system, cut with room to move without breaking the line.</p>
+                        <div class="ffs-hotspot-meta-row"><span>Thermal Comfort Index</span><span>10&deg;C &ndash; 24&deg;C</span></div>
+                        <div class="ffs-hotspot-meta-row"><span>Specimen Price</span><span style="font-family:'Fraunces',serif;font-weight:600;">R1,450</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <script>
+        (function () {
+            document.querySelectorAll('#layeringDiagram .ffs-hotspot-pin').forEach(function (pin) {
+                pin.addEventListener('click', function () {
+                    document.querySelectorAll('#layeringDiagram .ffs-hotspot-pin').forEach(function (p) { p.classList.remove('active'); });
+                    document.querySelectorAll('#layeringDiagram .ffs-hotspot-panel').forEach(function (p) { p.classList.remove('active'); });
+                    pin.classList.add('active');
+                    document.querySelector('#layeringDiagram .ffs-hotspot-panel[data-panel="' + pin.dataset.node + '"]').classList.add('active');
+                });
+            });
+        })();
+    </script>
+}
+
+@if (dept.Slug == "women")
+{
+    <section class="ffs-section">
+        <div class="ffs-container">
+            <span class="ffs-eyebrow">Interactive Lookbook Studio</span>
+            <h2 style="margin-bottom:6px;">The 7-Piece Work-to-Weekend Capsule</h2>
+            <p style="color:var(--ffs-ink-muted);font-size:0.9rem;margin-bottom:20px;max-width:560px;">Carefully calibrated essentials engineered to combine into 24+ distinct botanical looks. Tap items to build your capsule.</p>
+
+            <div class="ffs-capsule-wrap">
+                <div class="ffs-capsule-price">
+                    <span class="ffs-capsule-total">Capsule Bundle: <span id="capsuleTotal">R8,900</span></span>
+                    <span class="ffs-capsule-save" id="capsuleSave">Save 20%</span>
+                </div>
+                <button type="button" class="ffs-btn ffs-btn-forest" id="capsuleAddBtn" onclick="location.href='@Url.Action("Index", "Shop")'">Add Full Capsule</button>
+            </div>
+
+            @{
+                var capsuleItems = new (string Label, string Item, decimal Price)[]
+                {
+                    ("01. Studio Set", "Eucalyptus Ribbed Studio Set", 1350m),
+                    ("02. Relaxed Trench", "Cashmere-Touch Relaxed Trench", 3400m),
+                    ("03. Sculpt Tank", "Sculpt Seamless Crop Tank", 690m),
+                    ("04. Hemp Trouser", "High-Rise Pleated Hemp Trouser", 1650m),
+                    ("05. Cotton Poplin", "Oversized Organic Cotton Poplin Shirt", 1100m),
+                    ("06. Silk Slip", "Minimalist Slip Dress in Washed Silk", 2200m),
+                    ("07. Woven Tote", "Woven Leather Tote Bag", 1850m)
+                };
+            }
+
+            <div class="ffs-capsule-grid" id="capsuleGrid">
+                @foreach (var item in capsuleItems)
+                {
+                    <div class="ffs-capsule-item selected" data-price="@item.Price.ToString("0")" onclick="toggleCapsuleItem(this)">
+                        <img src="@Ph(item.Item, 300, 300)" alt="@item.Item" />
+                        <div class="ffs-capsule-item-label">
+                            <b>@item.Label</b>
+                            R@item.Price.ToString("N0")
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </section>
+
+    <script>
+        (function () {
+            var FULL_TOTAL = 8900;
+
+            window.toggleCapsuleItem = function (el) {
+                el.classList.toggle('selected');
+                recalcCapsule();
+            };
+
+            function recalcCapsule() {
+                var items = document.querySelectorAll('#capsuleGrid .ffs-capsule-item');
+                var selectedCount = 0, sum = 0;
+                items.forEach(function (el) {
+                    if (el.classList.contains('selected')) {
+                        selectedCount++;
+                        sum += parseFloat(el.dataset.price);
+                    }
+                });
+
+                var totalEl = document.getElementById('capsuleTotal');
+                var saveEl = document.getElementById('capsuleSave');
+                var addBtn = document.getElementById('capsuleAddBtn');
+
+                if (selectedCount === items.length) {
+                    totalEl.textContent = 'R' + FULL_TOTAL.toLocaleString();
+                    saveEl.style.display = 'inline-block';
+                    saveEl.textContent = 'Save 20%';
+                    addBtn.textContent = 'Add Full Capsule';
+                } else if (selectedCount === 0) {
+                    totalEl.textContent = 'R0';
+                    saveEl.style.display = 'none';
+                    addBtn.textContent = 'Select items to add';
+                } else {
+                    totalEl.textContent = 'R' + sum.toLocaleString() + ' (' + selectedCount + ' piece' + (selectedCount === 1 ? '' : 's') + ')';
+                    saveEl.style.display = 'none';
+                    addBtn.textContent = 'Add ' + selectedCount + ' Selected';
+                }
+            }
+        })();
+    </script>
+}

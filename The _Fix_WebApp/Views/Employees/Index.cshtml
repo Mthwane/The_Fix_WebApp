@@ -1,75 +1,156 @@
 @model List<ApplicationUser>
 @{
-    ViewData["Title"] = "Employees";
+    ViewData["Title"] = "Staff Directory";
+    Layout = "_StaffLayout";
     var roles = ViewBag.Roles as Dictionary<string, string> ?? new();
     var assignableRoles = ViewBag.AssignableRoles as List<string> ?? new List<string>();
+
+    var total = Model.Count;
+    var posCount = Model.Count(u => roles.GetValueOrDefault(u.Id, "").Contains("Employee"));
+    var managerCount = Model.Count(u => roles.GetValueOrDefault(u.Id, "").Contains("Manager"));
+    var adminCount = Model.Count(u => roles.GetValueOrDefault(u.Id, "").Contains("Administrator"));
+
+    string Initials(string name) => string.Concat(name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(w => w[0])).ToUpperInvariant();
+
+    (string bg, string fg) RoleColors(string role) => role switch
+    {
+        var r when r.Contains("Administrator") => ("var(--stf-primary)", "#fff"),
+        var r when r.Contains("Manager") => ("var(--stf-secondary-container)", "var(--stf-secondary)"),
+        var r when r.Contains("Owner") => ("var(--stf-primary-fixed)", "var(--stf-primary)"),
+        _ => ("var(--stf-surface-container)", "var(--stf-on-surface-variant)")
+    };
 }
-<div class="container py-4">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2 class="mb-0">Employees</h2>
-        <a asp-controller="Employees" asp-action="CreateEmployee" class="btn btn-primary">+ Add Employee</a>
+
+<div class="stf-content">
+    <div class="stf-page-head">
+        <div>
+            <span class="stf-eyebrow">Identity &amp; Governance &bull; Claims Policy &sect; Employees.Manage</span>
+            <h1>Staff &amp; Workforce Directory</h1>
+            <p>Manage internal staff credentials, job positions, active state toggles, and role assignments.</p>
+        </div>
+        <div style="display:flex;gap:10px;">
+            <a asp-action="ExportRoster" class="stf-btn stf-btn-outline">Export Roster (CSV)</a>
+            <a asp-action="CreateEmployee" class="stf-btn stf-btn-primary">+ Create New Staff Account</a>
+        </div>
     </div>
 
-    <table class="table table-hover align-middle">
+    <div class="stf-stat-grid">
+        <div class="stf-stat">
+            <div class="stf-stat-label">Total Staff</div>
+            <div class="stf-stat-value">@total</div>
+            <div class="stf-stat-sub">Headcount</div>
+        </div>
+        <div class="stf-stat">
+            <div class="stf-stat-label">Floor Operators</div>
+            <div class="stf-stat-value">@posCount</div>
+            <div class="stf-stat-sub">POS-enabled Employees</div>
+        </div>
+        <div class="stf-stat">
+            <div class="stf-stat-label">Managers</div>
+            <div class="stf-stat-value">@managerCount</div>
+            <div class="stf-stat-sub">Operational leads</div>
+        </div>
+        <div class="stf-stat">
+            <div class="stf-stat-label">System Admins</div>
+            <div class="stf-stat-value">@adminCount</div>
+            <div class="stf-stat-sub">Root clearance</div>
+        </div>
+    </div>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px;" id="roleFilters">
+        <button type="button" class="stf-btn stf-btn-primary" data-filter="all" onclick="filterStaff(this,'all')">All Staff (@total)</button>
+        <button type="button" class="stf-btn stf-btn-outline" data-filter="Employee" onclick="filterStaff(this,'Employee')">Employees (@posCount)</button>
+        <button type="button" class="stf-btn stf-btn-outline" data-filter="Manager" onclick="filterStaff(this,'Manager')">Managers (@managerCount)</button>
+        <button type="button" class="stf-btn stf-btn-outline" data-filter="Administrator" onclick="filterStaff(this,'Administrator')">System Admins (@adminCount)</button>
+        <input type="text" id="staffSearch" placeholder="Filter by name, email, or position..." oninput="filterStaff(null,null)"
+               style="flex:1;min-width:200px;border:1px solid var(--stf-outline-variant);border-radius:999px;padding:9px 16px;font-size:0.85rem;" />
+    </div>
+
+    <table class="stf-table" id="staffTable">
         <thead>
             <tr>
-                <th>Name</th>
-                <th>Username</th>
-                <th>Email</th>
-                <th>Job Position</th>
+                <th>Staff Member</th>
                 <th>Role</th>
-                <th>Status</th>
+                <th>Job Position</th>
+                <th>Employment State</th>
+                <th>Security</th>
                 <th></th>
             </tr>
         </thead>
         <tbody>
-        @foreach (var employee in Model)
-        {
-            <tr class="@(employee.IsActive ? "" : "table-secondary")">
-                <td>@employee.FullName</td>
-                <td>@employee.UserName</td>
-                <td>@employee.Email</td>
-                <td>@employee.JobPosition</td>
-                <td>
-                    <form asp-controller="Employees" asp-action="AssignRole" method="post" class="d-flex gap-1">
-                        <input type="hidden" name="userId" value="@employee.Id" />
-                        <select name="role" class="form-select form-select-sm" style="width:140px;">
-                            @foreach (var r in assignableRoles)
-                            {
-                                var current = roles.GetValueOrDefault(employee.Id, "");
-                                <option value="@r" selected="@(current.Contains(r))">@r</option>
-                            }
-                        </select>
-                        <button type="submit" class="btn btn-sm btn-outline-secondary">Set</button>
-                    </form>
-                </td>
-                <td>
-                    @if (employee.IsActive)
-                    {
-                        <span class="badge bg-success">Active</span>
-                    }
-                    else
-                    {
-                        <span class="badge bg-secondary">Deactivated</span>
-                    }
-                </td>
-                <td class="text-end">
-                    <a asp-controller="Employees" asp-action="Edit" asp-route-id="@employee.Id" class="btn btn-sm btn-outline-primary">Edit</a>
-                    @if (employee.IsActive)
-                    {
-                        <form asp-controller="Employees" asp-action="Deactivate" asp-route-id="@employee.Id" method="post" class="d-inline">
-                            <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Deactivate this staff account?');">Deactivate</button>
-                        </form>
-                    }
-                    else
-                    {
-                        <form asp-controller="Employees" asp-action="Reactivate" asp-route-id="@employee.Id" method="post" class="d-inline">
-                            <button type="submit" class="btn btn-sm btn-outline-success">Reactivate</button>
-                        </form>
-                    }
-                </td>
-            </tr>
-        }
+            @foreach (var user in Model)
+            {
+                var role = roles.GetValueOrDefault(user.Id, "");
+                var (bg, fg) = RoleColors(role);
+                var roleMatch = role.Contains("Administrator") ? "Administrator" : role.Contains("Manager") ? "Manager" : role.Contains("Employee") ? "Employee" : role;
+                <tr data-role="@roleMatch" data-search="@($"{user.FullName} {user.Email} {user.JobPosition}".ToLowerInvariant())">
+                    <td>
+                        <div style="display:flex;align-items:center;gap:10px;">
+                            <div class="stf-user-avatar" style="background:@bg;color:@fg;">@Initials(user.FullName)</div>
+                            <div>
+                                <div style="font-weight:600;">@user.FullName</div>
+                                <div style="font-size:0.75rem;color:var(--stf-outline);">@user.Email</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td><span class="stf-badge" style="background:@bg;color:@fg;">@role</span></td>
+                    <td style="font-size:0.82rem;">@user.JobPosition</td>
+                    <td>
+                        @if (user.IsActive)
+                        {
+                            <span class="stf-badge stf-badge-active">Active</span>
+                        }
+                        else
+                        {
+                            <span class="stf-badge stf-badge-danger">@(user.EmploymentStatus ?? "Inactive")</span>
+                        }
+                        @if (user.DateHired.HasValue)
+                        {
+                            <div style="font-size:0.72rem;color:var(--stf-outline);margin-top:3px;">Hired @user.DateHired.Value.ToString("dd MMM yyyy")</div>
+                        }
+                    </td>
+                    <td style="font-size:0.78rem;">@(user.TwoFactorEnabled ? "2FA Enforced" : "2FA Not Enabled")</td>
+                    <td style="text-align:right;white-space:nowrap;">
+                        <a asp-action="Edit" asp-route-id="@user.Id" class="stf-btn stf-btn-outline" style="padding:5px 12px;font-size:0.75rem;">Edit</a>
+                        @if (user.IsActive)
+                        {
+                            <form asp-action="Deactivate" asp-route-id="@user.Id" method="post" style="display:inline;">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="stf-btn stf-btn-danger-outline" style="padding:5px 12px;font-size:0.75rem;" onclick="return confirm('Deactivate @user.FullName?');">Deactivate</button>
+                            </form>
+                        }
+                        else
+                        {
+                            <form asp-action="Reactivate" asp-route-id="@user.Id" method="post" style="display:inline;">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="stf-btn stf-btn-outline" style="padding:5px 12px;font-size:0.75rem;">Reactivate</button>
+                            </form>
+                        }
+                    </td>
+                </tr>
+            }
         </tbody>
     </table>
 </div>
+
+@section Scripts {
+    <script>
+        function filterStaff(btn, roleFilter) {
+            if (btn) {
+                document.querySelectorAll('#roleFilters .stf-btn').forEach(function (b) {
+                    b.classList.remove('stf-btn-primary'); b.classList.add('stf-btn-outline');
+                });
+                btn.classList.remove('stf-btn-outline'); btn.classList.add('stf-btn-primary');
+                window.currentRoleFilter = roleFilter;
+            }
+            var active = window.currentRoleFilter || 'all';
+            var search = document.getElementById('staffSearch').value.trim().toLowerCase();
+
+            document.querySelectorAll('#staffTable tbody tr').forEach(function (row) {
+                var matchesRole = active === 'all' || row.dataset.role === active;
+                var matchesSearch = !search || row.dataset.search.includes(search);
+                row.style.display = (matchesRole && matchesSearch) ? '' : 'none';
+            });
+        }
+    </script>
+}

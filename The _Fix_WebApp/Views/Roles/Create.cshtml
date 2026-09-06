@@ -1,31 +1,25 @@
 @model RoleEditViewModel
 @{
     ViewData["Title"] = "New Role";
+    Layout = "_StaffLayout";
 }
-<div class="container py-4" style="max-width:640px;">
-    <h2>New Role</h2>
 
-    <form asp-controller="Roles" asp-action="Create" method="post">
-        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+<div class="stf-content" style="max-width:560px;">
+    <span class="stf-eyebrow">Custom Atelier</span>
+    <h1 style="margin-bottom:8px;">Create New Role</h1>
+    <p style="color:var(--stf-on-surface-variant);font-size:0.9rem;margin-bottom:24px;">Give it a name now - you'll choose exactly which permissions it grants on the matrix right after.</p>
 
-        <div class="mb-3">
-            <label asp-for="Name" class="form-label"></label>
-            <input asp-for="Name" class="form-control" placeholder="e.g. Supervisor" />
-            <span asp-validation-for="Name" class="text-danger"></span>
+    <form asp-controller="Roles" asp-action="Create" method="post" class="stf-card">
+        @Html.AntiForgeryToken()
+        <div asp-validation-summary="ModelOnly" style="color:var(--stf-error);margin-bottom:10px;"></div>
+
+        <label asp-for="Name" style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;"></label>
+        <input asp-for="Name" style="width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:9px 14px;font-size:0.9rem;margin-bottom:6px;" placeholder="e.g. Tailoring Specialist" />
+        <span asp-validation-for="Name" style="color:var(--stf-error);font-size:0.8rem;"></span>
+
+        <div style="margin-top:20px;display:flex;gap:10px;">
+            <button type="submit" class="stf-btn stf-btn-primary">Create Role</button>
+            <a asp-controller="Roles" asp-action="Index" style="font-size:0.85rem;color:var(--stf-on-surface-variant);align-self:center;">Cancel</a>
         </div>
-
-        <label class="form-label">Permissions</label>
-        <div class="border rounded p-3 mb-3">
-            @foreach (var permission in Model.AllPermissions)
-            {
-                <div class="form-check">
-                    <input type="checkbox" class="form-check-input" name="SelectedPermissions" value="@permission.Key" id="perm_@permission.Key" />
-                    <label class="form-check-label" for="perm_@permission.Key">@permission.Value</label>
-                </div>
-            }
-        </div>
-
-        <button type="submit" class="btn btn-primary">Create Role</button>
-        <a asp-controller="Roles" asp-action="Index" class="btn btn-link">Cancel</a>
     </form>
 </div>

@@ -1,0 +1,44 @@
+@model List<Department>
+@{
+    ViewData["Title"] = "Departments";
+    Layout = "_StaffLayout";
+}
+
+<div class="stf-content">
+    <div class="stf-page-head">
+        <div>
+            <span class="stf-eyebrow">Storefront</span>
+            <h1>Departments</h1>
+            <p>Top-level storefront sections shown on the homepage and in the shop nav.</p>
+        </div>
+        <a asp-action="Create" class="stf-btn stf-btn-primary">+ Add Department</a>
+    </div>
+
+    <table class="stf-table">
+        <thead>
+            <tr><th>Name</th><th>Slug</th><th>Subcategories</th><th style="width:80px;">Order</th><th>Status</th><th></th></tr>
+        </thead>
+        <tbody>
+            @foreach (var d in Model.OrderBy(x => x.DisplayOrder))
+            {
+                <tr>
+                    <td style="font-weight:600;">@d.Name</td>
+                    <td><code>@d.Slug</code></td>
+                    <td>@d.SubCategories.Count</td>
+                    <td>@d.DisplayOrder</td>
+                    <td>
+                        @if (d.IsActive)
+                        {
+                            <span class="stf-badge stf-badge-active">Active</span>
+                        }
+                        else
+                        {
+                            <span class="stf-badge stf-badge-muted">Hidden</span>
+                        }
+                    </td>
+                    <td style="text-align:right;"><a asp-action="Edit" asp-route-id="@d.DepartmentId" class="stf-btn stf-btn-outline" style="padding:6px 14px;font-size:0.78rem;">Edit</a></td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>

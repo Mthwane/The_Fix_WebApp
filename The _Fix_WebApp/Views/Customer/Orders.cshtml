@@ -1,8 +1,9 @@
 @model List<Order>
 @{
     ViewData["Title"] = "My Orders";
+    Layout = "_StorefrontLayout";
     var cancellableStatuses = ViewBag.CancellableStatuses as OrderStatus[] ?? Array.Empty<OrderStatus>();
-    var fallbackImage = "https://placehold.co/80x80?text=No+Image";
+    var fallbackImage = "https://placehold.co/80x80/E4DEC9/24211B?text=No+Image";
 
     var selectedCategory = ViewBag.SelectedCategory as OrderCategory?;
     var search = ViewBag.Search as string;
@@ -10,138 +11,122 @@
     var allCount = (int)ViewBag.AllCount;
 
     string CategoryUrl(OrderCategory? cat) => Url.Action("Orders", new { category = cat, search }) ?? "#";
+
+    (string bg, string fg) BadgeColors(OrderStatus s) => s switch
+    {
+        OrderStatus.Completed or OrderStatus.Delivered => ("var(--ffs-forest)", "#fff"),
+        OrderStatus.Cancelled or OrderStatus.Returned => ("var(--ffs-clay)", "#fff"),
+        OrderStatus.Shipped or OrderStatus.Processing => ("var(--ffs-sage)", "var(--ffs-sage-text)"),
+        _ => ("var(--ffs-cream-alt)", "var(--ffs-ink-muted)")
+    };
 }
 
-<div class="container py-4">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <div>
-            <h2 class="mb-0">My Orders</h2>
-            <p class="text-muted mb-0">Your purchase history and delivery status.</p>
-        </div>
-        <div class="d-flex gap-2">
-            <a asp-controller="Customer" asp-action="Profile" class="btn btn-outline-secondary">My Profile</a>
-            <a asp-controller="Shop" asp-action="Index" class="btn btn-danger"><i class="bi bi-cart3"></i> Shop Now</a>
-        </div>
-    </div>
-
-    <!-- Quick-filter tabs: Pending / Completed / Past - same grouping the staff Orders
-         screen uses (see OrderCategorizer), so "Completed" means the same thing everywhere. -->
-    <ul class="nav nav-pills mb-3">
-        <li class="nav-item">
-            <a class="nav-link @(selectedCategory is null ? "active" : "")" href="@CategoryUrl(null)">
-                All <span class="badge bg-secondary ms-1">@allCount</span>
-            </a>
-        </li>
-        <li class="nav-item">
-            <a class="nav-link @(selectedCategory == OrderCategory.Pending ? "active" : "")" href="@CategoryUrl(OrderCategory.Pending)">
-                <i class="bi bi-hourglass-split"></i> Pending <span class="badge bg-warning text-dark ms-1">@categoryCounts[OrderCategory.Pending]</span>
-            </a>
-        </li>
-        <li class="nav-item">
-            <a class="nav-link @(selectedCategory == OrderCategory.Completed ? "active" : "")" href="@CategoryUrl(OrderCategory.Completed)">
-                <i class="bi bi-check-circle"></i> Completed <span class="badge bg-success ms-1">@categoryCounts[OrderCategory.Completed]</span>
-            </a>
-        </li>
-        <li class="nav-item">
-            <a class="nav-link @(selectedCategory == OrderCategory.Past ? "active" : "")" href="@CategoryUrl(OrderCategory.Past)">
-                <i class="bi bi-archive"></i> Past <span class="badge bg-danger ms-1">@categoryCounts[OrderCategory.Past]</span>
-            </a>
-        </li>
-    </ul>
-
-    <form asp-controller="Customer" asp-action="Orders" method="get" class="row g-2 mb-3">
-        <input type="hidden" name="category" value="@selectedCategory" />
-        <div class="col-auto flex-grow-1" style="min-width: 220px;">
-            <div class="input-group">
-                <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
-                <input type="text" name="search" value="@search" class="form-control" placeholder="Search by order number" />
+<section class="ffs-section" style="padding-top:32px;">
+    <div class="ffs-container" style="max-width:900px;">
+        <div class="ffs-section-head">
+            <div>
+                <span class="ffs-eyebrow">Account</span>
+                <h1 style="font-family:'Fraunces',serif;font-size:1.9rem;">My Orders</h1>
+                <p>Your purchase history and delivery status.</p>
+            </div>
+            <div style="display:flex;gap:10px;">
+                <a asp-controller="Customer" asp-action="Profile" class="ffs-btn ffs-btn-outline">My Profile</a>
+                <a asp-controller="Shop" asp-action="Index" class="ffs-btn ffs-btn-forest">Shop Now</a>
             </div>
         </div>
-        <div class="col-auto">
-            <button type="submit" class="btn btn-outline-secondary"><i class="bi bi-filter"></i> Search</button>
+
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;">
+            <a href="@CategoryUrl(null)" class="ffs-btn @(selectedCategory is null ? "ffs-btn-forest" : "ffs-btn-outline")" style="padding:8px 16px;font-size:0.82rem;">
+                All <span style="opacity:.75;">(@allCount)</span>
+            </a>
+            <a href="@CategoryUrl(OrderCategory.Pending)" class="ffs-btn @(selectedCategory == OrderCategory.Pending ? "ffs-btn-forest" : "ffs-btn-outline")" style="padding:8px 16px;font-size:0.82rem;">
+                Pending <span style="opacity:.75;">(@categoryCounts[OrderCategory.Pending])</span>
+            </a>
+            <a href="@CategoryUrl(OrderCategory.Completed)" class="ffs-btn @(selectedCategory == OrderCategory.Completed ? "ffs-btn-forest" : "ffs-btn-outline")" style="padding:8px 16px;font-size:0.82rem;">
+                Completed <span style="opacity:.75;">(@categoryCounts[OrderCategory.Completed])</span>
+            </a>
+            <a href="@CategoryUrl(OrderCategory.Past)" class="ffs-btn @(selectedCategory == OrderCategory.Past ? "ffs-btn-forest" : "ffs-btn-outline")" style="padding:8px 16px;font-size:0.82rem;">
+                Past <span style="opacity:.75;">(@categoryCounts[OrderCategory.Past])</span>
+            </a>
         </div>
-        @if (!string.IsNullOrWhiteSpace(search) || selectedCategory.HasValue)
+
+        <form asp-controller="Customer" asp-action="Orders" method="get" style="display:flex;gap:8px;margin-bottom:28px;flex-wrap:wrap;">
+            <input type="hidden" name="category" value="@selectedCategory" />
+            <input type="text" name="search" value="@search" placeholder="Search by order number"
+                   style="flex:1 1 220px;border:1px solid var(--ffs-border);border-radius:999px;padding:9px 16px;font-size:0.85rem;background:var(--ffs-card);" />
+            <button type="submit" class="ffs-btn ffs-btn-outline" style="padding:9px 18px;font-size:0.82rem;">Search</button>
+            @if (!string.IsNullOrWhiteSpace(search) || selectedCategory.HasValue)
+            {
+                <a asp-controller="Customer" asp-action="Orders" class="ffs-btn ffs-btn-outline" style="padding:9px 18px;font-size:0.82rem;">Clear</a>
+            }
+        </form>
+
+        @if (!Model.Any())
         {
-            <div class="col-auto">
-                <a asp-controller="Customer" asp-action="Orders" class="btn btn-outline-danger"><i class="bi bi-x-circle"></i> Clear</a>
+            <div style="display:flex;justify-content:space-between;align-items:center;background:var(--ffs-cream-alt);border-radius:var(--ffs-radius);padding:16px 20px;">
+                @if (selectedCategory.HasValue || !string.IsNullOrWhiteSpace(search))
+                {
+                    <span style="font-size:0.9rem;">No orders match this filter.</span>
+                }
+                else
+                {
+                    <span style="font-size:0.9rem;">You haven't placed any orders yet.</span>
+                }
+                <a asp-controller="Shop" asp-action="Index" class="ffs-btn ffs-btn-forest" style="padding:8px 16px;font-size:0.8rem;">Start Shopping</a>
             </div>
         }
-    </form>
-
-    @if (!Model.Any())
-    {
-        <div class="alert alert-info d-flex justify-content-between align-items-center">
-            @if (selectedCategory.HasValue || !string.IsNullOrWhiteSpace(search))
-            {
-                <span>No orders match this filter.</span>
-            }
-            else
-            {
-                <span>You haven't placed any orders yet.</span>
-            }
-            <a asp-controller="Shop" asp-action="Index" class="btn btn-sm btn-danger">Start Shopping</a>
-        </div>
-    }
-    else
-    {
-        @foreach (var order in Model)
+        else
         {
-            var badgeClass = order.Status switch
-            {
-                OrderStatus.Completed or OrderStatus.Delivered => "bg-success",
-                OrderStatus.Cancelled or OrderStatus.Returned => "bg-danger",
-                OrderStatus.Shipped or OrderStatus.Processing => "bg-info text-dark",
-                _ => "bg-secondary"
-            };
-            var statusIcon = order.Status switch
-            {
-                OrderStatus.Delivered or OrderStatus.Completed => "bi-check-circle",
-                OrderStatus.Cancelled => "bi-x-circle",
-                OrderStatus.Returned => "bi-arrow-return-left",
-                OrderStatus.Shipped => "bi-truck",
-                OrderStatus.Processing => "bi-gear",
-                _ => "bi-hourglass-split"
-            };
-            <div class="card mb-3">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <div>
-                        <strong>Order #@order.OrderNumber</strong>
-                        <span class="text-muted ms-2">@order.DateCreated.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</span>
-                    </div>
-                    <span class="badge @badgeClass"><i class="bi @statusIcon"></i> @order.Status</span>
-                </div>
-                <div class="card-body">
-                    <table class="table table-sm mb-2 align-middle">
-                        <tbody>
-                            @foreach (var item in order.OrderItems)
-                            {
-                                <tr>
-                                    <td style="width:64px;">
+            <div style="display:flex;flex-direction:column;gap:16px;">
+                @foreach (var order in Model)
+                {
+                    var (bg, fg) = BadgeColors(order.Status);
+                    <div style="border:1px solid var(--ffs-border);border-radius:var(--ffs-radius);overflow:hidden;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;background:var(--ffs-cream-alt);padding:12px 18px;">
+                            <div>
+                                <strong>Order #@order.OrderNumber</strong>
+                                <span style="color:var(--ffs-ink-muted);margin-left:8px;font-size:0.85rem;">@order.DateCreated.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</span>
+                            </div>
+                            <span style="background:@bg;color:@fg;font-size:0.72rem;font-weight:600;padding:5px 12px;border-radius:999px;">@order.Status</span>
+                        </div>
+                        <div style="padding:16px 18px;">
+                            <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
+                                @foreach (var item in order.OrderItems)
+                                {
+                                    <div style="display:flex;gap:12px;align-items:center;">
                                         <img src="@(string.IsNullOrWhiteSpace(item.Product?.ImageUrl) ? fallbackImage : item.Product.ImageUrl)"
-                                             alt="@item.Product?.Name" class="rounded border" style="width:56px;height:56px;object-fit:cover;" />
-                                    </td>
-                                    <td>@item.Product?.Name <span class="text-muted">(@item.Quantity)</span></td>
-                                    <td class="text-end">@item.LineTotal.ToString("C")</td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                    <div class="d-flex justify-content-between align-items-center">
-                        <span class="text-muted">@order.PaymentMethod</span>
-                        <strong>Total: @order.GrandTotal.ToString("C")</strong>
-                    </div>
+                                             alt="@item.Product?.Name" style="width:52px;height:52px;object-fit:cover;border-radius:8px;flex-shrink:0;" />
+                                        <div style="flex:1;font-size:0.88rem;">
+                                            @item.Product?.Name
+                                            @if (item.ProductVariant != null)
+                                            {
+                                                <span style="color:var(--ffs-ink-muted);">(@item.ProductVariant.Size/@item.ProductVariant.Color)</span>
+                                            }
+                                            <span style="color:var(--ffs-ink-muted);">&times;@item.Quantity</span>
+                                        </div>
+                                        <div style="font-weight:500;">@item.LineTotal.ToString("C")</div>
+                                    </div>
+                                }
+                            </div>
+                            <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--ffs-border);padding-top:12px;">
+                                <span style="color:var(--ffs-ink-muted);font-size:0.85rem;">@order.PaymentMethod</span>
+                                <strong style="font-family:'Fraunces',serif;">Total: @order.GrandTotal.ToString("C")</strong>
+                            </div>
 
-                    @if (cancellableStatuses.Contains(order.Status))
-                    {
-                        <form asp-controller="Customer" asp-action="CancelOrder" asp-route-id="@order.OrderId" method="post" class="mt-2 text-end">
-                            <button type="submit" class="btn btn-sm btn-outline-danger"
-                                    onclick="return confirm('Cancel this order? Items will be released back to stock.');">
-                                Cancel Order
-                            </button>
-                        </form>
-                    }
-                </div>
+                            @if (cancellableStatuses.Contains(order.Status))
+                            {
+                                <form asp-controller="Customer" asp-action="CancelOrder" asp-route-id="@order.OrderId" method="post" style="text-align:right;margin-top:10px;">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="ffs-btn ffs-btn-outline" style="padding:6px 14px;font-size:0.78rem;color:var(--ffs-clay);border-color:var(--ffs-clay);"
+                                            onclick="return confirm('Cancel this order? Items will be released back to stock.');">
+                                        Cancel Order
+                                    </button>
+                                </form>
+                            }
+                        </div>
+                    </div>
+                }
             </div>
         }
-    }
-</div>
+    </div>
+</section>

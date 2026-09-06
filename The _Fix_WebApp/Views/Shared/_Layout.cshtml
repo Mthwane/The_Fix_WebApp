@@ -52,7 +52,7 @@
                             </a>
                         }
 
-                        if (Can(Permissions.ProductsManage) || Can(Permissions.PosUse))
+                        if (Can(Permissions.ProductsManage) || Can(Permissions.PosUse) || Can(Permissions.StorefrontManage))
                         {
                             <div class="sidebar-section-label">Store</div>
                         }
@@ -60,6 +60,21 @@
                         {
                             <a class="nav-link" asp-controller="Products" asp-action="Index">
                                 <i class="bi bi-tags nav-icon"></i><span class="nav-label">Products</span>
+                            </a>
+                        }
+                        if (Can(Permissions.StorefrontManage))
+                        {
+                            <a class="nav-link" asp-controller="Departments" asp-action="Index">
+                                <i class="bi bi-grid nav-icon"></i><span class="nav-label">Departments</span>
+                            </a>
+                            <a class="nav-link" asp-controller="Storefront" asp-action="Trending">
+                                <i class="bi bi-star nav-icon"></i><span class="nav-label">Trending Picks</span>
+                            </a>
+                            <a class="nav-link" asp-controller="Storefront" asp-action="Content">
+                                <i class="bi bi-file-text nav-icon"></i><span class="nav-label">Homepage Content</span>
+                            </a>
+                            <a class="nav-link" asp-controller="Storefront" asp-action="Reviews">
+                                <i class="bi bi-chat-square-text nav-icon"></i><span class="nav-label">Reviews</span>
                             </a>
                         }
                         if (Can(Permissions.PosUse))
@@ -155,7 +170,7 @@
                     @if (!isAuthenticated)
                     {
                         <div class="ms-auto">
-                            <a class="btn btn-outline-dark btn-sm me-2" asp-controller="Home" asp-action="Index">Customer Login</a>
+                            <a class="btn btn-outline-dark btn-sm me-2" asp-controller="Account" asp-action="Login">Customer Login</a>
                             <a class="btn btn-dark btn-sm" asp-controller="Account" asp-action="EmployeeLogin">Employee Login</a>
                         </div>
                     }
@@ -197,6 +212,19 @@
                 })();
         </script>
     }
+
+    <div id="toastContainer" style="position:fixed; bottom:24px; right:24px; z-index:1080; display:flex; flex-direction:column; gap:10px;">
+        @if (TempData["ToastMessage"] is string toastMessage)
+        {
+            var toastType = TempData["ToastType"] as string ?? "success";
+            <div class="toast align-items-center text-bg-@toastType border-0" role="alert" data-toast-type="@toastType">
+                <div class="d-flex">
+                    <div class="toast-body">@toastMessage</div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+            </div>
+        }
+    </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 

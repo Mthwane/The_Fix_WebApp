@@ -14,10 +14,14 @@ namespace FashionFix.Web.Controllers;
 /// <summary>
 /// The customer-facing storefront: browse the catalogue, build a cart, and check out
 /// (US-14: "check out and pay for my order using my preferred payment method").
-/// Cart state lives in Session, not the database - only a completed checkout ever writes
-/// an Order row, so an abandoned cart never touches stock or the Orders table.
+/// Browsing and the cart are open to anonymous visitors (a "visitor" is simply anyone not
+/// signed in - there's no separate account for it); Checkout/Confirmation require a
+/// Customer account, since an Order has to be linked to somebody. Cart state lives in
+/// Session, not the database - only a completed checkout ever writes an Order row, so an
+/// abandoned cart never touches stock or the Orders table, and it survives the trip from
+/// anonymous browsing straight through to signing in at checkout.
 /// </summary>
-[Authorize(Roles = "Customer")]
+[AllowAnonymous]
 public class ShopController : Controller
 {
     private readonly ApplicationDbContext _context;
@@ -34,14 +38,61 @@ public class ShopController : Controller
         _logger = logger;
     }
 
-    // GET: /Shop - browse the catalogue.
+    // GET: /Shop/Department/{slug} - a single department's landing page (Women/Men/Footwear/
+    // Kids/...), matching the Figma department-page designs. Reuses the same catalogue query
+    // as Index, just pre-filtered to this department.
+    [HttpGet]
+    public async Task<IActionResult> Department(string slug, string? sub, string? size, string? color)
+    {
+        var department = await _context.Departments
+            .AsNoTracking()
+            .Include(d => d.SubCategories.OrderBy(s => s.DisplayOrder))
+            .FirstOrDefaultAsync(d => d.Slug == slug && d.IsActive);
+
+        if (department is null) return NotFound();
+
+        var query = _context.Products
+            .AsNoTracking()
+            .Include(p => p.Variants)
+            .Where(p => p.IsActive && p.DepartmentId == department.DepartmentId
+                && p.Variants.Any(v => v.IsActive && v.StockQuantity > 0));
+
+        if (!string.IsNullOrWhiteSpace(sub))
+        {
+            var subCategoryName = department.SubCategories.FirstOrDefault(s => s.Slug == sub)?.Name;
+            if (subCategoryName is not null)
+                query = query.Where(p => p.SubCategory == subCategoryName);
+        }
+        if (!string.IsNullOrWhiteSpace(size))
+            query = query.Where(p => p.Variants.Any(v => v.IsActive && v.Size == size));
+        if (!string.IsNullOrWhiteSpace(color))
+            query = query.Where(p => p.Variants.Any(v => v.IsActive && v.Color == color));
+
+        var products = await query.OrderByDescending(p => p.DateAdded).ToListAsync();
+
+        return View(new DepartmentPageViewModel
+        {
+            Department = department,
+            Products = products,
+            SelectedSubCategory = sub,
+            SelectedSize = size,
+            SelectedColor = color
+        });
+    }
+
+    // GET: /Shop - browse the full catalogue. "In stock" now means at least one active variant
+    // has stock; each card shows its available sizes/colours so a customer picks one
+    // before adding to cart (see AddToCart, keyed to a specific variantId).
     [HttpGet]
     public async Task<IActionResult> Index(string? search, string? category)
     {
-        var query = _context.Products.AsNoTracking().Where(p => p.IsActive && p.StockQuantity > 0);
+        var query = _context.Products
+            .AsNoTracking()
+            .Include(p => p.Variants)
+            .Where(p => p.IsActive && p.Variants.Any(v => v.IsActive && v.StockQuantity > 0));
 
         if (!string.IsNullOrWhiteSpace(search))
-            query = query.Where(p => p.Name.Contains(search) || p.SKU.Contains(search));
+            query = query.Where(p => p.Name.Contains(search) || p.SKU.Contains(search) || p.Variants.Any(v => v.SKU.Contains(search)));
 
         if (!string.IsNullOrWhiteSpace(category))
             query = query.Where(p => p.Category == category);
@@ -62,40 +113,53 @@ public class ShopController : Controller
         return View(products);
     }
 
-    // POST: /Shop/AddToCart
+    // POST: /Shop/AddToCart - now takes the exact variant (size/colour) chosen on the
+    // product card/detail page, not just the parent product.
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> AddToCart(int productId, int quantity = 1)
+    public async Task<IActionResult> AddToCart(int variantId, int quantity = 1, string? returnUrl = null)
     {
-        var product = await _context.Products.AsNoTracking().FirstOrDefaultAsync(p => p.ProductId == productId && p.IsActive);
-        if (product is null)
+        IActionResult BackToSource() =>
+            !string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl)
+                ? Redirect(returnUrl)
+                : RedirectToAction(nameof(Index));
+
+        var variant = await _context.ProductVariants
+            .AsNoTracking()
+            .Include(v => v.Product)
+            .FirstOrDefaultAsync(v => v.ProductVariantId == variantId && v.IsActive && v.Product.IsActive);
+
+        if (variant is null)
         {
-            this.ToastError("That product is no longer available.");
-            return RedirectToAction(nameof(Index));
+            this.ToastError("That size/colour is no longer available.");
+            return BackToSource();
         }
 
-        if (product.StockQuantity <= 0)
+        if (variant.StockQuantity <= 0)
         {
-            this.ToastError($"'{product.Name}' is out of stock.");
-            return RedirectToAction(nameof(Index));
+            this.ToastError($"'{variant.Product.Name}' ({variant.Size}/{variant.Color}) is out of stock.");
+            return BackToSource();
         }
 
         var cart = SessionCart.Get(HttpContext.Session);
-        var line = cart.Lines.FirstOrDefault(l => l.ProductId == productId);
+        var line = cart.Lines.FirstOrDefault(l => l.VariantId == variantId);
 
         var desiredQuantity = (line?.Quantity ?? 0) + Math.Max(1, quantity);
-        var capped = desiredQuantity > product.StockQuantity;
-        if (capped) desiredQuantity = product.StockQuantity; // never let the cart exceed what's actually in stock
+        var capped = desiredQuantity > variant.StockQuantity;
+        if (capped) desiredQuantity = variant.StockQuantity; // never let the cart exceed what's actually in stock
 
         if (line is null)
         {
             cart.Lines.Add(new CartLineViewModel
             {
-                ProductId = product.ProductId,
-                Name = product.Name,
-                SKU = product.SKU,
-                ImageUrl = product.ImageUrl,
-                UnitPrice = product.SellingPrice,
+                ProductId = variant.ProductId,
+                VariantId = variant.ProductVariantId,
+                Name = variant.Product.Name,
+                SKU = variant.SKU,
+                Size = variant.Size,
+                Color = variant.Color,
+                ImageUrl = variant.Product.ImageUrl,
+                UnitPrice = variant.EffectivePrice,
                 Quantity = desiredQuantity
             });
         }
@@ -107,11 +171,11 @@ public class ShopController : Controller
         SessionCart.Save(HttpContext.Session, cart);
 
         if (capped)
-            this.ToastWarning($"Only {product.StockQuantity} of '{product.Name}' available - added the max to your cart.");
+            this.ToastWarning($"Only {variant.StockQuantity} of '{variant.Product.Name}' available - added the max to your cart.");
         else
-            this.ToastSuccess($"Added {product.Name} to your cart.");
+            this.ToastSuccess($"Added {variant.Product.Name} ({variant.Size}/{variant.Color}) to your cart.");
 
-        return RedirectToAction(nameof(Index));
+        return BackToSource();
     }
 
     // GET: /Shop/Cart
@@ -124,10 +188,10 @@ public class ShopController : Controller
     // POST: /Shop/UpdateCartLine
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public IActionResult UpdateCartLine(int productId, int quantity)
+    public IActionResult UpdateCartLine(int variantId, int quantity)
     {
         var cart = SessionCart.Get(HttpContext.Session);
-        var line = cart.Lines.FirstOrDefault(l => l.ProductId == productId);
+        var line = cart.Lines.FirstOrDefault(l => l.VariantId == variantId);
 
         if (line is not null)
         {
@@ -145,10 +209,10 @@ public class ShopController : Controller
     // POST: /Shop/RemoveFromCart
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public IActionResult RemoveFromCart(int productId)
+    public IActionResult RemoveFromCart(int variantId)
     {
         var cart = SessionCart.Get(HttpContext.Session);
-        cart.Lines.RemoveAll(l => l.ProductId == productId);
+        cart.Lines.RemoveAll(l => l.VariantId == variantId);
         SessionCart.Save(HttpContext.Session, cart);
         this.ToastSuccess("Item removed from your cart.");
         return RedirectToAction(nameof(Cart));
@@ -157,6 +221,7 @@ public class ShopController : Controller
 
     // GET: /Shop/Checkout
     [HttpGet]
+    [Authorize(Roles = "Customer")]
     public async Task<IActionResult> Checkout()
     {
         var cart = SessionCart.Get(HttpContext.Session);
@@ -199,6 +264,7 @@ public class ShopController : Controller
     // redirect path creates it in PaymentsController.Callback once the customer comes back.
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [Authorize(Roles = "Customer")]
     public async Task<IActionResult> Checkout(CheckoutViewModel model, [FromServices] IPaymentService payments, [FromServices] IOrderFulfillmentService orderFulfillment)
     {
         var cart = SessionCart.Get(HttpContext.Session);
@@ -218,18 +284,19 @@ public class ShopController : Controller
 
         // Re-check stock before we ever send the customer to pay - no point charging them
         // for something that's gone. One query for the whole cart instead of one per line.
-        var checkoutProductIds = cart.Lines.Select(l => l.ProductId).Distinct().ToList();
-        var checkoutProducts = await _context.Products
+        var checkoutVariantIds = cart.Lines.Select(l => l.VariantId).Distinct().ToList();
+        var checkoutVariants = await _context.ProductVariants
             .AsNoTracking()
-            .Where(p => checkoutProductIds.Contains(p.ProductId))
-            .ToDictionaryAsync(p => p.ProductId);
+            .Include(v => v.Product)
+            .Where(v => checkoutVariantIds.Contains(v.ProductVariantId))
+            .ToDictionaryAsync(v => v.ProductVariantId);
 
         foreach (var line in cart.Lines)
         {
-            if (!checkoutProducts.TryGetValue(line.ProductId, out var product) || !product.IsActive)
+            if (!checkoutVariants.TryGetValue(line.VariantId, out var variant) || !variant.IsActive || !variant.Product.IsActive)
                 ModelState.AddModelError(string.Empty, $"'{line.Name}' is no longer available. Please remove it from your cart.");
-            else if (product.StockQuantity < line.Quantity)
-                ModelState.AddModelError(string.Empty, $"Only {product.StockQuantity} of '{line.Name}' left in stock - please update the quantity.");
+            else if (variant.StockQuantity < line.Quantity)
+                ModelState.AddModelError(string.Empty, $"Only {variant.StockQuantity} of '{line.Name}' ({variant.Size}/{variant.Color}) left in stock - please update the quantity.");
         }
 
         if (!ModelState.IsValid)
@@ -327,15 +394,116 @@ public class ShopController : Controller
     }
     // GET: /Shop/Confirmation/5
     [HttpGet]
+    [Authorize(Roles = "Customer")]
     public async Task<IActionResult> Confirmation(int id)
     {
         var userId = _userManager.GetUserId(User);
 
         var order = await _context.Orders
             .Include(o => o.OrderItems).ThenInclude(oi => oi.Product)
+            .Include(o => o.OrderItems).ThenInclude(oi => oi.ProductVariant)
             .FirstOrDefaultAsync(o => o.OrderId == id && o.CustomerId == userId);
 
         if (order is null) return NotFound();
         return View(order);
+    }
+
+    // GET: /Shop/Product/5 - a single style's detail page (gallery, variant picker, reviews).
+    [HttpGet]
+    public async Task<IActionResult> Product(int id)
+    {
+        var product = await _context.Products
+            .AsNoTracking()
+            .Include(p => p.Variants)
+            .Include(p => p.Department)
+            .FirstOrDefaultAsync(p => p.ProductId == id && p.IsActive);
+
+        if (product is null) return NotFound();
+
+        var images = await _context.ProductImages
+            .AsNoTracking()
+            .Where(i => i.ProductId == id)
+            .OrderBy(i => i.DisplayOrder)
+            .ToListAsync();
+
+        var reviews = await _context.ProductReviews
+            .AsNoTracking()
+            .Include(r => r.Customer)
+            .Where(r => r.ProductId == id)
+            .OrderByDescending(r => r.DateCreated)
+            .ToListAsync();
+
+        var isWishlisted = false;
+        var canReview = false;
+        if (User.Identity?.IsAuthenticated == true && User.IsInRole("Customer"))
+        {
+            var userId = _userManager.GetUserId(User);
+            isWishlisted = await _context.WishlistItems.AnyAsync(w => w.CustomerId == userId && w.ProductId == id);
+            canReview = !reviews.Any(r => r.CustomerId == userId);
+        }
+
+        return View(new ProductDetailViewModel
+        {
+            Product = product,
+            Images = images,
+            Reviews = reviews,
+            IsWishlisted = isWishlisted,
+            CanReview = canReview,
+            ReturnUrl = Url.Action(nameof(Product), new { id })
+        });
+    }
+
+    // POST: /Shop/SubmitReview - one review per customer per product. Recalculates the
+    // product's denormalized AverageRating/ReviewCount inline (no separate reviews service
+    // yet - see the TODO on ProductReview for the eventual IReviewService).
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    [Authorize(Roles = "Customer")]
+    public async Task<IActionResult> SubmitReview(int productId, int rating, string? comment)
+    {
+        var userId = _userManager.GetUserId(User)!;
+
+        if (rating < 1 || rating > 5)
+        {
+            this.ToastError("Please choose a rating between 1 and 5 stars.");
+            return RedirectToAction(nameof(Product), new { id = productId });
+        }
+
+        var alreadyReviewed = await _context.ProductReviews.AnyAsync(r => r.ProductId == productId && r.CustomerId == userId);
+        if (alreadyReviewed)
+        {
+            this.ToastWarning("You've already reviewed this product.");
+            return RedirectToAction(nameof(Product), new { id = productId });
+        }
+
+        // "Verified Purchase" = this customer has a Delivered order containing this product.
+        var isVerified = await _context.OrderItems
+            .AnyAsync(oi => oi.ProductId == productId
+                && oi.Order.CustomerId == userId
+                && oi.Order.Status == OrderStatus.Delivered);
+
+        _context.ProductReviews.Add(new ProductReview
+        {
+            ProductId = productId,
+            CustomerId = userId,
+            Rating = rating,
+            Comment = string.IsNullOrWhiteSpace(comment) ? null : comment.Trim(),
+            IsVerifiedPurchase = isVerified
+        });
+        await _context.SaveChangesAsync();
+
+        // Recalculate the product's denormalized rating fields from the review table.
+        var product = await _context.Products.FirstAsync(p => p.ProductId == productId);
+        var stats = await _context.ProductReviews
+            .Where(r => r.ProductId == productId)
+            .GroupBy(r => 1)
+            .Select(g => new { Count = g.Count(), Average = g.Average(r => r.Rating) })
+            .FirstAsync();
+        product.AverageRating = Math.Round(stats.Average, 1);
+        product.ReviewCount = stats.Count;
+        await _context.SaveChangesAsync();
+
+        this.ToastSuccess("Thanks - your review has been posted.");
+        return RedirectToAction(nameof(Product), new { id = productId });
     }
 }

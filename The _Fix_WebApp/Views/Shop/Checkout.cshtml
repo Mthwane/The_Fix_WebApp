@@ -1,124 +1,122 @@
 @model CheckoutViewModel
 @{
     ViewData["Title"] = "Checkout";
-    var fallbackImage = "https://placehold.co/64x64?text=No+Image";
+    Layout = "_StorefrontLayout";
+    var fallbackImage = "https://placehold.co/100x100/E4DEC9/24211B?text=No+Image";
+    var vat = FashionFix.Web.Security.TaxSettings.CalculateVat(Model.Cart.SubTotal);
+    var total = Model.Cart.SubTotal + vat;
 }
-<div class="container py-4" style="max-width:640px;">
-    <h2>Checkout</h2>
 
-    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+<section class="ffs-section" style="padding-top:32px;">
+    <div class="ffs-container" style="max-width:680px;">
+        <span class="ffs-eyebrow">Almost There</span>
+        <h1 style="font-family:'Fraunces',serif;font-size:2rem;margin-bottom:24px;">Checkout</h1>
 
-    <table class="table table-sm align-middle">
-        <thead><tr><th></th><th>Item</th><th>Qty</th><th>Total</th></tr></thead>
-        <tbody>
+        <div asp-validation-summary="ModelOnly" style="color:var(--ffs-clay);margin-bottom:16px;"></div>
+
+        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:24px;">
             @foreach (var line in Model.Cart.Lines)
             {
-                <tr>
-                    <td style="width:56px;">
-                        <img src="@(string.IsNullOrWhiteSpace(line.ImageUrl) ? fallbackImage : line.ImageUrl)"
-                             alt="@line.Name" class="rounded border" style="width:48px;height:48px;object-fit:cover;" />
-                    </td>
-                    <td>@line.Name</td>
-                    <td>@line.Quantity</td>
-                    <td>@line.LineTotal.ToString("C")</td>
-                </tr>
+                <div style="display:flex;gap:14px;align-items:center;background:var(--ffs-card);border:1px solid var(--ffs-border);border-radius:var(--ffs-radius);padding:10px 14px;">
+                    <img src="@(string.IsNullOrWhiteSpace(line.ImageUrl) ? fallbackImage : line.ImageUrl)"
+                         alt="@line.Name" style="width:52px;height:52px;object-fit:cover;border-radius:8px;flex-shrink:0;" />
+                    <div style="flex:1;">
+                        <div style="font-size:0.9rem;">@line.Name @if (line.Size != null || line.Color != null) { <span style="color:var(--ffs-ink-muted);">(@line.Size/@line.Color)</span> }</div>
+                        <div style="font-size:0.78rem;color:var(--ffs-ink-muted);">Qty @line.Quantity</div>
+                    </div>
+                    <div style="font-weight:600;font-family:'Fraunces',serif;">@line.LineTotal.ToString("C")</div>
+                </div>
             }
-        </tbody>
-    </table>
+        </div>
 
-    @{
-        var vat = FashionFix.Web.Security.TaxSettings.CalculateVat(Model.Cart.SubTotal);
-        var total = Model.Cart.SubTotal + vat;
-    }
-    <div class="d-flex justify-content-between"><span>Subtotal</span><span>@Model.Cart.SubTotal.ToString("C")</span></div>
-    <div class="d-flex justify-content-between text-muted"><span>VAT (15%)</span><span>@vat.ToString("C")</span></div>
-    <div class="d-flex justify-content-between fs-5 border-top pt-2 mt-2"><strong>Total</strong><strong>@total.ToString("C")</strong></div>
+        <div style="background:var(--ffs-cream-alt);border-radius:var(--ffs-radius);padding:16px 20px;margin-bottom:28px;">
+            <div style="display:flex;justify-content:space-between;font-size:0.88rem;margin-bottom:6px;"><span>Subtotal</span><span>@Model.Cart.SubTotal.ToString("C")</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:0.85rem;color:var(--ffs-ink-muted);margin-bottom:10px;"><span>VAT (15%)</span><span>@vat.ToString("C")</span></div>
+            <div style="display:flex;justify-content:space-between;border-top:1px solid var(--ffs-border);padding-top:10px;font-size:1.05rem;font-weight:600;font-family:'Fraunces',serif;"><span>Total</span><span>@total.ToString("C")</span></div>
+        </div>
 
-    <form asp-controller="Shop" asp-action="Checkout" method="post" class="mt-4">
+        <form asp-controller="Shop" asp-action="Checkout" method="post">
+            @Html.AntiForgeryToken()
 
-        <!-- Delivery address -->
-        <h5><i class="bi bi-geo-alt"></i> Deliver To</h5>
-        @if (!Model.Addresses.Any())
-        {
-            <div class="alert alert-warning d-flex justify-content-between align-items-center">
-                <span>You don't have a saved address yet.</span>
-                <a asp-controller="Customer" asp-action="AddAddress" class="btn btn-sm btn-dark">Add Address</a>
-            </div>
-        }
-        else
-        {
-            <div class="mb-3">
-                @foreach (var address in Model.Addresses)
-                {
-                    <div class="form-check border rounded p-2 mb-2">
-                        <input class="form-check-input" type="radio" name="SelectedAddressId" id="addr-@address.CustomerAddressId"
-                               value="@address.CustomerAddressId" checked="@(Model.SelectedAddressId == address.CustomerAddressId)" />
-                        <label class="form-check-label w-100" for="addr-@address.CustomerAddressId">
-                            <strong>@address.Label</strong>
-                            @if (address.IsDefault)
-                            {
-                                <span class="badge bg-secondary ms-1">Default</span>
-                            }
-                            <br />
-                            <span class="text-muted small">
-                                @address.RecipientName &middot; @address.AddressLine1, @address.City, @address.Province @address.PostalCode
+            <h5 style="font-family:'Fraunces',serif;font-size:1.1rem;margin-bottom:12px;">Deliver To</h5>
+            @if (!Model.Addresses.Any())
+            {
+                <div style="display:flex;justify-content:space-between;align-items:center;background:var(--ffs-cream-alt);border-radius:var(--ffs-radius);padding:14px 18px;margin-bottom:20px;">
+                    <span style="font-size:0.88rem;">You don't have a saved address yet.</span>
+                    <a asp-controller="Customer" asp-action="AddAddress" class="ffs-btn ffs-btn-forest" style="padding:8px 16px;font-size:0.8rem;">Add Address</a>
+                </div>
+            }
+            else
+            {
+                <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px;">
+                    @foreach (var address in Model.Addresses)
+                    {
+                        <label style="display:flex;gap:10px;align-items:flex-start;border:1px solid var(--ffs-border);border-radius:var(--ffs-radius);padding:12px 14px;cursor:pointer;">
+                            <input type="radio" name="SelectedAddressId" value="@address.CustomerAddressId" checked="@(Model.SelectedAddressId == address.CustomerAddressId)" style="margin-top:3px;" />
+                            <span>
+                                <strong>@address.Label</strong>
+                                @if (address.IsDefault)
+                                {
+                                    <span class="ffs-product-badge" style="position:static;font-size:0.6rem;margin-left:6px;">Default</span>
+                                }
+                                <br />
+                                <span style="font-size:0.82rem;color:var(--ffs-ink-muted);">@address.RecipientName &middot; @address.AddressLine1, @address.City, @address.Province @address.PostalCode</span>
                             </span>
                         </label>
-                    </div>
-                }
-                <a asp-controller="Customer" asp-action="AddAddress" class="small"><i class="bi bi-plus-lg"></i> Add a different address</a>
-            </div>
-        }
-        <span asp-validation-for="SelectedAddressId" class="text-danger"></span>
-
-        <hr />
-
-        <!-- Payment -->
-        <h5><i class="bi bi-credit-card"></i> Payment</h5>
-        <div class="mb-3">
-            <label asp-for="PaymentMethod" class="form-label"></label>
-            <select asp-for="PaymentMethod" class="form-select">
-                <option value="Cash">Cash on delivery</option>
-                <option value="CreditCard">Credit Card</option>
-                <option value="DebitCard">Debit Card</option>
-            </select>
-        </div>
-
-        @if (Model.SavedCards.Any())
-        {
-            <div class="mb-2">
-                @foreach (var card in Model.SavedCards)
-                {
-                    <div class="form-check border rounded p-2 mb-2">
-                        <input class="form-check-input" type="radio" name="SelectedPaymentMethodId" id="card-@card.CustomerPaymentMethodId"
-                               value="@card.CustomerPaymentMethodId" checked="@(Model.SelectedPaymentMethodId == card.CustomerPaymentMethodId)" />
-                        <label class="form-check-label text-capitalize" for="card-@card.CustomerPaymentMethodId">
-                            <i class="bi bi-credit-card-2-front"></i> @(card.CardType ?? "Card") ending in @card.Last4
-                            @if (card.IsDefault)
-                            {
-                                <span class="badge bg-secondary ms-1">Default</span>
-                            }
-                        </label>
-                    </div>
-                }
-                <div class="form-check border rounded p-2 mb-2">
-                    <input class="form-check-input" type="radio" name="SelectedPaymentMethodId" id="card-new" value=""
-                           checked="@(Model.SelectedPaymentMethodId is null)" />
-                    <label class="form-check-label" for="card-new"><i class="bi bi-plus-lg"></i> Pay with a new card</label>
+                    }
+                    <a asp-controller="Customer" asp-action="AddAddress" style="font-size:0.82rem;color:var(--ffs-forest);">+ Add a different address</a>
                 </div>
+            }
+            <span asp-validation-for="SelectedAddressId" style="color:var(--ffs-clay);font-size:0.82rem;"></span>
+
+            <hr style="border-color:var(--ffs-border);margin:24px 0;" />
+
+            <h5 style="font-family:'Fraunces',serif;font-size:1.1rem;margin-bottom:12px;">Payment</h5>
+            <div style="margin-bottom:16px;">
+                <label asp-for="PaymentMethod" class="form-label" style="font-size:0.85rem;"></label>
+                <select asp-for="PaymentMethod" class="form-select" style="border:1px solid var(--ffs-border);border-radius:8px;padding:8px 12px;">
+                    <option value="Cash">Cash on delivery</option>
+                    <option value="CreditCard">Credit Card</option>
+                    <option value="DebitCard">Debit Card</option>
+                </select>
             </div>
-        }
-        else
-        {
-            <p class="text-muted small">No saved cards yet - you'll pay on Paystack's secure page and can save the card there for next time.</p>
-        }
 
-        <div class="form-check mb-3">
-            <input asp-for="SaveCard" class="form-check-input" />
-            <label asp-for="SaveCard" class="form-check-label">Save this card for next time</label>
-            <div class="form-text">Only applies when paying with a new card - we never see or store your card number, only a reusable token from Paystack.</div>
-        </div>
+            @if (Model.SavedCards.Any())
+            {
+                <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
+                    @foreach (var card in Model.SavedCards)
+                    {
+                        <label style="display:flex;gap:10px;align-items:center;border:1px solid var(--ffs-border);border-radius:var(--ffs-radius);padding:10px 14px;cursor:pointer;">
+                            <input type="radio" name="SelectedPaymentMethodId" value="@card.CustomerPaymentMethodId" checked="@(Model.SelectedPaymentMethodId == card.CustomerPaymentMethodId)" />
+                            <span style="font-size:0.88rem;text-transform:capitalize;">
+                                @(card.CardType ?? "Card") ending in @card.Last4
+                                @if (card.IsDefault)
+                                {
+                                    <span class="ffs-product-badge" style="position:static;font-size:0.6rem;margin-left:6px;">Default</span>
+                                }
+                            </span>
+                        </label>
+                    }
+                    <label style="display:flex;gap:10px;align-items:center;border:1px solid var(--ffs-border);border-radius:var(--ffs-radius);padding:10px 14px;cursor:pointer;">
+                        <input type="radio" name="SelectedPaymentMethodId" value="" checked="@(Model.SelectedPaymentMethodId is null)" />
+                        <span style="font-size:0.88rem;">+ Pay with a new card</span>
+                    </label>
+                </div>
+            }
+            else
+            {
+                <p style="font-size:0.82rem;color:var(--ffs-ink-muted);">No saved cards yet - you'll pay on Paystack's secure page and can save the card there for next time.</p>
+            }
 
-        <button type="submit" class="btn btn-danger w-100">Place Order</button>
-    </form>
-</div>
+            <label style="display:flex;gap:8px;align-items:flex-start;margin:14px 0 28px;cursor:pointer;">
+                <input type="checkbox" asp-for="SaveCard" style="margin-top:3px;" />
+                <span>
+                    <span style="font-size:0.85rem;">Save this card for next time</span>
+                    <div style="font-size:0.78rem;color:var(--ffs-ink-muted);">Only applies when paying with a new card - we never see or store your card number, only a reusable token from Paystack.</div>
+                </span>
+            </label>
+
+            <button type="submit" class="ffs-btn ffs-btn-forest" style="width:100%;justify-content:center;">Place Order</button>
+        </form>
+    </div>
+</section>

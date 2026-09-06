@@ -79,19 +79,20 @@ public class PaymentsController : Controller
 
         // Final stock re-check - time has passed while the customer was on Paystack's page.
         // One IN-clause query for the whole cart instead of one FindAsync per line.
-        var checkoutProductIds = cart.Lines.Select(l => l.ProductId).Distinct().ToList();
-        var checkoutProducts = await _context.Products
+        var checkoutVariantIds = cart.Lines.Select(l => l.VariantId).Distinct().ToList();
+        var checkoutVariants = await _context.ProductVariants
             .AsNoTracking()
-            .Where(p => checkoutProductIds.Contains(p.ProductId))
-            .ToDictionaryAsync(p => p.ProductId);
+            .Include(v => v.Product)
+            .Where(v => checkoutVariantIds.Contains(v.ProductVariantId))
+            .ToDictionaryAsync(v => v.ProductVariantId);
 
         foreach (var line in cart.Lines)
         {
-            if (!checkoutProducts.TryGetValue(line.ProductId, out var product) || !product.IsActive || product.StockQuantity < line.Quantity)
+            if (!checkoutVariants.TryGetValue(line.VariantId, out var variant) || !variant.IsActive || !variant.Product.IsActive || variant.StockQuantity < line.Quantity)
             {
                 _logger.LogError(
-                    "Payment {Reference} verified for {Amount:C} but stock check failed for product {ProductId}.",
-                    actualReference, verifyResult.AmountRands, line.ProductId);
+                    "Payment {Reference} verified for {Amount:C} but stock check failed for variant {VariantId}.",
+                    actualReference, verifyResult.AmountRands, line.VariantId);
                 this.ToastError($"Your payment succeeded but '{line.Name}' is no longer available. Please contact support with reference {actualReference} for a refund.");
                 return RedirectToAction("Index", "Shop");
             }

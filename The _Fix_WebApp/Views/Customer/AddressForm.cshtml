@@ -1,71 +1,82 @@
-﻿@model AddressViewModel
+@model AddressViewModel
 @{
     ViewData["Title"] = Model.CustomerAddressId == 0 ? "Add Address" : "Edit Address";
+    Layout = "_StorefrontLayout";
 }
 
-<div class="container py-4" style="max-width: 500px;">
-    <a asp-controller="Customer" asp-action="Profile" class="btn btn-outline-secondary btn-sm mb-3">&larr; Back to Profile</a>
-    <h2>@(Model.CustomerAddressId == 0 ? "Add a Delivery Address" : "Edit Address")</h2>
+<section class="ffs-section" style="padding-top:32px;">
+    <div class="ffs-container" style="max-width:560px;">
+        <a asp-controller="Customer" asp-action="Profile" class="ffs-btn ffs-btn-outline" style="padding:7px 14px;font-size:0.8rem;margin-bottom:16px;display:inline-flex;">&larr; Back to Profile</a>
+        <h1 style="font-family:'Fraunces',serif;font-size:1.7rem;margin-bottom:20px;">@(Model.CustomerAddressId == 0 ? "Add a Delivery Address" : "Edit Address")</h1>
 
-    <form asp-controller="Customer" asp-action="SaveAddress" method="post">
-        <input type="hidden" asp-for="CustomerAddressId" />
-        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+        <form asp-controller="Customer" asp-action="SaveAddress" method="post">
+            @Html.AntiForgeryToken()
+            <input type="hidden" asp-for="CustomerAddressId" />
+            <div asp-validation-summary="ModelOnly" style="color:var(--ffs-clay);margin-bottom:10px;"></div>
 
-        <div class="mb-3">
-            <label asp-for="Label" class="form-label"></label>
-            <input asp-for="Label" class="form-control" placeholder="e.g. Home, Work" />
-            <span asp-validation-for="Label" class="text-danger"></span>
-        </div>
+            @{
+                string FieldStyle = "width:100%;border:1px solid var(--ffs-border);border-radius:8px;padding:9px 14px;font-size:0.88rem;";
+                string LabelStyle = "font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;";
+            }
 
-        <div class="mb-3">
-            <label asp-for="RecipientName" class="form-label"></label>
-            <input asp-for="RecipientName" class="form-control" />
-            <span asp-validation-for="RecipientName" class="text-danger"></span>
-        </div>
-
-        <div class="mb-3">
-            <label asp-for="PhoneNumber" class="form-label"></label>
-            <input asp-for="PhoneNumber" class="form-control" />
-            <span asp-validation-for="PhoneNumber" class="text-danger"></span>
-        </div>
-
-        <div class="mb-3">
-            <label asp-for="AddressLine1" class="form-label"></label>
-            <input asp-for="AddressLine1" class="form-control" />
-            <span asp-validation-for="AddressLine1" class="text-danger"></span>
-        </div>
-
-        <div class="mb-3">
-            <label asp-for="AddressLine2" class="form-label"></label>
-            <input asp-for="AddressLine2" class="form-control" />
-            <span asp-validation-for="AddressLine2" class="text-danger"></span>
-        </div>
-
-        <div class="row">
-            <div class="col-md-6 mb-3">
-                <label asp-for="City" class="form-label"></label>
-                <input asp-for="City" class="form-control" />
-                <span asp-validation-for="City" class="text-danger"></span>
+            <div style="margin-bottom:14px;">
+                <label asp-for="Label" style="@LabelStyle"></label>
+                <input asp-for="Label" style="@FieldStyle" placeholder="e.g. Home, Work" />
+                <span asp-validation-for="Label" style="color:var(--ffs-clay);font-size:0.8rem;"></span>
             </div>
-            <div class="col-md-6 mb-3">
-                <label asp-for="Province" class="form-label"></label>
-                <input asp-for="Province" class="form-control" placeholder="e.g. KwaZulu-Natal" />
-                <span asp-validation-for="Province" class="text-danger"></span>
+
+            <div style="margin-bottom:14px;">
+                <label asp-for="RecipientName" style="@LabelStyle"></label>
+                <input asp-for="RecipientName" style="@FieldStyle" />
+                <span asp-validation-for="RecipientName" style="color:var(--ffs-clay);font-size:0.8rem;"></span>
             </div>
-        </div>
 
-        <div class="mb-3">
-            <label asp-for="PostalCode" class="form-label"></label>
-            <input asp-for="PostalCode" class="form-control" style="max-width:160px;" />
-            <span asp-validation-for="PostalCode" class="text-danger"></span>
-        </div>
+            <div style="margin-bottom:14px;">
+                <label asp-for="PhoneNumber" style="@LabelStyle"></label>
+                <input asp-for="PhoneNumber" style="@FieldStyle" />
+                <span asp-validation-for="PhoneNumber" style="color:var(--ffs-clay);font-size:0.8rem;"></span>
+            </div>
 
-        <div class="form-check mb-3">
-            <input asp-for="IsDefault" class="form-check-input" />
-            <label asp-for="IsDefault" class="form-check-label"></label>
-        </div>
+            <div style="margin-bottom:14px;">
+                <label asp-for="AddressLine1" style="@LabelStyle"></label>
+                <input asp-for="AddressLine1" style="@FieldStyle" />
+                <span asp-validation-for="AddressLine1" style="color:var(--ffs-clay);font-size:0.8rem;"></span>
+            </div>
 
-        <button type="submit" class="btn btn-danger"><i class="bi bi-geo-alt"></i> Save Address</button>
-        <a asp-controller="Customer" asp-action="Profile" class="btn btn-link">Cancel</a>
-    </form>
-</div>
+            <div style="margin-bottom:14px;">
+                <label asp-for="AddressLine2" style="@LabelStyle"></label>
+                <input asp-for="AddressLine2" style="@FieldStyle" />
+                <span asp-validation-for="AddressLine2" style="color:var(--ffs-clay);font-size:0.8rem;"></span>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+                <div>
+                    <label asp-for="City" style="@LabelStyle"></label>
+                    <input asp-for="City" style="@FieldStyle" />
+                    <span asp-validation-for="City" style="color:var(--ffs-clay);font-size:0.8rem;"></span>
+                </div>
+                <div>
+                    <label asp-for="Province" style="@LabelStyle"></label>
+                    <input asp-for="Province" style="@FieldStyle" placeholder="e.g. KwaZulu-Natal" />
+                    <span asp-validation-for="Province" style="color:var(--ffs-clay);font-size:0.8rem;"></span>
+                </div>
+            </div>
+
+            <div style="margin-bottom:14px;">
+                <label asp-for="PostalCode" style="@LabelStyle"></label>
+                <input asp-for="PostalCode" style="@FieldStyle max-width:160px;" />
+                <span asp-validation-for="PostalCode" style="color:var(--ffs-clay);font-size:0.8rem;"></span>
+            </div>
+
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:22px;">
+                <input asp-for="IsDefault" />
+                <label asp-for="IsDefault" style="font-size:0.88rem;margin:0;cursor:pointer;"></label>
+            </div>
+
+            <div style="display:flex;gap:12px;align-items:center;">
+                <button type="submit" class="ffs-btn ffs-btn-forest">Save Address</button>
+                <a asp-controller="Customer" asp-action="Profile" style="font-size:0.85rem;color:var(--ffs-ink-muted);">Cancel</a>
+            </div>
+        </form>
+    </div>
+</section>

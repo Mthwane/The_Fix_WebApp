@@ -108,7 +108,7 @@
 
 @* If checkout was rejected (e.g. a stock check failed) the scanned cart is restored from the
    posted model instead of the cashier having to re-scan everything from scratch. *@
-<script id="restoreCartData" type="application/json">@Html.Raw(Json.Serialize(Model.CartItems.Select(i => new { productId = i.ProductId, name = i.ProductName, sku = i.SKU, quantity = i.Quantity, unitPrice = i.UnitPrice })))</script>
+<script id="restoreCartData" type="application/json">@Html.Raw(Json.Serialize(Model.CartItems.Select(i => new { productId = i.ProductId, variantId = i.VariantId, name = i.ProductName, sku = i.SKU, size = i.Size, color = i.Color, quantity = i.Quantity, unitPrice = i.UnitPrice })))</script>
 
 @section Scripts {
     <script src="~/js/site.js"></script>

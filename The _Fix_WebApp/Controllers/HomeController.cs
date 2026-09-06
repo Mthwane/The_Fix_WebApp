@@ -2,6 +2,7 @@ using FashionFix.Web.Data;
 using FashionFix.Web.Models.Entities;
 using FashionFix.Web.Models.ViewModels;
 using FashionFix.Web.Security;
+using FashionFix.Web.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -13,77 +14,163 @@ public class HomeController : Controller
 {
     private readonly ApplicationDbContext _context;
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly IDashboardService _dashboardService;
     private readonly ILogger<HomeController> _logger;
 
-    public HomeController(ApplicationDbContext context, UserManager<ApplicationUser> userManager, ILogger<HomeController> logger)
+    public HomeController(
+        ApplicationDbContext context,
+        UserManager<ApplicationUser> userManager,
+        IDashboardService dashboardService,
+        ILogger<HomeController> logger)
     {
         _context = context;
         _userManager = userManager;
+        _dashboardService = dashboardService;
         _logger = logger;
     }
 
-    // GET: / - the branded customer login page. Signed-in users get bounced to the
-    // page that matches their role (dashboard for staff, order history for customers).
+    // GET: / - the public storefront landing page. Anyone can browse it (anonymous visitors
+    // included) - only staff (Administrator/Manager/Employee/Owner) get bounced straight to
+    // their Dashboard instead, since they don't need the customer-facing view by default.
+    // Logged-in Customers see the storefront here too (with their cart/wishlist state),
+    // rather than being redirected away like they used to be when this route was the login form.
     [HttpGet]
     [AllowAnonymous]
-    public async Task<IActionResult> Index(string? returnUrl = null)
+    public async Task<IActionResult> Index()
     {
         if (User.Identity?.IsAuthenticated == true)
-            return await RedirectToRoleHome();
+        {
+            var user = await _userManager.GetUserAsync(User);
+            if (user is not null)
+            {
+                var roles = await _userManager.GetRolesAsync(user);
+                var isStaff = roles.Any(r => r is "Administrator" or "Manager" or "Employee" or "Owner");
+                if (isStaff)
+                    return RedirectToAction(nameof(Dashboard));
+            }
+        }
 
-        return View(new LoginViewModel { ReturnUrl = returnUrl });
+        var curated = await _context.FeaturedProducts
+            .AsNoTracking()
+            .Include(f => f.Product).ThenInclude(p => p.Variants)
+            .Where(f => f.IsActive && f.Product.IsActive)
+            .OrderBy(f => f.DisplayOrder)
+            .Take(8)
+            .ToListAsync();
+
+        List<TrendingCardViewModel> trending;
+        if (curated.Count > 0)
+        {
+            trending = curated.Select(f => new TrendingCardViewModel
+            {
+                Product = f.Product,
+                DisplayTitle = f.OverrideTitle ?? f.Product.Name,
+                DisplayImageUrl = f.OverrideImageUrl ?? f.Product.ImageUrl,
+                DisplayBadge = f.OverrideBadge ?? f.Product.Badge
+            }).ToList();
+        }
+        else
+        {
+            // No admin curation yet - fall back to an automatic pick so the section is never empty.
+            var automatic = await _context.Products
+                .AsNoTracking()
+                .Include(p => p.Variants)
+                .Where(p => p.IsActive && p.Variants.Any(v => v.IsActive && v.StockQuantity > 0))
+                .OrderByDescending(p => p.ReviewCount)
+                .ThenByDescending(p => p.AverageRating)
+                .Take(4)
+                .ToListAsync();
+
+            trending = automatic.Select(p => new TrendingCardViewModel
+            {
+                Product = p,
+                DisplayTitle = p.Name,
+                DisplayImageUrl = p.ImageUrl,
+                DisplayBadge = p.Badge
+            }).ToList();
+        }
+
+        var departments = await _context.Departments
+            .AsNoTracking()
+            .Where(d => d.IsActive)
+            .OrderBy(d => d.DisplayOrder)
+            .ToListAsync();
+
+        var siteSettings = await _context.SiteSettings.AsNoTracking().FirstOrDefaultAsync(s => s.Id == 1)
+            ?? new SiteSettings();
+
+        return View(new StorefrontLandingViewModel
+        {
+            Trending = trending,
+            Departments = departments,
+            SiteSettings = siteSettings
+        });
     }
 
     // GET: /Home/Dashboard - dashboard of business statistics (US-04, US-05).
     // Staff-only: customers get their own account area instead (see CustomerController).
-    // Always queries live from the database - no caching - so it reflects every sale,
-    // return, and stock change the moment it happens.
+    // Which sections get computed is driven entirely by the current user's permission claims -
+    // this IS the "configurable through roles and perms" mechanism: adjust a role's
+    // permissions on the Roles screen and the corresponding widgets appear/disappear here,
+    // with no separate dashboard-config system to keep in sync.
     [HttpGet]
     [Authorize(Policy = Permissions.DashboardView)]
     public async Task<IActionResult> Dashboard()
     {
-        var today = DateTime.UtcNow.Date;
-        var monthStart = new DateTime(today.Year, today.Month, 1);
-
-        var model = new DashboardViewModel
-        {
-            TodaysSales = await _context.Orders
-                .Where(o => o.DateCreated >= today)
-                .SumAsync(o => (decimal?)o.GrandTotal) ?? 0,
-
-            TodaysOrderCount = await _context.Orders
-                .CountAsync(o => o.DateCreated >= today),
-
-            MonthToDateRevenue = await _context.Orders
-                .Where(o => o.DateCreated >= monthStart)
-                .SumAsync(o => (decimal?)o.GrandTotal) ?? 0,
-
-            TotalActiveProducts = await _context.Products.CountAsync(p => p.IsActive),
-
-            LowStockProducts = await _context.Products
-                .Where(p => p.IsActive && p.StockQuantity <= p.LowStockThreshold)
-                .OrderBy(p => p.StockQuantity)
-                .Take(10)
-                .ToListAsync(),
-
-            RecentOrders = await _context.Orders
-                .OrderByDescending(o => o.DateCreated)
-                .Take(5)
-                .ToListAsync()
-        };
-
-        model.LowStockCount = model.LowStockProducts.Count;
+        var sections = BuildSectionsForCurrentUser();
+        var model = await _dashboardService.BuildAsync(sections, _userManager.GetUserId(User));
 
         // Low-stock notification (US-03): surfaces as a toast every time a staff member
         // lands on the dashboard while items are below threshold, on top of the table below.
-        if (model.LowStockCount > 0 && Can(Permissions.ProductsManage))
+        if (sections.HasFlag(DashboardSections.Inventory) && model.LowStockCount > 0)
         {
-            var names = string.Join(", ", model.LowStockProducts.Take(3).Select(p => p.Name));
+            var names = string.Join(", ", model.LowStockVariants.Take(3).Select(v => $"{v.Product.Name} ({v.Size}/{v.Color})"));
             var suffix = model.LowStockCount > 3 ? $" and {model.LowStockCount - 3} more" : "";
             this.ToastWarning($"Low stock: {names}{suffix}.");
         }
 
         return View(model);
+    }
+
+    // GET: /Home/DashboardData - polled client-side every 15-30s to refresh the dashboard's
+    // numbers in place, the same "poll, don't push" pattern already used for courier tracking
+    // (ICourierService.RefreshTrackingAsync) - no SignalR, no fake-live socket claims.
+    [HttpGet]
+    [Authorize(Policy = Permissions.DashboardView)]
+    public async Task<IActionResult> DashboardData()
+    {
+        var sections = BuildSectionsForCurrentUser();
+        var model = await _dashboardService.BuildAsync(sections, _userManager.GetUserId(User));
+
+        return Json(new
+        {
+            todaysSales = model.TodaysSales,
+            todaysOrderCount = model.TodaysOrderCount,
+            monthToDateRevenue = model.MonthToDateRevenue,
+            averageOrderValueToday = model.AverageOrderValueToday,
+            lowStockCount = model.LowStockCount,
+            ordersNeedingAction = model.OrdersNeedingAction,
+            pendingApprovalCount = model.PendingApprovalCount,
+            attentionItems = model.AttentionItems
+        });
+    }
+
+    private DashboardSections BuildSectionsForCurrentUser()
+    {
+        var sections = DashboardSections.CoreKpis; // everyone who can reach this page gets the base KPIs
+
+        if (Can(Permissions.ProductsManage)) sections |= DashboardSections.Inventory;
+        if (Can(Permissions.OrdersManage)) sections |= DashboardSections.Orders;
+        if (Can(Permissions.ReturnsProcess)) sections |= DashboardSections.Returns;
+        if (Can(Permissions.SuppliersManage) || Can(Permissions.PurchaseOrdersManage)) sections |= DashboardSections.SupplyChain;
+        if (Can(Permissions.PurchaseOrdersApprove)) sections |= DashboardSections.Approvals;
+        if (Can(Permissions.ReportsView)) sections |= DashboardSections.Reports;
+        if (Can(Permissions.StorefrontManage)) sections |= DashboardSections.Storefront;
+        if (Can(Permissions.EmployeesManage)) sections |= DashboardSections.Staff;
+        if (Can(Permissions.AuditLogsView)) sections |= DashboardSections.AuditActivity;
+        if (Can(Permissions.PosUse) || Can(Permissions.ReportsView)) sections |= DashboardSections.Shift;
+
+        return sections;
     }
 
     // POST: /Home/LogClientError - best-effort sink for uncaught JS errors, so a failure
@@ -116,7 +203,7 @@ public class HomeController : Controller
     // generic message so real errors don't get mislabeled as a missing page.
     [HttpGet]
     [AllowAnonymous]
-    public IActionResult StatusCode(int code)
+    public new IActionResult StatusCode(int code)
     {
         if (code == 404) return View("NotFound");
 
@@ -125,22 +212,6 @@ public class HomeController : Controller
     }
 
     private bool Can(string permission) => User.HasClaim(Permissions.ClaimType, permission);
-
-    private async Task<IActionResult> RedirectToRoleHome()
-    {
-        var user = await _userManager.GetUserAsync(User);
-        if (user is not null)
-        {
-            var roles = await _userManager.GetRolesAsync(user);
-            if (roles.Contains("Customer") &&
-                !roles.Any(r => r is "Administrator" or "Manager" or "Employee" or "Owner"))
-            {
-                return RedirectToAction("Orders", "Customer");
-            }
-        }
-
-        return RedirectToAction(nameof(Dashboard));
-    }
 }
 
 public class ClientErrorReport

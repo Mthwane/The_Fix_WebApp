@@ -1,0 +1,17 @@
+@{
+    ViewData["Title"] = "Start Shift";
+}
+<div class="container py-4" style="max-width:480px;">
+    <h2>Start Shift</h2>
+    <p class="text-muted">Count the cash in the drawer before your first sale, so anything short or over at close-out is visible.</p>
+
+    <form asp-action="StartShift" method="post" class="card p-4">
+        @Html.AntiForgeryToken()
+        <div class="mb-3">
+            <label class="form-label">Opening Float</label>
+            <input type="number" name="openingFloat" step="0.01" min="0" class="form-control form-control-lg" required autofocus />
+        </div>
+        <button type="submit" class="btn btn-primary btn-lg">Start Shift</button>
+        <a asp-action="Index" class="btn btn-link">Skip for now</a>
+    </form>
+</div>

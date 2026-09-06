@@ -1,0 +1,63 @@
+@model List<ProductImage>
+@{
+    var product = ViewBag.Product as Product;
+    ViewData["Title"] = $"Images - {product?.Name}";
+}
+<div class="container py-4">
+    <div class="mb-3">
+        <h2 class="mb-0">Image Gallery: @product?.Name</h2>
+        <p class="text-muted mb-0">Additional photos for this product's detail page. The main product photo (used on cards/grids) is still set on the product's own Edit screen.</p>
+        <a asp-action="Edit" asp-route-id="@product?.ProductId" class="btn btn-sm btn-link ps-0">&larr; Back to Product</a>
+    </div>
+
+    <form asp-action="AddImage" method="post" class="row g-2 mb-4 align-items-end">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="productId" value="@product?.ProductId" />
+        <div class="col-md-7">
+            <label class="form-label small">Image URL</label>
+            <input name="imageUrl" class="form-control" placeholder="https://..." required />
+        </div>
+        <div class="col-md-3 form-check mb-2">
+            <input type="checkbox" name="isPrimary" value="true" class="form-check-input" id="isPrimaryCheck" />
+            <label class="form-check-label" for="isPrimaryCheck">Set as primary gallery image</label>
+        </div>
+        <div class="col-md-2">
+            <button type="submit" class="btn btn-primary w-100">+ Add</button>
+        </div>
+    </form>
+
+    @if (!Model.Any())
+    {
+        <div class="alert alert-info">No gallery images yet - the product page will just show the main product photo.</div>
+    }
+    else
+    {
+        <div class="row g-3">
+            @foreach (var img in Model)
+            {
+                <div class="col-md-3">
+                    <div class="card h-100">
+                        <img src="@img.ImageUrl" class="card-img-top" style="aspect-ratio:1;object-fit:cover;" alt="" />
+                        <div class="card-body">
+                            @if (img.IsPrimary)
+                            {
+                                <span class="badge bg-success mb-2">Primary</span>
+                            }
+                            else
+                            {
+                                <form asp-action="SetPrimaryImage" asp-route-id="@img.ProductImageId" method="post" class="d-inline">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="btn btn-sm btn-outline-secondary mb-2">Make Primary</button>
+                                </form>
+                            }
+                            <form asp-action="RemoveImage" asp-route-id="@img.ProductImageId" method="post">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="btn btn-sm btn-outline-danger w-100" onclick="return confirm('Remove this image?');">Remove</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>

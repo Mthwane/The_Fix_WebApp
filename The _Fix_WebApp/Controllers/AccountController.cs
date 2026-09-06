@@ -35,15 +35,15 @@ public class AccountController : Controller
         _logger = logger;
     }
 
-    // GET: /Account/Login - the customer login form itself lives on Home/Index (the branded
-    // landing page), so a direct GET here just lands you back on that page.
+    // GET: /Account/Login - the branded customer/staff login form. Lives here now (not on
+    // Home/Index) since Home/Index is the public storefront landing page.
     [HttpGet]
     public IActionResult Login(string? returnUrl = null)
     {
         if (User.Identity?.IsAuthenticated == true)
-            return RedirectToAction("Dashboard", "Home");
+            return RedirectToAction("Index", "Home"); // branches staff -> Dashboard, Customer -> storefront
 
-        return RedirectToAction("Index", "Home", new { returnUrl });
+        return View(new LoginViewModel { ReturnUrl = returnUrl });
     }
 
     // POST: /Account/Login - handles BOTH the customer login form (Home/Index) and the
@@ -52,7 +52,7 @@ public class AccountController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Login(LoginViewModel model)
     {
-        var viewName = model.IsEmployeeLogin ? "EmployeeLogin" : "~/Views/Home/Index.cshtml";
+        var viewName = model.IsEmployeeLogin ? "EmployeeLogin" : "Login";
 
         if (!ModelState.IsValid)
             return View(viewName, model);

@@ -43,10 +43,12 @@ public class CustomerController : Controller
     {
         var userId = _userManager.GetUserId(User);
 
+
         var query = _context.Orders
             .AsNoTracking()
             .Where(o => o.CustomerId == userId)
             .Include(o => o.OrderItems).ThenInclude(oi => oi.Product)
+            .Include(o => o.OrderItems).ThenInclude(oi => oi.ProductVariant)
             .AsQueryable();
 
         if (category.HasValue)
@@ -104,10 +106,17 @@ public class CustomerController : Controller
         {
             order.Status = OrderStatus.Cancelled;
 
-            // One round trip for every item on the order, instead of one per line.
-            await _inventoryService.IncrementStockBatchAsync(
-                order.OrderItems.Select(i => (i.ProductId, i.Quantity)),
-                InventoryChangeReason.OrderCancelled);
+            // One round trip for every item on the order, instead of one per line. Items
+            // from before the variant rework may have a null ProductVariantId - those can't
+            // be restocked automatically and are skipped with a log entry rather than throwing.
+            var restockLines = order.OrderItems.Where(i => i.ProductVariantId.HasValue)
+                .Select(i => (i.ProductVariantId!.Value, i.Quantity)).ToList();
+            var unrestockable = order.OrderItems.Where(i => !i.ProductVariantId.HasValue).ToList();
+            if (unrestockable.Count > 0)
+                _logger.LogWarning("Order {OrderNumber} cancelled with {Count} pre-variant line item(s) that could not be auto-restocked.", order.OrderNumber, unrestockable.Count);
+
+            if (restockLines.Count > 0)
+                await _inventoryService.IncrementStockBatchAsync(restockLines, InventoryChangeReason.OrderCancelled);
 
             _context.AuditLogs.Add(new AuditLog
             {
@@ -126,6 +135,51 @@ public class CustomerController : Controller
         }
 
         return RedirectToAction(nameof(Orders));
+    }
+
+    // GET: /Customer/Wishlist - saved products (heart icon in the storefront header/cards).
+    [HttpGet]
+    public async Task<IActionResult> Wishlist()
+    {
+        var userId = _userManager.GetUserId(User);
+
+        var items = await _context.WishlistItems
+            .AsNoTracking()
+            .Include(w => w.Product).ThenInclude(p => p.Variants)
+            .Where(w => w.CustomerId == userId)
+            .OrderByDescending(w => w.DateAdded)
+            .ToListAsync();
+
+        return View(items);
+    }
+
+    // POST: /Customer/ToggleWishlist - adds the product if not already saved, removes it if it is.
+    // Called from a heart icon on a product card, so it redirects back to wherever the user came from.
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ToggleWishlist(int productId, string? returnUrl)
+    {
+        var userId = _userManager.GetUserId(User);
+
+        var existing = await _context.WishlistItems
+            .FirstOrDefaultAsync(w => w.CustomerId == userId && w.ProductId == productId);
+
+        if (existing is not null)
+        {
+            _context.WishlistItems.Remove(existing);
+            this.ToastSuccess("Removed from your wishlist.");
+        }
+        else
+        {
+            _context.WishlistItems.Add(new WishlistItem { CustomerId = userId!, ProductId = productId });
+            this.ToastSuccess("Saved to your wishlist.");
+        }
+
+        await _context.SaveChangesAsync();
+
+        return !string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl)
+            ? Redirect(returnUrl)
+            : RedirectToAction(nameof(Wishlist));
     }
 
     // GET: /Customer/Profile - view/update personal information (US-11).

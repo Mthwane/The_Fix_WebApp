@@ -1,0 +1,148 @@
+@using Microsoft.AspNetCore.Identity
+@using FashionFix.Web.Models.Entities
+@inject UserManager<ApplicationUser> UserManager
+@{
+    bool Can(string permission) => User.HasClaim(Permissions.ClaimType, permission);
+    var currentUser = await UserManager.GetUserAsync(User);
+    var currentAction = ViewContext.RouteData.Values["action"]?.ToString();
+    var currentController = ViewContext.RouteData.Values["controller"]?.ToString();
+    string NavClass(string controller) => currentController == controller ? "stf-nav-link active" : "stf-nav-link";
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>@(ViewData["Title"] != null ? $"{ViewData["Title"]} - Fashion Fix Staff" : "Fashion Fix Staff")</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Newsreader:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="~/css/staff.css" asp-append-version="true" />
+    @await RenderSectionAsync("Styles", required: false)
+</head>
+<body class="stf-page">
+    <div class="stf-shell">
+        <aside class="stf-sidebar">
+            <div class="stf-brand">FashionFix</div>
+            <div class="stf-brand-sub">Staff Operations</div>
+
+            <div class="stf-nav-label">Operations Core</div>
+            @if (Can(Permissions.DashboardView))
+            {
+                <a class="@NavClass("Home")" asp-controller="Home" asp-action="Dashboard">Dashboard</a>
+            }
+            @if (Can(Permissions.EmployeesManage))
+            {
+                <a class="@NavClass("Employees")" asp-controller="Employees" asp-action="Index">Staff &amp; Employees</a>
+            }
+            @if (Can(Permissions.RolesManage))
+            {
+                <a class="@NavClass("Roles")" asp-controller="Roles" asp-action="Index">Roles &amp; Permissions</a>
+            }
+            @if (Can(Permissions.AuditLogsView))
+            {
+                <a class="@NavClass("AuditLogs")" asp-controller="Employees" asp-action="AuditLogs">Audit Logs &amp; Trail</a>
+            }
+            @if (Can(Permissions.ProductsManage))
+            {
+                <a class="@NavClass("Products")" asp-controller="Products" asp-action="Index">Product Catalogue</a>
+                <a class="@NavClass("Pricing")" asp-controller="Pricing" asp-action="Index">Pricing</a>
+            }
+            @if (Can(Permissions.PosUse))
+            {
+                <a class="@NavClass("Pos")" asp-controller="Pos" asp-action="Index">POS Till Workstation</a>
+            }
+            @if (Can(Permissions.OrdersManage))
+            {
+                <a class="@NavClass("Orders")" asp-controller="Orders" asp-action="Index">Orders &amp; Dispatches</a>
+
+            }
+            @if (Can(Permissions.OrdersManage))
+{
+    <a class="@NavClass("Orders")" asp-controller="Orders" asp-action="Index">Orders &amp; Dispatches</a>
+}
+
+@if (Can(Permissions.SuppliersManage) || Can(Permissions.PurchaseOrdersManage) || Can(Permissions.ReturnsProcess))
+{
+    <div class="stf-nav-label">Supply Chain</div>
+}
+@if (Can(Permissions.SuppliersManage))
+{
+    <a class="@NavClass("Suppliers")" asp-controller="Suppliers" asp-action="Index">Suppliers</a>
+}
+@if (Can(Permissions.PurchaseOrdersManage))
+{
+    <a class="@NavClass("PurchaseOrders")" asp-controller="PurchaseOrders" asp-action="Index">Purchase Orders</a>
+    <a class="@NavClass("RestockBundles")" asp-controller="RestockBundles" asp-action="Index">Restock Bundles</a>
+}
+@if (Can(Permissions.ReturnsProcess))
+{
+    <a class="@NavClass("Returns")" asp-controller="Returns" asp-action="Index">Returns</a>
+}
+
+@if (Can(Permissions.ReportsView))
+{
+    <a class="@NavClass("Reports")" asp-controller="Reports" asp-action="Index">Reports &amp; Margins</a>
+}
+            @if (Can(Permissions.ReportsView))
+            {
+                <a class="@NavClass("Reports")" asp-controller="Reports" asp-action="Index">Reports &amp; Margins</a>
+            }
+
+            <div class="stf-sidebar-footer">
+                @if (currentUser is not null)
+                {
+                    <div class="stf-user-chip">
+                        <div class="stf-user-avatar">@(string.Concat(currentUser.FullName.Split(' ').Select(w => w.Length > 0 ? w[0] : ' ')).ToUpperInvariant())</div>
+                        <div>
+                            <div style="font-weight:600;">@currentUser.FullName</div>
+                            <div style="color:var(--stf-outline);font-size:0.72rem;">@currentUser.JobPosition</div>
+                        </div>
+                    </div>
+                }
+                <form asp-controller="Account" asp-action="Logout" method="post" style="margin-top:6px;">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="stf-btn stf-btn-outline" style="width:100%;justify-content:center;padding:7px;font-size:0.78rem;">Sign Out</button>
+                </form>
+            </div>
+        </aside>
+
+        <div class="stf-main">
+            <div class="stf-topbar">
+                <div class="stf-topbar-left">
+                    <span class="stf-chip">Cape Town V&amp;A Waterfront Sanctuary</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:10px;">
+                    @if (currentUser is not null)
+                    {
+                        <span style="font-size:0.85rem;">@currentUser.FullName</span>
+                    }
+                </div>
+            </div>
+
+            @RenderBody()
+        </div>
+    </div>
+
+    <div id="toastContainer" style="position:fixed; bottom:24px; right:24px; z-index:1080; display:flex; flex-direction:column; gap:10px;">
+        @if (TempData["ToastMessage"] is string toastMessage)
+        {
+            var toastType = TempData["ToastType"] as string ?? "success";
+            <div class="toast align-items-center text-bg-@toastType border-0" role="alert" data-toast-type="@toastType">
+                <div class="d-flex">
+                    <div class="toast-body">@toastMessage</div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+            </div>
+        }
+    </div>
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.querySelectorAll('#toastContainer .toast').forEach(function (el) {
+            new bootstrap.Toast(el, { delay: 5000 }).show();
+        });
+    </script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

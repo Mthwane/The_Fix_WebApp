@@ -62,6 +62,7 @@ public class OrderFulfillmentService : IOrderFulfillmentService
             order.OrderItems.Add(new OrderItem
             {
                 ProductId = line.ProductId,
+                ProductVariantId = line.VariantId,
                 Quantity = line.Quantity,
                 UnitPrice = line.UnitPrice,
                 LineTotal = line.LineTotal
@@ -73,12 +74,12 @@ public class OrderFulfillmentService : IOrderFulfillmentService
 
         // One round trip and one commit for the whole cart, instead of one query + one
         // commit per line item.
-        var updatedProducts = await _inventoryService.DecrementStockBatchAsync(
-            cart.Lines.Select(l => (l.ProductId, l.Quantity)));
+        var updatedVariants = await _inventoryService.DecrementStockBatchAsync(
+            cart.Lines.Select(l => (l.VariantId, l.Quantity)));
 
-        var lowStockProductIds = updatedProducts.Where(p => p.IsLowStock).Select(p => p.ProductId).ToHashSet();
+        var lowStockVariantIds = updatedVariants.Where(v => v.IsLowStock).Select(v => v.ProductVariantId).ToHashSet();
         var newlyLowStock = cart.Lines
-            .Where(l => lowStockProductIds.Contains(l.ProductId))
+            .Where(l => lowStockVariantIds.Contains(l.VariantId))
             .Select(l => l.Name)
             .ToList();
         if (newlyLowStock.Count > 0)

@@ -1,0 +1,25 @@
+@model ShiftSession
+@{
+    ViewData["Title"] = "End Shift";
+    decimal expected = ViewBag.ExpectedCash;
+}
+<div class="container py-4" style="max-width:480px;">
+    <h2>End Shift</h2>
+    <p class="text-muted">Opened @Model.DateOpened.ToLocalTime().ToString("dd MMM, HH:mm") with a float of @Model.OpeningFloat.ToString("C").</p>
+
+    <div class="alert alert-info">Expected cash in drawer: <strong>@expected.ToString("C")</strong> (opening float + cash sales this shift)</div>
+
+    <form asp-action="EndShift" method="post" class="card p-4">
+        @Html.AntiForgeryToken()
+        <div class="mb-3">
+            <label class="form-label">Counted Closing Float</label>
+            <input type="number" name="closingFloat" step="0.01" min="0" class="form-control form-control-lg" required autofocus />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Notes (optional)</label>
+            <textarea name="notes" class="form-control" rows="2" placeholder="Explain any variance, if there is one"></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary btn-lg">Close Shift</button>
+        <a asp-action="Index" class="btn btn-link">Cancel</a>
+    </form>
+</div>

@@ -2,6 +2,7 @@ using FashionFix.Web.Data;
 using FashionFix.Web.Models.Entities;
 using FashionFix.Web.Security;
 using FashionFix.Web.Services;
+using FashionFix.Web.Services.Courier;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -112,6 +113,7 @@ public class OrdersController : Controller
             .Include(o => o.Customer)
             .Include(o => o.ProcessedByUser)
             .Include(o => o.OrderItems).ThenInclude(oi => oi.Product)
+            .Include(o => o.OrderItems).ThenInclude(oi => oi.ProductVariant)
             .FirstOrDefaultAsync(o => o.OrderId == id);
 
         if (order is null) return NotFound();
@@ -191,10 +193,18 @@ public class OrdersController : Controller
         {
             order.Status = OrderStatus.Cancelled;
 
-            // One round trip for every item on the order, instead of one per line.
-            await _inventoryService.IncrementStockBatchAsync(
-                order.OrderItems.Select(i => (i.ProductId, i.Quantity)),
-                InventoryChangeReason.OrderCancelled);
+            // One round trip for every item on the order, instead of one per line. Items
+            // from before the variant rework may have a null ProductVariantId - those can't
+            // be restocked automatically (we no longer know which size/colour to credit)
+            // and are skipped with a log entry rather than throwing.
+            var restockLines = order.OrderItems.Where(i => i.ProductVariantId.HasValue)
+                .Select(i => (i.ProductVariantId!.Value, i.Quantity)).ToList();
+            var unrestockable = order.OrderItems.Where(i => !i.ProductVariantId.HasValue).ToList();
+            if (unrestockable.Count > 0)
+                _logger.LogWarning("Order {OrderNumber} cancelled with {Count} pre-variant line item(s) that could not be auto-restocked.", order.OrderNumber, unrestockable.Count);
+
+            if (restockLines.Count > 0)
+                await _inventoryService.IncrementStockBatchAsync(restockLines, InventoryChangeReason.OrderCancelled);
 
             _context.AuditLogs.Add(new AuditLog
             {
@@ -222,6 +232,88 @@ public class OrdersController : Controller
         }
 
         return RedirectToAction(nameof(Index));
+    }
+
+    // ===================== Courier delivery =====================
+
+    // POST: /Orders/BookDelivery/5 - creates the waybill at The Courier Guy for an online order.
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> BookDelivery(int id, [FromServices] ICourierService courier)
+    {
+        var order = await _context.Orders
+            .Include(o => o.Customer)
+            .FirstOrDefaultAsync(o => o.OrderId == id);
+
+        if (order is null) return NotFound();
+
+        var result = await courier.CreateOrderShipmentAsync(order);
+        if (!result.Success)
+        {
+            this.ToastError(result.ErrorMessage!);
+            return RedirectToAction(nameof(Index));
+        }
+
+        // Booking the courier is what "shipped" actually means for an online order, so advance
+        // the status here rather than making staff do it as a separate manual step.
+        if (order.Status is OrderStatus.Pending or OrderStatus.Processing)
+            order.Status = OrderStatus.Shipped;
+
+        await _context.SaveChangesAsync();
+
+        this.ToastSuccess($"Waybill {result.Data!.TrackingReference} created for {order.OrderNumber}.");
+        return RedirectToAction(nameof(Index));
+    }
+
+    // POST: /Orders/RefreshTracking/5 - pull fresh tracking for one shipment on demand.
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> RefreshTracking(int id, [FromServices] ICourierService courier)
+    {
+        var result = await courier.RefreshTrackingAsync(id, force: true);
+        if (!result.Success) this.ToastError(result.ErrorMessage!);
+        else this.ToastSuccess($"Tracking updated - {result.Data!.Stage}.");
+
+        return RedirectToAction(nameof(Index));
+    }
+
+    // GET: /Orders/TrackingStatus - JSON for the dashboard's periodic poll. Returns the locally
+    // cached status for every live shipment and only hits the courier for ones past the cache
+    // window, so a page polling every 30s doesn't turn into 30s-interval API hammering.
+    [HttpGet]
+    public async Task<IActionResult> TrackingStatus([FromServices] ICourierService courier)
+    {
+        var shipments = await _context.CourierShipments
+            .Include(s => s.Order)
+            .Where(s => s.OrderId != null && s.Status != "delivered" && s.Status != "cancelled")
+            .ToListAsync();
+
+        foreach (var shipment in shipments)
+            await courier.RefreshTrackingAsync(shipment.CourierShipmentId); // respects cache window
+
+        return Json(shipments.Select(s => new
+        {
+            orderId = s.OrderId,
+            orderNumber = s.Order?.OrderNumber,
+            waybill = s.TrackingReference,
+            status = s.Status,
+            stage = s.Stage,
+            lastSynced = s.LastSyncedAt
+        }));
+    }
+
+    // GET: /Orders/Waybill/5 - redirects to the courier's signed PDF (expires after 24h).
+    [HttpGet]
+    public async Task<IActionResult> Waybill(int id, [FromServices] ICourierService courier)
+    {
+        var result = await courier.GetLabelUrlAsync(id);
+        if (!result.Success)
+        {
+            this.ToastError(result.ErrorMessage!);
+            return RedirectToAction(nameof(Index));
+        }
+
+        return Redirect(result.Data!);
     }
 }
 

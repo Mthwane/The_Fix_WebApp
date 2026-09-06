@@ -1,0 +1,113 @@
+@model RestockBundle
+@{
+    ViewData["Title"] = Model.Name;
+    Layout = "_StaffLayout";
+    var suppliers = (List<Supplier>)ViewBag.Suppliers;
+}
+
+<div class="stf-content">
+    <div class="stf-page-head">
+        <div>
+            <span class="stf-eyebrow">Restock Bundle &middot; @Model.Season</span>
+            <h1>@Model.Name</h1>
+            @if (!string.IsNullOrWhiteSpace(Model.Description))
+            {
+                <p>@Model.Description</p>
+            }
+        </div>
+        <div style="display:flex;gap:10px;">
+            <a asp-action="Edit" asp-route-id="@Model.RestockBundleId" class="stf-btn stf-btn-outline">Edit</a>
+            <a asp-action="Index" class="stf-btn stf-btn-outline">&larr; Back</a>
+        </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:2fr 1fr;gap:20px;align-items:start;">
+        <div>
+            <table class="stf-table" style="margin-bottom:20px;">
+                <thead>
+                    <tr><th>Variant</th><th style="width:110px;">Default Qty</th><th style="width:130px;">Default Cost</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in Model.Items.OrderBy(i => i.DisplayOrder))
+                    {
+                        <tr>
+                            <td>@item.ProductVariant.Product.Name (@item.ProductVariant.Size/@item.ProductVariant.Color)</td>
+                            <td>@item.DefaultQuantity</td>
+                            <td>@(item.DefaultUnitCost.HasValue ? item.DefaultUnitCost.Value.ToString("C") : "current cost")</td>
+                        </tr>
+                    }
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td style="font-weight:600;">Estimate</td>
+                        <td style="font-weight:600;">@Model.TotalUnits units</td>
+                        <td style="font-weight:600;">@Model.EstimatedCost.ToString("C")</td>
+                    </tr>
+                </tfoot>
+            </table>
+
+            @if (Model.GeneratedPurchaseOrders.Any())
+            {
+                <h5 style="font-family:'Newsreader',serif;font-size:1.05rem;margin:0 0 12px;">Purchase Orders Generated From This Bundle</h5>
+                <table class="stf-table">
+                    <thead><tr><th>PO Number</th><th>Status</th><th>Date</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var po in Model.GeneratedPurchaseOrders.OrderByDescending(p => p.DateCreated))
+                        {
+                            <tr>
+                                <td>@po.PONumber</td>
+                                <td><span class="stf-badge stf-badge-muted">@po.Status</span></td>
+                                <td>@po.DateCreated.ToString("dd MMM yyyy")</td>
+                                <td style="text-align:right;"><a asp-controller="PurchaseOrders" asp-action="Details" asp-route-id="@po.PurchaseOrderId" class="stf-btn stf-btn-outline" style="padding:6px 14px;font-size:0.78rem;">View</a></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+
+        <div>
+            <div class="stf-card" style="margin-bottom:16px;">
+                <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--stf-outline);margin-bottom:10px;">Generate Purchase Order</div>
+                <form asp-action="Generate" asp-route-id="@Model.RestockBundleId" method="post">
+                    @Html.AntiForgeryToken()
+
+                    @{ string L = "font-size:0.8rem;font-weight:600;display:block;margin-bottom:6px;"; string F = "width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:8px 12px;font-size:0.85rem;"; }
+
+                    <label style="@L">Supplier</label>
+                    <select name="supplierId" style="@F margin-bottom:14px;" @(Model.SupplierId is null ? "required" : "")>
+                        @if (Model.SupplierId is null)
+                        {
+                            <option value="">-- Choose a supplier --</option>
+                        }
+                        @foreach (var s in suppliers)
+                        {
+                            <option value="@s.SupplierId" selected="@(s.SupplierId == Model.SupplierId)">@s.Name</option>
+                        }
+                    </select>
+
+                    <div style="font-size:0.78rem;color:var(--stf-on-surface-variant);margin-bottom:8px;">Quantities default to the template - override for this run only if needed.</div>
+                    @foreach (var item in Model.Items.OrderBy(i => i.DisplayOrder))
+                    {
+                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                            <input type="hidden" name="itemIds" value="@item.RestockBundleItemId" />
+                            <span style="flex:1;font-size:0.8rem;">@item.ProductVariant.Product.Name (@item.ProductVariant.Size/@item.ProductVariant.Color)</span>
+                            <input type="number" name="quantities" min="0" value="@item.DefaultQuantity" style="width:70px;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:6px 8px;font-size:0.82rem;" />
+                        </div>
+                    }
+
+                    <button type="submit" class="stf-btn stf-btn-primary" style="width:100%;justify-content:center;margin-top:8px;">Generate Draft Purchase Order</button>
+                </form>
+            </div>
+
+            <div class="stf-card">
+                <form asp-action="ToggleActive" asp-route-id="@Model.RestockBundleId" method="post">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="stf-btn @(Model.IsActive ? "stf-btn-danger-outline" : "stf-btn-outline")" style="width:100%;justify-content:center;">
+                        @(Model.IsActive ? "Archive Bundle" : "Reactivate Bundle")
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>

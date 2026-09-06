@@ -1,35 +1,47 @@
 @model Order
 @{
     ViewData["Title"] = "Order Confirmed";
-    var fallbackImage = "https://placehold.co/56x56?text=No+Image";
+    Layout = "_StorefrontLayout";
+    var fallbackImage = "https://placehold.co/80x80/E4DEC9/24211B?text=No+Image";
 }
-<div class="container py-5 text-center" style="max-width:520px;">
-    <h1 class="display-6 text-success"><i class="bi bi-check-circle"></i> Order Confirmed</h1>
-    <p class="text-muted">Order <strong>@Model.OrderNumber</strong> has been placed and is being processed.</p>
 
-    <table class="table table-sm text-start mt-4 align-middle">
-        <tbody>
-        @foreach (var item in Model.OrderItems)
-        {
-            <tr>
-                <td style="width:56px;">
+<section class="ffs-section" style="padding-top:56px;">
+    <div class="ffs-container" style="max-width:560px;text-align:center;">
+        <div style="width:56px;height:56px;border-radius:50%;background:var(--ffs-sage);display:flex;align-items:center;justify-content:center;margin:0 auto 20px;">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--ffs-sage-text)" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>
+        </div>
+        <span class="ffs-eyebrow">Thank You</span>
+        <h1 style="font-family:'Fraunces',serif;font-size:1.9rem;margin-bottom:10px;">Order Confirmed</h1>
+        <p style="color:var(--ffs-ink-muted);margin-bottom:32px;">Order <strong style="color:var(--ffs-ink);">@Model.OrderNumber</strong> has been placed and is being processed.</p>
+
+        <div style="text-align:left;display:flex;flex-direction:column;gap:10px;margin-bottom:20px;">
+            @foreach (var item in Model.OrderItems)
+            {
+                <div style="display:flex;gap:14px;align-items:center;background:var(--ffs-card);border:1px solid var(--ffs-border);border-radius:var(--ffs-radius);padding:10px 14px;">
                     <img src="@(string.IsNullOrWhiteSpace(item.Product?.ImageUrl) ? fallbackImage : item.Product.ImageUrl)"
-                         alt="@item.Product?.Name" class="rounded border" style="width:48px;height:48px;object-fit:cover;" />
-                </td>
-                    <td>@item.Product?.Name (x@(item.Quantity))</td>
-                    <td class="text-end">@item.LineTotal.ToString("C")</td>
-            </tr>
-        }
-        </tbody>
-    </table>
-    <div class="text-start">
-        <div class="d-flex justify-content-between"><span>Subtotal</span><span>@Model.SubTotal.ToString("C")</span></div>
-        <div class="d-flex justify-content-between text-muted"><span>VAT (15%)</span><span>@Model.TaxTotal.ToString("C")</span></div>
-        <div class="d-flex justify-content-between fs-5 border-top pt-2 mt-2"><strong>Total</strong><strong>@Model.GrandTotal.ToString("C")</strong></div>
-    </div>
+                         alt="@item.Product?.Name" style="width:52px;height:52px;object-fit:cover;border-radius:8px;flex-shrink:0;" />
+                    <div style="flex:1;font-size:0.88rem;">
+                        @item.Product?.Name
+                        @if (item.ProductVariant != null)
+                        {
+                            <span style="color:var(--ffs-ink-muted);">(@item.ProductVariant.Size/@item.ProductVariant.Color)</span>
+                        }
+                        <span style="color:var(--ffs-ink-muted);">&times;@item.Quantity</span>
+                    </div>
+                    <div style="font-weight:600;font-family:'Fraunces',serif;">@item.LineTotal.ToString("C")</div>
+                </div>
+            }
+        </div>
 
-    <div class="mt-4">
-        <a asp-controller="Customer" asp-action="Orders" class="btn btn-danger">View My Orders</a>
-        <a asp-controller="Shop" asp-action="Index" class="btn btn-outline-secondary">Continue Shopping</a>
+        <div style="text-align:left;background:var(--ffs-cream-alt);border-radius:var(--ffs-radius);padding:16px 20px;margin-bottom:28px;">
+            <div style="display:flex;justify-content:space-between;font-size:0.88rem;margin-bottom:6px;"><span>Subtotal</span><span>@Model.SubTotal.ToString("C")</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:0.85rem;color:var(--ffs-ink-muted);margin-bottom:10px;"><span>VAT (15%)</span><span>@Model.TaxTotal.ToString("C")</span></div>
+            <div style="display:flex;justify-content:space-between;border-top:1px solid var(--ffs-border);padding-top:10px;font-size:1.05rem;font-weight:600;font-family:'Fraunces',serif;"><span>Total</span><span>@Model.GrandTotal.ToString("C")</span></div>
+        </div>
+
+        <div style="display:flex;gap:12px;justify-content:center;">
+            <a asp-controller="Customer" asp-action="Orders" class="ffs-btn ffs-btn-forest">View My Orders</a>
+            <a asp-controller="Shop" asp-action="Index" class="ffs-btn ffs-btn-outline">Continue Shopping</a>
+        </div>
     </div>
-</div>
+</section>

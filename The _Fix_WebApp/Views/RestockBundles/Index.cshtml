@@ -1,0 +1,74 @@
+@model List<RestockBundle>
+@{
+    ViewData["Title"] = "Restock Bundles";
+    Layout = "_StaffLayout";
+    var selected = ViewBag.SelectedSeason as RestockSeason?;
+}
+
+<div class="stf-content">
+    <div class="stf-page-head">
+        <div>
+            <span class="stf-eyebrow">Supply Chain</span>
+            <h1>Restock Bundles</h1>
+            <p>Saved restock templates - build one once, then generate a purchase order from it in a click whenever it's needed.</p>
+        </div>
+        <a asp-action="Create" class="stf-btn stf-btn-primary">+ New Bundle</a>
+    </div>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;">
+        <a asp-action="Index" class="stf-chip" style="@(selected is null ? "background:var(--stf-primary);color:#fff;" : "")">All Seasons</a>
+        @foreach (var s in Enum.GetValues<RestockSeason>())
+        {
+            <a asp-action="Index" asp-route-season="@s" class="stf-chip" style="@(selected == s ? "background:var(--stf-primary);color:#fff;" : "")">@s</a>
+        }
+    </div>
+
+    @if (Model.Count == 0)
+    {
+        <div class="stf-card" style="text-align:center;padding:40px 20px;color:var(--stf-on-surface-variant);">
+            <p style="margin-bottom:16px;">No restock bundles @(selected is null ? "yet" : $"for {selected}").</p>
+            <a asp-action="Create" class="stf-btn stf-btn-primary">+ New Bundle</a>
+        </div>
+    }
+    else
+    {
+        <table class="stf-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Season</th>
+                    <th>Supplier</th>
+                    <th>Scope</th>
+                    <th>Lines</th>
+                    <th>Est. Cost</th>
+                    <th>Status</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var b in Model)
+                {
+                    <tr class="@(b.IsActive ? "" : "")" style="@(b.IsActive ? "" : "opacity:.6;")">
+                        <td style="font-weight:600;"><a asp-action="Details" asp-route-id="@b.RestockBundleId">@b.Name</a></td>
+                        <td>@b.Season</td>
+                        <td>@(b.Supplier?.Name ?? "Varies")</td>
+                        <td>@(b.Department?.Name ?? b.Brand ?? "-")</td>
+                        <td>@b.Items.Count (@b.TotalUnits units)</td>
+                        <td>@b.EstimatedCost.ToString("C")</td>
+                        <td>
+                            @if (b.IsActive)
+                            {
+                                <span class="stf-badge stf-badge-active">Active</span>
+                            }
+                            else
+                            {
+                                <span class="stf-badge stf-badge-muted">Archived</span>
+                            }
+                        </td>
+                        <td style="text-align:right;"><a asp-action="Details" asp-route-id="@b.RestockBundleId" class="stf-btn stf-btn-outline" style="padding:6px 14px;font-size:0.78rem;">View</a></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
