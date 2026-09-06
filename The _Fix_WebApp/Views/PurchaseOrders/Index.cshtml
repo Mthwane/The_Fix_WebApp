@@ -1,0 +1,80 @@
+@model List<PurchaseOrder>
+@{
+    ViewData["Title"] = "Purchase Orders";
+    Layout = "_StaffLayout";
+    var counts = ViewBag.StatusCounts as Dictionary<PurchaseOrderStatus, int> ?? new();
+    var selected = ViewBag.SelectedStatus as PurchaseOrderStatus?;
+    int CountFor(PurchaseOrderStatus? s) => s is null ? counts.Values.Sum() : (counts.TryGetValue(s.Value, out var c) ? c : 0);
+
+    (string cls, string? bg, string? fg) BadgeFor(PurchaseOrderStatus s) => s switch
+    {
+        PurchaseOrderStatus.Draft => ("stf-badge stf-badge-muted", null, null),
+        PurchaseOrderStatus.AwaitingApproval => ("stf-badge", "var(--stf-secondary-container)", "var(--stf-secondary)"),
+        PurchaseOrderStatus.Approved => ("stf-badge stf-badge-active", null, null),
+        PurchaseOrderStatus.Rejected => ("stf-badge stf-badge-danger", null, null),
+        PurchaseOrderStatus.Shipped => ("stf-badge", "var(--stf-primary-container)", "var(--stf-on-primary-container)"),
+        PurchaseOrderStatus.Received => ("stf-badge stf-badge-active", null, null),
+        PurchaseOrderStatus.Cancelled => ("stf-badge stf-badge-danger", null, null),
+        _ => ("stf-badge stf-badge-muted", null, null)
+    };
+}
+
+<div class="stf-content">
+    <div class="stf-page-head">
+        <div>
+            <span class="stf-eyebrow">Supply Chain</span>
+            <h1>Purchase Orders</h1>
+            <p>Raise, approve, book and receive restock requests. Stock only moves once an order is actually received.</p>
+        </div>
+        <a asp-action="Create" class="stf-btn stf-btn-primary">+ New Purchase Order</a>
+    </div>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;">
+        <a asp-action="Index" class="stf-chip" style="@(selected is null ? "background:var(--stf-primary);color:#fff;" : "")">All <strong style="margin-left:4px;">@CountFor(null)</strong></a>
+        @foreach (var s in Enum.GetValues<PurchaseOrderStatus>())
+        {
+            <a asp-action="Index" asp-route-status="@s" class="stf-chip" style="@(selected == s ? "background:var(--stf-primary);color:#fff;" : "")">@s <strong style="margin-left:4px;">@CountFor(s)</strong></a>
+        }
+    </div>
+
+    @if (Model.Count == 0)
+    {
+        <div class="stf-card" style="text-align:center;padding:40px 20px;color:var(--stf-on-surface-variant);">
+            <p style="margin-bottom:16px;">No purchase orders @(selected is null ? "yet" : $"with status {selected}").</p>
+            <a asp-action="Create" class="stf-btn stf-btn-primary">+ New Purchase Order</a>
+        </div>
+    }
+    else
+    {
+        <table class="stf-table">
+            <thead>
+                <tr>
+                    <th>PO Number</th>
+                    <th>Supplier</th>
+                    <th>Lines</th>
+                    <th>Total Cost</th>
+                    <th>Status</th>
+                    <th>Raised By</th>
+                    <th>Date</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var po in Model)
+                {
+                    var (cls, bg, fg) = BadgeFor(po.Status);
+                    <tr>
+                        <td style="font-weight:600;"><a asp-action="Details" asp-route-id="@po.PurchaseOrderId">@po.PONumber</a></td>
+                        <td>@po.Supplier.Name</td>
+                        <td>@po.Items.Count</td>
+                        <td>@po.TotalCost.ToString("C")</td>
+                        <td><span class="@cls" style="@(bg is null ? "" : $"background:{bg};color:{fg};")">@po.Status</span></td>
+                        <td>@(po.CreatedByUser?.FullName ?? "-")</td>
+                        <td>@po.DateCreated.ToString("dd MMM yyyy")</td>
+                        <td style="text-align:right;"><a asp-action="Details" asp-route-id="@po.PurchaseOrderId" class="stf-btn stf-btn-outline" style="padding:6px 14px;font-size:0.78rem;">View</a></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>

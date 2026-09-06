@@ -1,0 +1,103 @@
+@model List<Supplier>
+@{
+    ViewData["Title"] = "Suppliers";
+    Layout = "_StaffLayout";
+    var openPoCounts = ViewBag.OpenPoCounts as Dictionary<int, int> ?? new();
+}
+
+<div class="stf-content">
+    <div class="stf-page-head">
+        <div>
+            <span class="stf-eyebrow">Supply Chain</span>
+            <h1>Suppliers</h1>
+            <p>Vendor contacts, lead times, and the collection addresses used when The Courier Guy is booked to pick up a restock.</p>
+        </div>
+        <a asp-action="Create" class="stf-btn stf-btn-primary">+ Add Supplier</a>
+    </div>
+
+    @if (Model.Count == 0)
+    {
+        <div class="stf-card" style="text-align:center;padding:40px 20px;color:var(--stf-on-surface-variant);">
+            <p style="margin-bottom:16px;">No suppliers yet - add your first one to start raising purchase orders against them.</p>
+            <a asp-action="Create" class="stf-btn stf-btn-primary">+ Add Supplier</a>
+        </div>
+    }
+    else
+    {
+        <table class="stf-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Contact</th>
+                    <th>Lead Time</th>
+                    <th>Collection Address</th>
+                    <th>Open POs</th>
+                    <th>Status</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var supplier in Model)
+                {
+                    var openCount = openPoCounts.TryGetValue(supplier.SupplierId, out var c) ? c : 0;
+                    var hasAddress = !string.IsNullOrWhiteSpace(supplier.StreetAddress) && !string.IsNullOrWhiteSpace(supplier.City);
+                    <tr>
+                        <td style="font-weight:600;">@supplier.Name</td>
+                        <td>
+                            @if (!string.IsNullOrWhiteSpace(supplier.ContactName)) { <div>@supplier.ContactName</div> }
+                            @if (!string.IsNullOrWhiteSpace(supplier.ContactEmail)) { <div style="font-size:0.78rem;color:var(--stf-on-surface-variant);">@supplier.ContactEmail</div> }
+                            @if (!string.IsNullOrWhiteSpace(supplier.ContactPhone)) { <div style="font-size:0.78rem;color:var(--stf-on-surface-variant);">@supplier.ContactPhone</div> }
+                            @if (string.IsNullOrWhiteSpace(supplier.ContactName) && string.IsNullOrWhiteSpace(supplier.ContactEmail) && string.IsNullOrWhiteSpace(supplier.ContactPhone))
+                            {
+                                <span style="color:var(--stf-outline);">-</span>
+                            }
+                        </td>
+                        <td>@supplier.LeadTimeDays day@(supplier.LeadTimeDays == 1 ? "" : "s")</td>
+                        <td>
+                            @if (hasAddress)
+                            {
+                                <span>@supplier.City, @supplier.Province</span>
+                            }
+                            else
+                            {
+                                <span class="stf-badge stf-badge-danger" title="Blocks courier collection booking on purchase orders">Incomplete</span>
+                            }
+                        </td>
+                        <td>
+                            @if (openCount > 0)
+                            {
+                                <span class="stf-badge stf-badge-active">@openCount open</span>
+                            }
+                            else
+                            {
+                                <span style="color:var(--stf-outline);">-</span>
+                            }
+                        </td>
+                        <td>
+                            @if (supplier.IsActive)
+                            {
+                                <span class="stf-badge stf-badge-active">Active</span>
+                            }
+                            else
+                            {
+                                <span class="stf-badge stf-badge-muted">Inactive</span>
+                            }
+                        </td>
+                        <td style="text-align:right;white-space:nowrap;">
+                            <a asp-action="Edit" asp-route-id="@supplier.SupplierId" class="stf-btn stf-btn-outline" style="padding:6px 14px;font-size:0.78rem;">Edit</a>
+                            <form asp-action="ToggleActive" asp-route-id="@supplier.SupplierId" method="post" style="display:inline;">
+                                @Html.AntiForgeryToken()
+                                <button type="submit"
+                                        class="stf-btn @(supplier.IsActive ? "stf-btn-danger-outline" : "stf-btn-outline")"
+                                        style="padding:6px 14px;font-size:0.78rem;"
+                                        onclick="return confirm('@(supplier.IsActive ? $"Deactivate {supplier.Name}? Existing purchase orders are unaffected." : $"Reactivate {supplier.Name}?")');">
+                                    @(supplier.IsActive ? "Deactivate" : "Reactivate")
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>

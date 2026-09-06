@@ -1,0 +1,62 @@
+@model SiteSettings
+@{
+    ViewData["Title"] = "Homepage Content";
+    Layout = "_StaffLayout";
+}
+<div class="stf-content" style="max-width:800px;">
+    <span class="stf-eyebrow">Storefront</span>
+    <h1 style="margin-bottom:6px;">Homepage Content</h1>
+    <p style="color:var(--stf-on-surface-variant);margin-bottom:10px;">Editable copy for the storefront homepage's hero banner and Style Box section.</p>
+    <div class="stf-card" style="background:var(--stf-surface-container);border:none;margin-bottom:20px;">
+        <p style="margin:0;font-size:0.82rem;color:var(--stf-on-surface-variant);">
+            Scope note: this covers the hero banner and Style Box headline/subheadline only for now. The feature-strip captions, ethics/story block, and boutique visit banner are still fixed text in the page template - a follow-up item, not part of this screen yet.
+        </p>
+    </div>
+
+    <form asp-action="Content" method="post" class="stf-card">
+        <input type="hidden" asp-for="Id" />
+        <div asp-validation-summary="ModelOnly" style="color:var(--stf-error);margin-bottom:10px;"></div>
+        @{ string L = "font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;"; string F = "width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:9px 14px;font-size:0.9rem;"; }
+
+        <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:0 0 14px;">Hero Banner</h5>
+        <div style="margin-bottom:14px;">
+            <label asp-for="HeroEyebrow" style="@L"></label>
+            <input asp-for="HeroEyebrow" style="@F" />
+        </div>
+        <div style="margin-bottom:14px;">
+            <label asp-for="HeroHeadline" style="@L"></label>
+            <input asp-for="HeroHeadline" style="@F" />
+        </div>
+        <div style="margin-bottom:14px;">
+            <label asp-for="HeroSubheadline" style="@L"></label>
+            <textarea asp-for="HeroSubheadline" rows="2" style="@F"></textarea>
+        </div>
+        <div style="margin-bottom:14px;">
+            <label asp-for="HeroImageUrl" style="@L"></label>
+            <input asp-for="HeroImageUrl" style="@F" placeholder="https://... (blank uses a placeholder)" />
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px;">
+            <div>
+                <label asp-for="HeroPrimaryCtaText" style="@L"></label>
+                <input asp-for="HeroPrimaryCtaText" style="@F" />
+            </div>
+            <div>
+                <label asp-for="HeroSecondaryCtaText" style="@L"></label>
+                <input asp-for="HeroSecondaryCtaText" style="@F" />
+            </div>
+        </div>
+
+        <hr style="border-color:var(--stf-outline-variant);margin:16px 0;" />
+        <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:0 0 14px;">Style Box Section</h5>
+        <div style="margin-bottom:14px;">
+            <label asp-for="StyleBoxHeadline" style="@L"></label>
+            <input asp-for="StyleBoxHeadline" style="@F" />
+        </div>
+        <div style="margin-bottom:20px;">
+            <label asp-for="StyleBoxSubheadline" style="@L"></label>
+            <textarea asp-for="StyleBoxSubheadline" rows="2" style="@F"></textarea>
+        </div>
+
+        <button type="submit" class="stf-btn stf-btn-primary">Save Homepage Content</button>
+    </form>
+</div>
