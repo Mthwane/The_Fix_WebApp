@@ -21,5 +21,6 @@ public enum DashboardSections
     Storefront = 1 << 7,         // StorefrontManage
     Staff = 1 << 8,              // EmployeesManage
     AuditActivity = 1 << 9,      // AuditLogsView
-    Shift = 1 << 10,             // PosUse (own shift) / ReportsView (full history)
+    Shift = 1 << 10,             // PosUse (own shift) / ReportsView (full history + all open shifts)
+    AccessControl = 1 << 11,     // RolesManage - the read-only RBAC matrix preview
 }
