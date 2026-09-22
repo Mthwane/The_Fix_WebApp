@@ -1,25 +1,29 @@
 @model ShiftSession
 @{
     ViewData["Title"] = "End Shift";
+    Layout = "_StaffLayout";
     decimal expected = ViewBag.ExpectedCash;
 }
-<div class="container py-4" style="max-width:480px;">
-    <h2>End Shift</h2>
-    <p class="text-muted">Opened @Model.DateOpened.ToLocalTime().ToString("dd MMM, HH:mm") with a float of @Model.OpeningFloat.ToString("C").</p>
+<div class="stf-content" style="max-width:440px;">
+    <span class="stf-eyebrow">Operations Core</span>
+    <h1 style="margin-bottom:6px;">End Shift</h1>
+    <p style="color:var(--stf-on-surface-variant);margin-bottom:16px;">Opened @Model.DateOpened.ToLocalTime().ToString("dd MMM, HH:mm") with a float of @Model.OpeningFloat.ToString("C").</p>
 
-    <div class="alert alert-info">Expected cash in drawer: <strong>@expected.ToString("C")</strong> (opening float + cash sales this shift)</div>
+    <div class="stf-card" style="background:var(--stf-secondary-container);border:none;margin-bottom:20px;">
+        <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--stf-secondary);font-weight:600;">Expected Cash in Drawer</div>
+        <div style="font-family:'Newsreader',serif;font-size:1.6rem;margin-top:4px;">@expected.ToString("C")</div>
+        <div style="font-size:0.78rem;color:var(--stf-on-surface-variant);margin-top:4px;">Opening float + cash sales this shift</div>
+    </div>
 
-    <form asp-action="EndShift" method="post" class="card p-4">
+    <form asp-action="EndShift" method="post" class="stf-card">
         @Html.AntiForgeryToken()
-        <div class="mb-3">
-            <label class="form-label">Counted Closing Float</label>
-            <input type="number" name="closingFloat" step="0.01" min="0" class="form-control form-control-lg" required autofocus />
-        </div>
-        <div class="mb-3">
-            <label class="form-label">Notes (optional)</label>
-            <textarea name="notes" class="form-control" rows="2" placeholder="Explain any variance, if there is one"></textarea>
-        </div>
-        <button type="submit" class="btn btn-primary btn-lg">Close Shift</button>
-        <a asp-action="Index" class="btn btn-link">Cancel</a>
+        <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;">Counted Closing Float</label>
+        <input type="number" name="closingFloat" step="0.01" min="0" required autofocus
+               style="width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:11px 16px;font-size:1.1rem;margin-bottom:14px;" />
+        <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;">Notes (optional)</label>
+        <textarea name="notes" rows="2" placeholder="Explain any variance, if there is one"
+                  style="width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:9px 12px;font-size:0.88rem;margin-bottom:16px;"></textarea>
+        <button type="submit" class="stf-btn stf-btn-primary" style="width:100%;justify-content:center;">Close Shift</button>
+        <a asp-action="Index" style="display:block;text-align:center;margin-top:10px;font-size:0.85rem;color:var(--stf-on-surface-variant);">Cancel</a>
     </form>
 </div>

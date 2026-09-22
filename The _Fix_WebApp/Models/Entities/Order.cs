@@ -62,6 +62,12 @@ public class Order
     public DateTime DateCreated { get; set; } = DateTime.UtcNow;
     public DateTime? DateFulfilled { get; set; }
 
+    /// <summary>Set when the customer explicitly confirms receipt (a "Confirm Receipt" action
+    /// on their own order page) - deliberately separate from the courier's own "Delivered"
+    /// report, since a carrier marking something delivered isn't the same as the customer
+    /// actually confirming it arrived intact. This is the real end of the order lifecycle.</summary>
+    public DateTime? CustomerConfirmedDeliveryAt { get; set; }
+
     // --- Delivery address (Online orders only - null for in-store POS sales) ---
     // Snapshotted from the customer's chosen CustomerAddress at checkout time, not a
     // foreign key to it, so editing or deleting that saved address later never rewrites

@@ -47,7 +47,7 @@
                         <div class="ffs-product-meta">
                             <a asp-controller="Shop" asp-action="Product" asp-route-id="@product.ProductId" class="ffs-product-name" style="display:block;">@product.Name</a>
                             <div class="ffs-product-price-row">
-                                <span class="ffs-price">R @product.SellingPrice.ToString("N2")</span>
+                                <span class="ffs-price">R@product.SellingPrice.ToString("N2")</span>
                             </div>
                             <a asp-controller="Shop" asp-action="Product" asp-route-id="@product.ProductId" class="ffs-btn @(inStock ? "ffs-btn-forest" : "ffs-btn-outline")" style="width:100%;justify-content:center;margin-top:10px;padding:8px;font-size:0.8rem;">
                                 @(inStock ? "View" : "Out of stock")

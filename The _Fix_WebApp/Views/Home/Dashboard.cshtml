@@ -1,18 +1,124 @@
 @model DashboardViewModel
+@using System.Globalization
+@using System.Text
+@using Microsoft.AspNetCore.Html
 @{
     ViewData["Title"] = "Dashboard";
     Layout = "_StaffLayout";
     bool Can(string permission) => User.HasClaim(FashionFix.Web.Security.Permissions.ClaimType, permission);
     string Money(decimal v) => v.ToString("C");
+    string I(double v) => v.ToString("0.##", CultureInfo.InvariantCulture);
+
+    string heroEyebrow = ViewBag.HeroEyebrow;
+    string heroTitle = ViewBag.HeroTitle;
+    string heroSubtitle = ViewBag.HeroSubtitle;
+
+    // --- Real inline SVG charts - no charting library, matches the app's existing
+    // "vanilla JS/CSS, no SPA framework" convention. Both are driven entirely by
+    // DashboardViewModel data; there is nothing fabricated in either.
+
+    IHtmlContent RevenueLineChart(List<HourlyRevenuePoint> points, int w, int h)
+    {
+        var byHour = points.ToDictionary(p => p.Hour, p => p.Revenue);
+        var hourRange = Enumerable.Range(8, 13).ToList(); // 08:00 - 20:00, matches trading hours
+        var values = hourRange.Select(hh => byHour.TryGetValue(hh, out var r) ? r : 0m).ToList();
+        if (values.All(v => v == 0))
+        {
+            return new HtmlString($"<div style='display:flex;align-items:center;justify-content:center;height:{h}px;color:var(--stf-on-surface-variant);font-size:0.85rem;'>No sales yet today.</div>");
+        }
+        var max = Math.Max(values.Max(), 1m);
+        int n = values.Count;
+        double padL = 6, padR = 6, padT = 14, padB = 8;
+        double plotW = w - padL - padR, plotH = h - padT - padB;
+
+        var pts = new List<(double X, double Y, decimal Rev, int Hour)>();
+        for (int i = 0; i < n; i++)
+        {
+            double x = padL + plotW * i / (n - 1);
+            double y = padT + plotH - (double)(values[i] / max) * plotH;
+            pts.Add((x, y, values[i], hourRange[i]));
+        }
+        var linePath = new StringBuilder();
+        for (int i = 0; i < pts.Count; i++) linePath.Append(i == 0 ? $"M{I(pts[i].X)},{I(pts[i].Y)}" : $" L{I(pts[i].X)},{I(pts[i].Y)}");
+        var areaPath = linePath.ToString() + $" L{I(pts[^1].X)},{I(padT + plotH)} L{I(pts[0].X)},{I(padT + plotH)} Z";
+        var peak = pts.OrderByDescending(p => p.Rev).First();
+
+        var sb = new StringBuilder();
+        sb.Append($"<svg viewBox='0 0 {w} {h}' preserveAspectRatio='none' style='width:100%;height:{h}px;' xmlns='http://www.w3.org/2000/svg'>");
+        sb.Append("<defs><linearGradient id='revFill' x1='0' y1='0' x2='0' y2='1'>");
+        sb.Append("<stop offset='0%' stop-color='#2f5943' stop-opacity='0.30'/>");
+        sb.Append("<stop offset='100%' stop-color='#2f5943' stop-opacity='0'/>");
+        sb.Append("</linearGradient></defs>");
+        sb.Append($"<path d='{areaPath}' fill='url(#revFill)' stroke='none'/>");
+        sb.Append($"<path d='{linePath}' fill='none' stroke='#2f5943' stroke-width='2.5' vector-effect='non-scaling-stroke'/>");
+        foreach (var p in pts)
+            sb.Append($"<circle cx='{I(p.X)}' cy='{I(p.Y)}' r='{(p.Hour == peak.Hour ? 4.5 : 2)}' fill='{(p.Hour == peak.Hour ? "#2f5943" : "#7a9385")}' />");
+        sb.Append("</svg>");
+        return new HtmlString(sb.ToString());
+    }
+
+    IHtmlContent DonutChart(List<(string Label, decimal Value)> segments, int size)
+    {
+        var palette = new[] { "#2f5943", "#c9a227", "#7a9385", "#a0522d", "#5b7a68", "#d9c98a" };
+        var total = segments.Sum(s => s.Value);
+        if (total <= 0)
+        {
+            return new HtmlString($"<div style='display:flex;align-items:center;justify-content:center;height:{size}px;color:var(--stf-on-surface-variant);font-size:0.8rem;'>No data yet.</div>");
+        }
+        double radius = size / 2.0 - 9, cx = size / 2.0, cy = size / 2.0;
+        double circumference = 2 * Math.PI * radius;
+        double offset = 0;
+        var sb = new StringBuilder();
+        sb.Append($"<svg viewBox='0 0 {size} {size}' style='width:{size}px;height:{size}px;' xmlns='http://www.w3.org/2000/svg'>");
+        sb.Append($"<circle cx='{I(cx)}' cy='{I(cy)}' r='{I(radius)}' fill='none' stroke='var(--stf-surface-container)' stroke-width='14'/>");
+        for (int i = 0; i < segments.Count; i++)
+        {
+            double frac = (double)(segments[i].Value / total);
+            double dash = frac * circumference;
+            sb.Append($"<circle cx='{I(cx)}' cy='{I(cy)}' r='{I(radius)}' fill='none' stroke='{palette[i % palette.Length]}' stroke-width='14' " +
+                      $"stroke-dasharray='{I(dash)} {I(circumference)}' stroke-dashoffset='-{I(offset)}' transform='rotate(-90 {I(cx)} {I(cy)})' />");
+            offset += dash;
+        }
+        sb.Append($"<text x='{I(cx)}' y='{I(cy - 4)}' text-anchor='middle' font-size='11' fill='var(--stf-on-surface-variant)' font-family='Plus Jakarta Sans, sans-serif'>Total</text>");
+        sb.Append($"<text x='{I(cx)}' y='{I(cy + 12)}' text-anchor='middle' font-size='13' font-weight='700' fill='var(--stf-on-surface)' font-family='Plus Jakarta Sans, sans-serif'>{total.ToString("C0")}</text>");
+        sb.Append("</svg>");
+        return new HtmlString(sb.ToString());
+    }
+
+    var donutPalette = new[] { "#2f5943", "#c9a227", "#7a9385", "#a0522d", "#5b7a68", "#d9c98a" };
+    var useDeptDonut = Can(FashionFix.Web.Security.Permissions.ReportsView) && Model.RevenueByDepartment.Any();
+   
+    var donutSegments = useDeptDonut
+? Model.RevenueByDepartment.Select(d => (Label: d.DepartmentName, Value: d.Revenue)).ToList()
+: Model.ChannelSplitToday.Select(c => (Label: c.Channel, Value: c.Revenue)).ToList();
 }
 
 <div class="stf-content">
     <div class="stf-page-head">
         <div>
-            <span class="stf-eyebrow">Operations Core</span>
-            <h1>Dashboard</h1>
-            <p>Live from the ledger, refreshed automatically every 20 seconds - no caching, no sockets, just polling.</p>
+            <span class="stf-eyebrow">@heroEyebrow</span>
+            <h1>@heroTitle</h1>
+            @if (!string.IsNullOrEmpty(heroSubtitle))
+            {
+                <p>@heroSubtitle</p>
+            }
         </div>
+    </div>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;">
+        <span class="stf-chip">&#9679; Live &middot; refreshes every 20s</span>
+        @if (Can(FashionFix.Web.Security.Permissions.EmployeesManage))
+        {
+            <span class="stf-chip">@Model.ActiveStaffCount active staff</span>
+        }
+        @if (Can(FashionFix.Web.Security.Permissions.PurchaseOrdersApprove) && Model.PendingApprovalCount > 0)
+        {
+            <span class="stf-chip">@Model.PendingApprovalCount PO@(Model.PendingApprovalCount == 1 ? "" : "s") awaiting approval</span>
+        }
+        @if (Model.MyPermissionLabels.Any())
+        {
+            <span class="stf-chip" title="@string.Join(", ", Model.MyPermissionLabels)">@Model.MyPermissionLabels.Count permission@(Model.MyPermissionLabels.Count == 1 ? "" : "s") granted</span>
+        }
     </div>
 
     @if (Model.AttentionItems.Any())
@@ -61,6 +167,65 @@
         }
     </div>
 
+    <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:20px;align-items:start;margin-bottom:24px;">
+        <div class="stf-card">
+            <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--stf-outline);margin-bottom:2px;">Today, by the hour</div>
+            <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:0 0 12px;">Sales & Revenue Velocity</h5>
+            @RevenueLineChart(Model.HourlyRevenueToday, 640, 180)
+            <div style="display:flex;justify-content:space-between;font-size:0.72rem;color:var(--stf-outline);margin-top:4px;">
+                <span>08:00</span><span>12:00</span><span>16:00</span><span>20:00</span>
+            </div>
+        </div>
+        <div class="stf-card" style="text-align:center;">
+            <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--stf-outline);margin-bottom:2px;text-align:left;">@(useDeptDonut ? "This Month" : "Today")</div>
+            <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:0 0 12px;text-align:left;">@(useDeptDonut ? "Revenue by Department" : "Channel Split")</h5>
+            @DonutChart(donutSegments, 160)
+            <div style="text-align:left;margin-top:14px;">
+                @for (int i = 0; i < donutSegments.Count; i++)
+                {
+                    <div style="display:flex;align-items:center;gap:8px;font-size:0.82rem;padding:3px 0;">
+                        <span style="width:10px;height:10px;border-radius:3px;background:@donutPalette[i % donutPalette.Length];flex-shrink:0;"></span>
+                        <span style="flex:1;">@donutSegments[i].Label</span>
+                        <strong>@Money(donutSegments[i].Value)</strong>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    @if (Can(FashionFix.Web.Security.Permissions.RolesManage) && Model.RbacMatrix.Any())
+    {
+        <div class="stf-card" style="margin-bottom:24px;overflow-x:auto;">
+            <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--stf-outline);margin-bottom:2px;">Access Control</div>
+            <div style="display:flex;justify-content:space-between;align-items:baseline;">
+                <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:0 0 12px;">RBAC Claim Permissions</h5>
+                <a asp-controller="Roles" asp-action="Index" style="font-size:0.78rem;color:var(--stf-secondary);">Edit on Roles screen &rarr;</a>
+            </div>
+            <table class="stf-table">
+                <thead>
+                    <tr>
+                        <th>Permission</th>
+                        @foreach (var role in Model.RbacRoleNames) { <th style="text-align:center;">@role</th> }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in Model.RbacMatrix)
+                    {
+                        <tr>
+                            <td style="font-size:0.85rem;">@row.PermissionLabel</td>
+                            @foreach (var role in Model.RbacRoleNames)
+                            {
+                                <td style="text-align:center;color:@(row.GrantedByRole.GetValueOrDefault(role) ? "var(--stf-primary)" : "var(--stf-outline-variant)");">
+                                    @(row.GrantedByRole.GetValueOrDefault(role) ? "\u2713" : "\u2013")
+                                </td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
     <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:20px;align-items:start;">
         <div>
             @if (Can(FashionFix.Web.Security.Permissions.OrdersManage))
@@ -90,34 +255,21 @@
                 }
             }
 
-            @if (Can(FashionFix.Web.Security.Permissions.ReportsView) && Model.RevenueByDepartment.Any())
-            {
-                <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:0 0 12px;">Revenue by Department (MTD)</h5>
-                <div class="stf-card" style="margin-bottom:20px;">
-                    @foreach (var d in Model.RevenueByDepartment)
-                    {
-                        <div style="margin-bottom:10px;">
-                            <div style="display:flex;justify-content:space-between;font-size:0.85rem;margin-bottom:4px;">
-                                <span>@d.DepartmentName</span><span>@Money(d.Revenue) (@d.Percentage%)</span>
-                            </div>
-                            <div style="height:6px;background:var(--stf-surface-container);border-radius:3px;overflow:hidden;">
-                                <div style="height:100%;width:@d.Percentage%;background:var(--stf-primary);"></div>
-                            </div>
-                        </div>
-                    }
-                </div>
-            }
-
             @if (Can(FashionFix.Web.Security.Permissions.AuditLogsView) && Model.RecentActivity.Any())
             {
-                <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:0 0 12px;">Recent Activity</h5>
+                <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:0 0 12px;">Staff Activity Log</h5>
                 <div class="stf-card" style="padding:0;">
                     @foreach (var log in Model.RecentActivity)
                     {
-                        <div style="padding:10px 16px;border-bottom:1px solid var(--stf-surface-container);font-size:0.82rem;">
-                            <strong>@(log.User?.FullName ?? "System")</strong> - @log.Action
-                            @if (!string.IsNullOrWhiteSpace(log.Details)) { <div style="color:var(--stf-on-surface-variant);font-size:0.78rem;">@log.Details</div> }
-                            <div style="color:var(--stf-outline);font-size:0.72rem;margin-top:2px;">@log.Timestamp.ToLocalTime().ToString("dd MMM, HH:mm")</div>
+                        <div style="display:flex;gap:10px;padding:10px 16px;border-bottom:1px solid var(--stf-surface-container);font-size:0.82rem;">
+                            <div style="width:28px;height:28px;border-radius:50%;background:var(--stf-primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:0.72rem;font-weight:700;flex-shrink:0;">
+                                @((log.User?.FullName ?? "SY").Substring(0, Math.Min(2, (log.User?.FullName ?? "SY").Length)).ToUpper())
+                            </div>
+                            <div>
+                                <strong>@(log.User?.FullName ?? "System")</strong> - @log.Action
+                                @if (!string.IsNullOrWhiteSpace(log.Details)) { <div style="color:var(--stf-on-surface-variant);font-size:0.78rem;">@log.Details</div> }
+                                <div style="color:var(--stf-outline);font-size:0.72rem;margin-top:2px;">@log.Timestamp.ToLocalTime().ToString("dd MMM, HH:mm")</div>
+                            </div>
                         </div>
                     }
                 </div>
@@ -155,6 +307,23 @@
                 }
             }
 
+            @if (Can(FashionFix.Web.Security.Permissions.ReportsView) && Model.OpenShifts.Any())
+            {
+                <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:0 0 12px;">On the Floor</h5>
+                <div class="stf-card" style="padding:0;margin-bottom:20px;">
+                    @foreach (var shift in Model.OpenShifts)
+                    {
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--stf-surface-container);">
+                            <div>
+                                <div style="font-weight:600;font-size:0.88rem;">@(shift.User?.FullName ?? "Unknown")</div>
+                                <div style="font-size:0.78rem;color:var(--stf-on-surface-variant);">Since @shift.DateOpened.ToLocalTime().ToString("HH:mm") &middot; Float @Money(shift.OpeningFloat)</div>
+                            </div>
+                            <span class="stf-badge stf-badge-active">Open</span>
+                        </div>
+                    }
+                </div>
+            }
+
             @if (Can(FashionFix.Web.Security.Permissions.SuppliersManage) || Can(FashionFix.Web.Security.Permissions.PurchaseOrdersManage))
             {
                 <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:0 0 12px;">Supply Chain</h5>
@@ -185,13 +354,24 @@
                 </div>
             }
 
-            @if (Can(FashionFix.Web.Security.Permissions.PosUse) && Model.CurrentShift is not null)
+            @if (Can(FashionFix.Web.Security.Permissions.PosUse))
             {
                 <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:0 0 12px;">Your Shift</h5>
                 <div class="stf-card" style="margin-bottom:20px;">
-                    <div style="font-size:0.85rem;">Opened @Model.CurrentShift.DateOpened.ToLocalTime().ToString("HH:mm") with @Money(Model.CurrentShift.OpeningFloat)</div>
-                    <div style="font-size:0.85rem;margin-top:4px;">Expected cash now: <strong>@Money(Model.CurrentShiftExpectedCash ?? 0)</strong></div>
-                    <a asp-controller="Pos" asp-action="EndShift" class="stf-btn stf-btn-outline" style="margin-top:10px;padding:6px 14px;font-size:0.78rem;">End Shift</a>
+                    @if (Model.CurrentShift is not null)
+                    {
+                        <div style="font-size:0.85rem;">Opened @Model.CurrentShift.DateOpened.ToLocalTime().ToString("HH:mm") with @Money(Model.CurrentShift.OpeningFloat)</div>
+                        <div style="font-size:0.85rem;margin-top:4px;">Expected cash now: <strong>@Money(Model.CurrentShiftExpectedCash ?? 0)</strong></div>
+                        <div style="display:flex;gap:8px;margin-top:10px;">
+                            <a asp-controller="Pos" asp-action="Index" class="stf-btn stf-btn-primary" style="padding:6px 14px;font-size:0.78rem;">Open Till</a>
+                            <a asp-controller="Pos" asp-action="EndShift" class="stf-btn stf-btn-outline" style="padding:6px 14px;font-size:0.78rem;">End Shift</a>
+                        </div>
+                    }
+                    else
+                    {
+                        <div style="font-size:0.85rem;color:var(--stf-on-surface-variant);">No shift open yet.</div>
+                        <a asp-controller="Pos" asp-action="StartShift" class="stf-btn stf-btn-primary" style="margin-top:10px;padding:6px 14px;font-size:0.78rem;">Start Shift</a>
+                    }
                 </div>
             }
 

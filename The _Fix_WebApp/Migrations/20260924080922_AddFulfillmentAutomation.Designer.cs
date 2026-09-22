@@ -4,6 +4,7 @@ using FashionFix.Web.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace The__Fix_WebApp.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260924080922_AddFulfillmentAutomation")]
+    partial class AddFulfillmentAutomation
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -134,6 +137,34 @@ namespace The__Fix_WebApp.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("AuditLogs");
+                });
+
+            modelBuilder.Entity("FashionFix.Web.Models.Entities.CategoryPricingRule", b =>
+                {
+                    b.Property<int>("CategoryPricingRuleId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("CategoryPricingRuleId"));
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("MarkupPercentage")
+                        .HasPrecision(9, 2)
+                        .HasColumnType("decimal(9,2)");
+
+                    b.HasKey("CategoryPricingRuleId");
+
+                    b.HasIndex("Category")
+                        .IsUnique();
+
+                    b.ToTable("CategoryPricingRules");
                 });
 
             modelBuilder.Entity("FashionFix.Web.Models.Entities.CourierShipment", b =>
@@ -442,6 +473,33 @@ namespace The__Fix_WebApp.Migrations
                     b.ToTable("DepartmentSubCategories");
                 });
 
+            modelBuilder.Entity("FashionFix.Web.Models.Entities.EmailSubscriber", b =>
+                {
+                    b.Property<int>("EmailSubscriberId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("EmailSubscriberId"));
+
+                    b.Property<DateTime>("DateSubscribed")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.HasKey("EmailSubscriberId");
+
+                    b.HasIndex("Email")
+                        .IsUnique();
+
+                    b.ToTable("EmailSubscribers");
+                });
+
             modelBuilder.Entity("FashionFix.Web.Models.Entities.FeaturedProduct", b =>
                 {
                     b.Property<int>("FeaturedProductId")
@@ -520,6 +578,9 @@ namespace The__Fix_WebApp.Migrations
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("OrderId"));
+
+                    b.Property<DateTime?>("CustomerConfirmedDeliveryAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("CustomerId")
                         .HasColumnType("nvarchar(450)");
@@ -638,6 +699,23 @@ namespace The__Fix_WebApp.Migrations
                     b.HasIndex("ProductVariantId");
 
                     b.ToTable("OrderItems");
+                });
+
+            modelBuilder.Entity("FashionFix.Web.Models.Entities.PricingSettings", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("DefaultMarkupPercentage")
+                        .HasPrecision(9, 2)
+                        .HasColumnType("decimal(9,2)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("PricingSettings");
                 });
 
             modelBuilder.Entity("FashionFix.Web.Models.Entities.Product", b =>
@@ -899,6 +977,19 @@ namespace The__Fix_WebApp.Migrations
                         .HasMaxLength(30)
                         .HasColumnType("nvarchar(30)");
 
+                    b.Property<DateTime?>("PaymentDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("PaymentMethod")
+                        .HasColumnType("int");
+
+                    b.Property<string>("PaymentReference")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("PaymentStatus")
+                        .HasColumnType("int");
+
                     b.Property<int?>("RestockBundleId")
                         .HasColumnType("int");
 
@@ -1098,6 +1189,48 @@ namespace The__Fix_WebApp.Migrations
                     b.HasIndex("ProductVariantId");
 
                     b.ToTable("ReturnTransactions");
+                });
+
+            modelBuilder.Entity("FashionFix.Web.Models.Entities.ShiftSession", b =>
+                {
+                    b.Property<int>("ShiftSessionId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ShiftSessionId"));
+
+                    b.Property<decimal?>("ClosingFloat")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("DateClosed")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("DateOpened")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<decimal>("OpeningFloat")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("ShiftSessionId");
+
+                    b.HasIndex("UserId")
+                        .IsUnique()
+                        .HasFilter("[Status] = 0");
+
+                    b.ToTable("ShiftSessions");
                 });
 
             modelBuilder.Entity("FashionFix.Web.Models.Entities.SiteSettings", b =>
@@ -1688,6 +1821,17 @@ namespace The__Fix_WebApp.Migrations
                     b.Navigation("ProcessedByUser");
 
                     b.Navigation("ProductVariant");
+                });
+
+            modelBuilder.Entity("FashionFix.Web.Models.Entities.ShiftSession", b =>
+                {
+                    b.HasOne("FashionFix.Web.Models.Entities.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("FashionFix.Web.Models.Entities.WishlistItem", b =>

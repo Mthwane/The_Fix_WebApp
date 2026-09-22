@@ -58,7 +58,7 @@ builder.Services.Configure<SecurityStampValidatorOptions>(options =>
 
 builder.Services.ConfigureApplicationCookie(options =>
 {
-    options.LoginPath = "/Account/EmployeeLogin";
+    options.LoginPath = "/Account/Login";
     options.AccessDeniedPath = "/Account/AccessDenied";
     options.SlidingExpiration = true;
     options.ExpireTimeSpan = TimeSpan.FromHours(8);
@@ -91,6 +91,14 @@ builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
 builder.Services.Configure<PaystackOptions>(builder.Configuration.GetSection("Paystack"));
 builder.Services.AddHttpClient<IPaymentService, PaystackPaymentService>();
 builder.Services.AddScoped<IOrderFulfillmentService, OrderFulfillmentService>();
+builder.Services.AddScoped<IDashboardService, DashboardService>();
+builder.Services.AddHostedService<OrderFulfillmentBackgroundService>();
+
+// --- The Courier Guy (Shiplogic) integration ---
+// API key lives in user-secrets / env vars, never appsettings.json. Registered via
+// AddHttpClient so it gets a pooled, properly-disposed HttpClient rather than a new one per call.
+builder.Services.Configure<FashionFix.Web.Services.Courier.CourierGuyOptions>(builder.Configuration.GetSection("CourierGuy"));
+builder.Services.AddHttpClient<FashionFix.Web.Services.Courier.ICourierService, FashionFix.Web.Services.Courier.CourierGuyService>();
 
 // --- Session (backs the customer's shopping cart - no new DB table needed) ---
 builder.Services.AddDistributedMemoryCache();
@@ -102,7 +110,13 @@ builder.Services.AddSession(options =>
 });
 
 // --- MVC ---
-builder.Services.AddControllersWithViews();
+builder.Services.AddControllersWithViews(options =>
+{
+    // Must run before the framework's own decimal binder - see the class doc comment for why
+    // this is needed at all (a period-decimal posted value failing to parse under a
+    // comma-decimal server culture).
+    options.ModelBinderProviders.Insert(0, new FashionFix.Web.Infrastructure.InvariantDecimalModelBinderProvider());
+});
 
 var app = builder.Build();
 // --- Apply any pending EF Core migrations, creating the database/tables if they don't exist yet ---
@@ -180,6 +194,39 @@ using (var scope = app.Services.CreateScope())
             }
         }
     }
+
+    // --- Seed the storefront departments (Women/Men/Kids/Footwear/Accessories/Sale) ---
+    // Only inserted the first time - if an admin later renames/reorders/deactivates one via
+    // a future Department management screen, restarting the app must never overwrite that.
+    var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    if (!await dbContext.Departments.AnyAsync())
+    {
+        dbContext.Departments.AddRange(
+            new Department { Name = "Women", Slug = "women", DisplayOrder = 1, IsActive = true },
+            new Department { Name = "Men", Slug = "men", DisplayOrder = 2, IsActive = true },
+            new Department { Name = "Kids", Slug = "kids", DisplayOrder = 3, IsActive = true },
+            new Department { Name = "Footwear", Slug = "footwear", DisplayOrder = 4, IsActive = true },
+            new Department { Name = "Accessories", Slug = "accessories", DisplayOrder = 5, IsActive = true },
+            new Department { Name = "Sale & Outlet", Slug = "sale", DisplayOrder = 6, IsActive = true }
+        );
+        await dbContext.SaveChangesAsync();
+    }
+
+    // --- Seed default homepage content (hero + Style Box copy) ---
+    // Editable afterwards via Storefront/Content - this seed only ever runs once.
+    if (!await dbContext.SiteSettings.AnyAsync())
+    {
+        dbContext.SiteSettings.Add(new SiteSettings());
+        await dbContext.SaveChangesAsync();
+    }
+
+    // --- Seed default pricing settings (60% markup) ---
+    // Editable afterwards via /Pricing - this seed only ever runs once.
+    if (!await dbContext.PricingSettings.AnyAsync())
+    {
+        dbContext.PricingSettings.Add(new PricingSettings());
+        await dbContext.SaveChangesAsync();
+    }
 }
 
 // --- HTTP pipeline ---
@@ -206,6 +253,11 @@ app.UseSession();
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+app.MapControllerRoute(
+    name: "department",
+    pattern: "Shop/Department/{slug}",
+    defaults: new { controller = "Shop", action = "Department" });
 
 app.MapControllerRoute(
     name: "default",

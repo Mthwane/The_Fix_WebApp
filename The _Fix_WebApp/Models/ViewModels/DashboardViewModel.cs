@@ -69,13 +69,29 @@ public class DashboardViewModel
     public int StaffWithout2FA { get; set; }
     public List<AuditLog> RecentActivity { get; set; } = new();
 
-    // --- Till / Shift (PosUse to see your own; ReportsView for the full history) ---
+    // --- Till / Shift (PosUse to see your own; ReportsView for full history + all open shifts) ---
     public ShiftSession? CurrentShift { get; set; }
     public decimal? CurrentShiftExpectedCash { get; set; }
     public List<ShiftSession> RecentShifts { get; set; } = new();
+    public List<ShiftSession> OpenShifts { get; set; } = new();
+
+    // --- Access Control (RolesManage) - a read-only preview of the same data the Roles &
+    // Permissions screen edits; this widget never writes anything ---
+    public List<string> RbacRoleNames { get; set; } = new();
+    public List<RbacMatrixRow> RbacMatrix { get; set; } = new();
+
+    // --- Display only - which permissions the CURRENT viewer holds, for their own header chip.
+    // Computed directly from claims in HomeController, not a DB query. ---
+    public List<string> MyPermissionLabels { get; set; } = new();
 
     // --- Rolled-up cross-domain callouts, built last from whatever sections were populated ---
     public List<AttentionItem> AttentionItems { get; set; } = new();
+}
+
+public class RbacMatrixRow
+{
+    public string PermissionLabel { get; set; } = string.Empty;
+    public Dictionary<string, bool> GrantedByRole { get; set; } = new(); // role name -> has claim
 }
 
 public class HourlyRevenuePoint

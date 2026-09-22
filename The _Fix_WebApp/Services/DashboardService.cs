@@ -2,6 +2,7 @@ using FashionFix.Web.Data;
 using FashionFix.Web.Models;
 using FashionFix.Web.Models.Entities;
 using FashionFix.Web.Models.ViewModels;
+using FashionFix.Web.Security;
 using Microsoft.EntityFrameworkCore;
 
 namespace FashionFix.Web.Services;
@@ -65,6 +66,9 @@ public class DashboardService : IDashboardService
 
         if (sections.HasFlag(DashboardSections.Shift))
             await PopulateShiftAsync(model, currentUserId, sections);
+
+        if (sections.HasFlag(DashboardSections.AccessControl))
+            await PopulateAccessControlAsync(model);
 
         model.AttentionItems = BuildAttentionItems(model, sections);
 
@@ -297,8 +301,8 @@ public class DashboardService : IDashboardService
             }
         }
 
-        // Full shift history is a manager/reports-level view, not something every till
-        // operator needs cluttering their own dashboard.
+        // Full shift history, and who's currently on the floor, are manager/reports-level -
+        // not something every till operator needs cluttering their own dashboard.
         if (sections.HasFlag(DashboardSections.Reports))
         {
             model.RecentShifts = await _context.ShiftSessions.AsNoTracking()
@@ -306,7 +310,36 @@ public class DashboardService : IDashboardService
                 .OrderByDescending(s => s.DateOpened)
                 .Take(10)
                 .ToListAsync();
+
+            model.OpenShifts = await _context.ShiftSessions.AsNoTracking()
+                .Include(s => s.User)
+                .Where(s => s.Status == ShiftStatus.Open)
+                .OrderBy(s => s.DateOpened)
+                .ToListAsync();
         }
+    }
+
+    // Read-only preview of the exact same role/claim data the Roles & Permissions screen
+    // edits (RolesController) - queried directly here rather than via RoleManager, since this
+    // never writes anything and a plain query is cheaper than spinning up the full manager.
+    private async Task PopulateAccessControlAsync(DashboardViewModel model)
+    {
+        var roles = await _context.Roles.AsNoTracking()
+            .OrderBy(r => r.Name)
+            .ToListAsync();
+        model.RbacRoleNames = roles.Select(r => r.Name!).ToList();
+
+        var claimsByRole = await _context.RoleClaims.AsNoTracking()
+            .Where(c => c.ClaimType == Permissions.ClaimType)
+            .ToListAsync();
+
+        model.RbacMatrix = Permissions.All.Select(kv => new RbacMatrixRow
+        {
+            PermissionLabel = kv.Value,
+            GrantedByRole = roles.ToDictionary(
+                r => r.Name!,
+                r => claimsByRole.Any(c => c.RoleId == r.Id && c.ClaimValue == kv.Key))
+        }).ToList();
     }
 
     private static List<AttentionItem> BuildAttentionItems(DashboardViewModel model, DashboardSections sections)

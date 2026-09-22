@@ -2,59 +2,54 @@
 @{
     var product = ViewBag.Product as Product;
     ViewData["Title"] = $"Images - {product?.Name}";
+    Layout = "_StaffLayout";
 }
-<div class="container py-4">
-    <div class="mb-3">
-        <h2 class="mb-0">Image Gallery: @product?.Name</h2>
-        <p class="text-muted mb-0">Additional photos for this product's detail page. The main product photo (used on cards/grids) is still set on the product's own Edit screen.</p>
-        <a asp-action="Edit" asp-route-id="@product?.ProductId" class="btn btn-sm btn-link ps-0">&larr; Back to Product</a>
-    </div>
+<div class="stf-content">
+    <span class="stf-eyebrow">Catalogue</span>
+    <h1 style="margin-bottom:6px;">Image Gallery: @product?.Name</h1>
+    <p style="color:var(--stf-on-surface-variant);margin-bottom:4px;">Additional photos for this product's detail page. The main product photo (used on cards/grids) is still set on the product's own Edit screen.</p>
+    <a asp-action="Edit" asp-route-id="@product?.ProductId" style="font-size:0.85rem;color:var(--stf-secondary);">&larr; Back to Product</a>
 
-    <form asp-action="AddImage" method="post" class="row g-2 mb-4 align-items-end">
+    <form asp-action="AddImage" method="post" class="stf-card" style="display:flex;gap:14px;align-items:flex-end;margin:20px 0;">
         @Html.AntiForgeryToken()
         <input type="hidden" name="productId" value="@product?.ProductId" />
-        <div class="col-md-7">
-            <label class="form-label small">Image URL</label>
-            <input name="imageUrl" class="form-control" placeholder="https://..." required />
+        <div style="flex:1;">
+            <label style="font-size:0.82rem;display:block;margin-bottom:6px;">Image URL</label>
+            <input name="imageUrl" required placeholder="https://..." style="width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:8px 12px;font-size:0.88rem;" />
         </div>
-        <div class="col-md-3 form-check mb-2">
-            <input type="checkbox" name="isPrimary" value="true" class="form-check-input" id="isPrimaryCheck" />
-            <label class="form-check-label" for="isPrimaryCheck">Set as primary gallery image</label>
-        </div>
-        <div class="col-md-2">
-            <button type="submit" class="btn btn-primary w-100">+ Add</button>
-        </div>
+        <label style="font-size:0.82rem;display:flex;align-items:center;gap:6px;">
+            <input type="checkbox" name="isPrimary" value="true" id="isPrimaryCheck" /> Set as primary gallery image
+        </label>
+        <button type="submit" class="stf-btn stf-btn-primary">+ Add</button>
     </form>
 
     @if (!Model.Any())
     {
-        <div class="alert alert-info">No gallery images yet - the product page will just show the main product photo.</div>
+        <div class="stf-card" style="text-align:center;padding:40px 20px;color:var(--stf-on-surface-variant);">No gallery images yet - the product page will just show the main product photo.</div>
     }
     else
     {
-        <div class="row g-3">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;">
             @foreach (var img in Model)
             {
-                <div class="col-md-3">
-                    <div class="card h-100">
-                        <img src="@img.ImageUrl" class="card-img-top" style="aspect-ratio:1;object-fit:cover;" alt="" />
-                        <div class="card-body">
-                            @if (img.IsPrimary)
-                            {
-                                <span class="badge bg-success mb-2">Primary</span>
-                            }
-                            else
-                            {
-                                <form asp-action="SetPrimaryImage" asp-route-id="@img.ProductImageId" method="post" class="d-inline">
-                                    @Html.AntiForgeryToken()
-                                    <button type="submit" class="btn btn-sm btn-outline-secondary mb-2">Make Primary</button>
-                                </form>
-                            }
-                            <form asp-action="RemoveImage" asp-route-id="@img.ProductImageId" method="post">
+                <div class="stf-card" style="padding:0;overflow:hidden;">
+                    <img src="@img.ImageUrl" style="width:100%;aspect-ratio:1;object-fit:cover;" alt="" />
+                    <div style="padding:14px;">
+                        @if (img.IsPrimary)
+                        {
+                            <span class="stf-badge stf-badge-active" style="margin-bottom:8px;display:inline-block;">Primary</span>
+                        }
+                        else
+                        {
+                            <form asp-action="SetPrimaryImage" asp-route-id="@img.ProductImageId" method="post" style="margin-bottom:8px;">
                                 @Html.AntiForgeryToken()
-                                <button type="submit" class="btn btn-sm btn-outline-danger w-100" onclick="return confirm('Remove this image?');">Remove</button>
+                                <button type="submit" class="stf-btn stf-btn-outline" style="width:100%;justify-content:center;padding:6px 10px;font-size:0.75rem;">Make Primary</button>
                             </form>
-                        </div>
+                        }
+                        <form asp-action="RemoveImage" asp-route-id="@img.ProductImageId" method="post">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="stf-btn stf-btn-danger-outline" style="width:100%;justify-content:center;padding:6px 10px;font-size:0.75rem;" onclick="return confirm('Remove this image?');">Remove</button>
+                        </form>
                     </div>
                 </div>
             }

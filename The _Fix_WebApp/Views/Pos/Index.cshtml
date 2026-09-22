@@ -1,106 +1,181 @@
 @model POSCheckoutViewModel
 @{
     ViewData["Title"] = "POS / Till";
+    Layout = "_StaffLayout";
+    decimal todaysTillSales = ViewBag.TodaysTillSales ?? 0m;
+    int todaysTillCount = ViewBag.TodaysTillTransactionCount ?? 0;
+    var currentShift = ViewBag.CurrentShift as ShiftSession;
 }
-<div class="container-fluid py-4">
-    <h2>POS / Till</h2>
 
-    <div class="row">
-        <div class="col-lg-7">
-            <div class="mb-3">
-                <label class="form-label">Scan or enter SKU</label>
-                <input type="text" id="barcodeInput" class="form-control form-control-lg" placeholder="Scan barcode or type SKU and press Enter" autofocus />
-                <div id="scanError" class="text-danger small mt-1"></div>
+<style>
+    /* Scoped to this page only. The scan-preview modal below MUST keep Bootstrap's own
+       .modal/.modal-dialog/.modal-content/.fade/.show classes exactly as-is - site.js uses
+       real bootstrap.Modal JS (loaded in _StaffLayout) to toggle them. But _StaffLayout only
+       ships staff.css, not Bootstrap's CSS, so without this the modal would be functional
+       but completely unstyled (and misplaced in the page flow while "hidden"). This supplies
+       just the visual layer Bootstrap's JS doesn't provide itself. */
+    .modal { display: none; position: fixed; inset: 0; z-index: 1055; overflow-y: auto; outline: 0; }
+    .modal.show { display: block; }
+    .modal-backdrop { position: fixed; inset: 0; z-index: 1050; background: #0a2217; opacity: 0; transition: opacity .1s linear; }
+    .modal-backdrop.show { opacity: .55; }
+    .modal-dialog { display: flex; align-items: center; min-height: calc(100% - 3.5rem); margin: 1.75rem auto; max-width: 480px; padding: 0 12px; }
+    .modal-content { width: 100%; background: #fff; border-radius: var(--stf-radius); box-shadow: 0 20px 50px rgba(10,34,23,.3); overflow: hidden; }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--stf-outline-variant); }
+    .modal-title { font-family: 'Newsreader', serif; font-size: 1.15rem; margin: 0; }
+    .modal-body { padding: 20px; }
+    .modal-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 20px; border-top: 1px solid var(--stf-outline-variant); }
+    .btn-close { width: 14px; height: 14px; border: none; background: transparent; position: relative; cursor: pointer; opacity: .6; }
+    .btn-close::before, .btn-close::after { content: ''; position: absolute; top: 50%; left: 50%; width: 14px; height: 2px; background: currentColor; }
+    .btn-close::before { transform: translate(-50%, -50%) rotate(45deg); }
+    .btn-close::after { transform: translate(-50%, -50%) rotate(-45deg); }
+    .btn-close:hover { opacity: 1; }
+
+    /* Cosmetic classes for the cart rows site.js builds at runtime (qty-input/remove-btn are
+       the functional hooks and were left untouched in site.js - only the visual class names
+       changed there, matching these). */
+    .pos-muted { color: var(--stf-on-surface-variant); font-size: 0.8rem; }
+    .pos-input { border: 1px solid var(--stf-outline-variant); border-radius: 6px; padding: 5px 8px; font-size: 0.85rem; }
+    .pos-btn-remove { border: 1px solid var(--stf-error); color: var(--stf-error); background: transparent; border-radius: 6px; padding: 5px 10px; font-size: 0.75rem; cursor: pointer; }
+    .pos-btn-remove:hover { background: var(--stf-error); color: #fff; }
+</style>
+
+<div class="stf-content">
+    <div class="stf-page-head">
+        <div>
+            <span class="stf-eyebrow">Operations Core</span>
+            <h1>Till</h1>
+        </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px;">
+        <div class="stf-card">
+            <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--stf-secondary);font-weight:600;">Today's Till Sales</div>
+            <div style="font-family:'Newsreader',serif;font-size:1.6rem;margin-top:6px;">@todaysTillSales.ToString("C")</div>
+            <div style="font-size:0.78rem;color:var(--stf-on-surface-variant);margin-top:4px;">@todaysTillCount transaction@(todaysTillCount == 1 ? "" : "s")</div>
+        </div>
+        <div class="stf-card">
+            <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--stf-secondary);font-weight:600;">Shift</div>
+            @if (currentShift is not null)
+            {
+                <div style="font-family:'Newsreader',serif;font-size:1.3rem;margin-top:6px;">Open</div>
+                <div style="font-size:0.78rem;color:var(--stf-on-surface-variant);margin-top:4px;">Since @currentShift.DateOpened.ToLocalTime().ToString("HH:mm") &middot; Float @currentShift.OpeningFloat.ToString("C")</div>
+            }
+            else
+            {
+                <div style="font-family:'Newsreader',serif;font-size:1.3rem;margin-top:6px;color:var(--stf-error);">Not Started</div>
+                <a asp-action="StartShift" class="stf-btn stf-btn-primary" style="margin-top:8px;padding:6px 14px;font-size:0.78rem;">Start Shift</a>
+            }
+        </div>
+        <div class="stf-card" style="display:flex;align-items:center;justify-content:center;">
+            @if (currentShift is not null)
+            {
+                <a asp-action="EndShift" class="stf-btn stf-btn-outline">End Shift</a>
+            }
+            else
+            {
+                <span style="font-size:0.82rem;color:var(--stf-on-surface-variant);">Trading without a shift open - your cash won't be reconciled at close-out.</span>
+            }
+        </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:20px;align-items:start;">
+        <div>
+            <div class="stf-card" style="margin-bottom:16px;">
+                <label style="font-size:0.82rem;font-weight:600;display:block;margin-bottom:8px;">Scan or enter SKU</label>
+                <input type="text" id="barcodeInput" placeholder="Scan barcode or type SKU and press Enter" autofocus
+                       style="width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:12px 16px;font-size:1rem;" />
+                <div id="scanError" style="color:var(--stf-error);font-size:0.82rem;margin-top:6px;"></div>
             </div>
 
-            <table class="table" id="cartTable">
+            <table class="stf-table" id="cartTable">
                 <thead>
                     <tr><th>Item</th><th>SKU</th><th>Qty</th><th>Unit Price</th><th>Line Total</th><th></th></tr>
                 </thead>
                 <tbody id="cartBody">
-                    <tr id="emptyCartRow"><td colspan="6" class="text-muted text-center py-3">Cart is empty - scan an item to begin.</td></tr>
+                    <tr id="emptyCartRow"><td colspan="6" style="text-align:center;padding:24px;color:var(--stf-on-surface-variant);">Cart is empty - scan an item to begin.</td></tr>
                 </tbody>
             </table>
         </div>
 
-        <div class="col-lg-5">
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="card-title">Checkout</h5>
+        <div class="stf-card">
+            <h5 style="font-family:'Newsreader',serif;font-size:1.15rem;margin:0 0 16px;">Checkout</h5>
 
-                    <form id="checkoutForm" asp-controller="Pos" asp-action="Checkout" method="post">
-                        <div id="cartInputs"></div>
+            <form id="checkoutForm" asp-controller="Pos" asp-action="Checkout" method="post">
+                <div id="cartInputs"></div>
 
-                        <div class="mb-2 d-flex justify-content-between">
-                            <span>Subtotal</span><strong id="subtotalDisplay">R0.00</strong>
-                        </div>
-                        <div class="mb-2">
-                            <label class="form-label">Discount</label>
-                            <input type="number" step="0.01" min="0" name="DiscountTotal" id="discountInput" class="form-control" value="0" />
-                        </div>
-                        <div class="mb-2 d-flex justify-content-between text-muted">
-                            <span>VAT (15%)</span><span id="vatDisplay">R0.00</span>
-                        </div>
-                        <div class="mb-3 d-flex justify-content-between fs-5 border-top pt-2">
-                            <span>Total</span><strong id="grandTotalDisplay">R0.00</strong>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label">Payment Method</label>
-                            <select name="PaymentMethod" class="form-select" required>
-                                <option value="Cash">Cash</option>
-                                <option value="CreditCard">Credit Card</option>
-                                <option value="DebitCard">Debit Card</option>
-                            </select>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label">Customer ID (optional)</label>
-                            <input type="text" name="CustomerId" class="form-control" placeholder="Link this sale to a customer account" />
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label">Email receipt to (optional)</label>
-                            <input type="email" name="ReceiptEmail" class="form-control" placeholder="customer@example.com" />
-                            <div class="form-text">Overrides the linked customer's email if both are filled in - handy for walk-in customers with no account.</div>
-                        </div>
-
-                        <button type="submit" id="checkoutBtn" class="btn btn-danger w-100" disabled>Complete Sale</button>
-                    </form>
+                <div style="display:flex;justify-content:space-between;font-size:0.9rem;margin-bottom:10px;">
+                    <span>Subtotal</span><strong id="subtotalDisplay">R0.00</strong>
                 </div>
-            </div>
+                <div style="margin-bottom:10px;">
+                    <label style="font-size:0.82rem;display:block;margin-bottom:4px;">Discount</label>
+                    <input type="number" step="0.01" min="0" name="DiscountTotal" id="discountInput" value="0"
+                           style="width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:8px 12px;font-size:0.9rem;" />
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:0.85rem;color:var(--stf-on-surface-variant);margin-bottom:10px;">
+                    <span>VAT (15%)</span><span id="vatDisplay">R0.00</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:1.15rem;font-weight:600;border-top:1px solid var(--stf-outline-variant);padding-top:10px;margin-bottom:16px;">
+                    <span>Total</span><strong id="grandTotalDisplay">R0.00</strong>
+                </div>
+
+                <div style="margin-bottom:12px;">
+                    <label style="font-size:0.82rem;display:block;margin-bottom:4px;">Payment Method</label>
+                    <select name="PaymentMethod" required style="width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:9px 12px;font-size:0.9rem;">
+                        <option value="Cash">Cash</option>
+                        <option value="CreditCard">Credit Card</option>
+                        <option value="DebitCard">Debit Card</option>
+                    </select>
+                </div>
+
+                <div style="margin-bottom:12px;">
+                    <label style="font-size:0.82rem;display:block;margin-bottom:4px;">Customer ID (optional)</label>
+                    <input type="text" name="CustomerId" placeholder="Link this sale to a customer account"
+                           style="width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:9px 12px;font-size:0.9rem;" />
+                </div>
+
+                <div style="margin-bottom:16px;">
+                    <label style="font-size:0.82rem;display:block;margin-bottom:4px;">Email receipt to (optional)</label>
+                    <input type="email" name="ReceiptEmail" placeholder="customer@example.com"
+                           style="width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:9px 12px;font-size:0.9rem;" />
+                    <div style="font-size:0.75rem;color:var(--stf-on-surface-variant);margin-top:4px;">Overrides the linked customer's email if both are filled in - handy for walk-in customers with no account.</div>
+                </div>
+
+                <button type="submit" id="checkoutBtn" class="stf-btn stf-btn-primary" style="width:100%;justify-content:center;" disabled>Complete Sale</button>
+            </form>
         </div>
     </div>
 </div>
 
-<!-- Scan preview modal - shown every time a SKU is found, before it's added to the till. -->
+<!-- Scan preview modal - shown every time a SKU is found, before it's added to the till.
+     Bootstrap classes/attributes below are required as-is; see the <style> block above. -->
 <div class="modal fade" id="scanPreviewModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">Item Scanned</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <div class="d-flex gap-3">
-                    <img id="scanPreviewImage" src="" alt="" class="rounded border"
-                         style="width:120px;height:120px;object-fit:cover;flex-shrink:0;" />
+                <div style="display:flex;gap:14px;">
+                    <img id="scanPreviewImage" src="" alt=""
+                         style="width:120px;height:120px;object-fit:cover;flex-shrink:0;border-radius:8px;border:1px solid var(--stf-outline-variant);" />
                     <div>
-                        <h5 id="scanPreviewName" class="mb-1"></h5>
-                        <div id="scanPreviewDetails" class="text-muted small mb-2"></div>
-                        <div class="fs-5 fw-bold" id="scanPreviewPrice"></div>
-                        <div id="scanPreviewStock" class="text-muted small"></div>
+                        <h5 id="scanPreviewName" style="font-family:'Newsreader',serif;font-size:1.1rem;margin:0 0 6px;"></h5>
+                        <div id="scanPreviewDetails" style="color:var(--stf-on-surface-variant);font-size:0.82rem;margin-bottom:8px;"></div>
+                        <div id="scanPreviewPrice" style="font-size:1.15rem;font-weight:700;"></div>
+                        <div id="scanPreviewStock" style="color:var(--stf-on-surface-variant);font-size:0.82rem;"></div>
                     </div>
                 </div>
 
-                <div class="mt-3">
-                    <label class="form-label">Quantity</label>
-                    <input type="number" id="scanPreviewQty" class="form-control" value="1" min="1" />
+                <div style="margin-top:16px;">
+                    <label style="font-size:0.82rem;display:block;margin-bottom:4px;">Quantity</label>
+                    <input type="number" id="scanPreviewQty" value="1" min="1"
+                           style="width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:9px 12px;font-size:0.9rem;" />
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-danger" id="scanPreviewAddBtn">Add to Till</button>
+                <button type="button" class="stf-btn stf-btn-outline" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="stf-btn stf-btn-primary" id="scanPreviewAddBtn">Add to Till</button>
             </div>
         </div>
     </div>

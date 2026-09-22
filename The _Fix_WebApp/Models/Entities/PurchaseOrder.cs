@@ -67,6 +67,9 @@ public enum PurchaseOrderStatus
     Cancelled
 }
 
+public enum PurchaseOrderPaymentStatus { Unpaid, Paid }
+public enum SupplierPaymentMethod { EFT, Cash, Card, Other }
+
 public class PurchaseOrder
 {
     [Key]
@@ -103,6 +106,17 @@ public class PurchaseOrder
 
     [MaxLength(500)]
     public string? Notes { get; set; }
+
+    // --- Payment (paid manually - suppliers are settled by EFT/invoice, not through a
+    // payment gateway; see the payment-flow planning discussion. Only ever set once the PO
+    // is Received - see PurchaseOrdersController.MarkPaid.) ---
+    public PurchaseOrderPaymentStatus PaymentStatus { get; set; } = PurchaseOrderPaymentStatus.Unpaid;
+    public SupplierPaymentMethod? PaymentMethod { get; set; }
+
+    [MaxLength(100)]
+    public string? PaymentReference { get; set; }
+
+    public DateTime? PaymentDate { get; set; }
 
     public ICollection<PurchaseOrderItem> Items { get; set; } = new List<PurchaseOrderItem>();
 

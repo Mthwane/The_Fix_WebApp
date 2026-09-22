@@ -65,15 +65,31 @@ public class PaymentsController : Controller
             return RedirectToAction("Cart", "Shop");
         }
 
-        var cart = SessionCart.Get(HttpContext.Session);
-        if (cart.Lines.Count == 0)
+        var cart = SessionCart.GetSnapshot(HttpContext.Session, actualReference);
+        if (cart is null || cart.Lines.Count == 0)
         {
-            // Verified payment but no cart left in session - shouldn't normally happen,
+            // Verified payment but no snapshot left in session - shouldn't normally happen,
             // but don't silently lose a paid transaction: log it loudly for manual follow-up.
             _logger.LogError(
-                "Payment {Reference} verified for {Amount:C} but no cart was found in session.",
+                "Payment {Reference} verified for {Amount:C} but no cart snapshot was found in session.",
                 actualReference, verifyResult.AmountRands);
             this.ToastError("Your payment succeeded but your cart session expired. Please contact support with reference " + actualReference);
+            return RedirectToAction("Index", "Shop");
+        }
+
+        // Reconcile what was actually charged against what this snapshot says the order
+        // should cost. The snapshot closes the "edit your cart while sitting on Paystack's
+        // page" window, but this check is the belt-and-braces backstop: it catches anything
+        // that could still cause a mismatch (a clock/rounding edge case, a gateway anomaly)
+        // rather than ever silently creating an order for a different amount than was paid.
+        var expectedVat = TaxSettings.CalculateVat(cart.SubTotal);
+        var expectedTotal = cart.SubTotal + expectedVat;
+        if (Math.Abs(expectedTotal - verifyResult.AmountRands) > 0.01m)
+        {
+            _logger.LogError(
+                "Payment {Reference} verified for {Paid:C} but the reconciled cart total is {Expected:C} - refusing to create an order automatically.",
+                actualReference, verifyResult.AmountRands, expectedTotal);
+            this.ToastError($"Your payment succeeded but the amount doesn't match your order - nothing has been charged incorrectly, but we need to check this manually. Please contact support with reference {actualReference}.");
             return RedirectToAction("Index", "Shop");
         }
 
@@ -138,6 +154,7 @@ public class PaymentsController : Controller
         }
 
         SessionCart.Clear(HttpContext.Session);
+        SessionCart.ClearSnapshot(HttpContext.Session, actualReference);
         HttpContext.Session.Remove("PendingPaymentReference");
         HttpContext.Session.Remove("PendingPaymentMethod");
         HttpContext.Session.Remove("PendingAddressId");

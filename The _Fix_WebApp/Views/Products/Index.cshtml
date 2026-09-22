@@ -33,7 +33,7 @@
     {
         <table class="stf-table">
             <thead>
-                <tr><th>Product</th><th>Style Code</th><th>Category</th><th>Sizes / Colours</th><th>Price</th><th>Stock</th><th></th></tr>
+                <tr><th>Product</th><th>Style Code</th><th>Category</th><th>Variants &amp; SKUs</th><th>Price</th><th>Stock</th><th></th></tr>
             </thead>
             <tbody>
             @foreach (var p in Model)
@@ -43,9 +43,13 @@
                     <td><code>@p.SKU</code></td>
                     <td>@p.Category</td>
                     <td>
-                        <span style="font-size:0.82rem;">@string.Join(", ", p.DistinctSizes)</span>
-                        <div style="font-size:0.78rem;color:var(--stf-on-surface-variant);">@string.Join(", ", p.DistinctColors)</div>
-                        <div style="font-size:0.78rem;color:var(--stf-on-surface-variant);">@p.Variants.Count(v => v.IsActive) variant(s)</div>
+                        @foreach (var v in p.Variants.Where(v => v.IsActive).OrderBy(v => v.Size).ThenBy(v => v.Color))
+                        {
+                            <div style="font-size:0.78rem;white-space:nowrap;">
+                                @v.Size/@v.Color &mdash; <code>@v.SKU</code>
+                                <span style="color:var(--stf-on-surface-variant);">(@v.StockQuantity)</span>
+                            </div>
+                        }
                     </td>
                     <td>@p.SellingPrice.ToString("C")</td>
                     <td>

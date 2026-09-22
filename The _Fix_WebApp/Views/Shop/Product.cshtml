@@ -1,5 +1,4 @@
 @model ProductDetailViewModel
-@using System.Globalization
 @{
     var product = Model.Product;
     ViewData["Title"] = product.Name;
@@ -60,10 +59,10 @@
                 }
 
                 <div class="ffs-product-price-row" style="margin-bottom:16px;">
-                    <span class="ffs-price" style="font-size:1.4rem;">@product.SellingPrice.ToString("N2")</span>
+                    <span class="ffs-price" style="font-size:1.4rem;">R@product.SellingPrice.ToString("N2")</span>
                     @if (product.IsOnSale)
                     {
-                        <span class="ffs-price-was">@product.CompareAtPrice!.Value.ToString("N2",CultureInfo.GetCultureInfo("en-ZA"))</span>
+                        <span class="ffs-price-was">R@product.CompareAtPrice!.Value.ToString("N2")</span>
                         <span class="ffs-product-badge ffs-badge-clay" style="position:static;">@(product.DiscountPercentage)% off</span>
                     }
                 </div>

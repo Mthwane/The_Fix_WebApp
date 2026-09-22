@@ -383,8 +383,12 @@ public class ShopController : Controller
         }
 
         // Stash what the callback will need to rebuild the order once payment is verified.
-        // The cart itself is already in Session - we just remember which payment method,
-        // delivery address, reference, and "save this card?" choice this attempt belongs to.
+        // The CART CONTENTS are snapshotted here (see SessionCart.SaveSnapshot) rather than
+        // re-read from the live session cart at callback time - that's the fix for the
+        // price/quantity-tampering window where a customer could edit their cart in another
+        // tab while sitting on Paystack's page. Everything else here is just metadata this
+        // attempt belongs to.
+        SessionCart.SaveSnapshot(HttpContext.Session, reference, cart);
         HttpContext.Session.SetString("PendingPaymentReference", reference);
         HttpContext.Session.SetString("PendingPaymentMethod", model.PaymentMethod.ToString());
         HttpContext.Session.SetInt32("PendingAddressId", deliveryAddress.CustomerAddressId);

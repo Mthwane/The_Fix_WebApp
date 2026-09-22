@@ -36,7 +36,23 @@ public class PosController : Controller
 
     // GET: /Pos - the till interface for staff.
     [HttpGet]
-    public IActionResult Index() => View(new POSCheckoutViewModel());
+    public async Task<IActionResult> Index()
+    {
+        var userId = _userManager.GetUserId(User);
+        var today = DateTime.UtcNow.Date;
+
+        var todaysSales = await _context.Orders
+            .Where(o => o.ProcessedByUserId == userId && o.OrderType == OrderType.POS && o.DateCreated >= today)
+            .ToListAsync();
+
+        ViewBag.TodaysTillSales = todaysSales.Sum(o => o.GrandTotal);
+        ViewBag.TodaysTillTransactionCount = todaysSales.Count;
+
+        ViewBag.CurrentShift = await _context.ShiftSessions.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.UserId == userId && s.Status == ShiftStatus.Open);
+
+        return View(new POSCheckoutViewModel());
+    }
 
     // GET: /Pos/StartShift - opening float entry. Not a hard gate on using the till (POS
     // access isn't blocked without an open shift, to avoid a risky behavioural change to an

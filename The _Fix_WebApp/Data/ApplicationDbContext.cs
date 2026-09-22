@@ -27,7 +27,6 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<FeaturedProduct> FeaturedProducts => Set<FeaturedProduct>();
     public DbSet<SiteSettings> SiteSettings => Set<SiteSettings>();
     public DbSet<PricingSettings> PricingSettings => Set<PricingSettings>();
-
     public DbSet<CategoryPricingRule> CategoryPricingRules => Set<CategoryPricingRule>();
     public DbSet<EmailSubscriber> EmailSubscribers => Set<EmailSubscriber>();
     public DbSet<ShiftSession> ShiftSessions => Set<ShiftSession>();
@@ -169,15 +168,11 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         // SiteSettings is a manually-assigned singleton row (always Id = 1), not an
         // auto-incrementing identity column - without this, EF treats the int primary key as
         // IDENTITY by convention and rejects the explicit Id=1 insert in Program.cs.
-
-
-
         builder.Entity<SiteSettings>().Property(s => s.Id).ValueGeneratedNever();
 
+        // Same singleton pattern for PricingSettings (the global default markup).
         builder.Entity<PricingSettings>().Property(p => p.Id).ValueGeneratedNever();
         builder.Entity<PricingSettings>().Property(p => p.DefaultMarkupPercentage).HasPrecision(9, 2);
-
-        // A category can only have one markup rule...
 
         // A category can only have one markup rule (Category is never null here, unlike a
         // theoretical "global" row, so a plain unique index is safe - SQL Server would let

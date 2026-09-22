@@ -120,6 +120,16 @@ public class HomeController : Controller
         var sections = BuildSectionsForCurrentUser();
         var model = await _dashboardService.BuildAsync(sections, _userManager.GetUserId(User));
 
+        var (eyebrow, title, subtitle) = BuildHeroForCurrentUser();
+        ViewBag.HeroEyebrow = eyebrow;
+        ViewBag.HeroTitle = title;
+        ViewBag.HeroSubtitle = subtitle;
+
+        model.MyPermissionLabels = Permissions.All
+            .Where(kv => Can(kv.Key))
+            .Select(kv => kv.Value)
+            .ToList();
+
         // Low-stock notification (US-03): surfaces as a toast every time a staff member
         // lands on the dashboard while items are below threshold, on top of the table below.
         if (sections.HasFlag(DashboardSections.Inventory) && model.LowStockCount > 0)
@@ -169,8 +179,30 @@ public class HomeController : Controller
         if (Can(Permissions.EmployeesManage)) sections |= DashboardSections.Staff;
         if (Can(Permissions.AuditLogsView)) sections |= DashboardSections.AuditActivity;
         if (Can(Permissions.PosUse) || Can(Permissions.ReportsView)) sections |= DashboardSections.Shift;
+        if (Can(Permissions.RolesManage)) sections |= DashboardSections.AccessControl;
 
         return sections;
+    }
+
+    // Chooses which "console" framing to show - based on what the user can actually do, not a
+    // hardcoded role-name check, so a custom role (Section 3.1 of the app's permission model)
+    // still gets a sensible tier instead of falling through to nothing. Highest tier whose
+    // condition matches wins.
+    private (string Eyebrow, string Title, string Subtitle) BuildHeroForCurrentUser()
+    {
+        if (Can(Permissions.RolesManage) && Can(Permissions.EmployeesManage))
+            return ("Enterprise Governance", "Administrator Command Console",
+                "Staff access control, permission matrices, and full operational oversight across every part of the store.");
+
+        if (Can(Permissions.ReportsView) && (Can(Permissions.SuppliersManage) || Can(Permissions.PurchaseOrdersApprove)))
+            return ("Operations Core", "Store Manager Operations & BI Console",
+                "Sales velocity, restock queues, till reconciliation, and purchase approvals in one view.");
+
+        if (Can(Permissions.PosUse))
+            return ("Operations Core", "Workstation Console",
+                "Your shift, your queue, your numbers for the day.");
+
+        return ("Operations Core", "Dashboard", "");
     }
 
     // POST: /Home/LogClientError - best-effort sink for uncaught JS errors, so a failure
@@ -203,7 +235,7 @@ public class HomeController : Controller
     // generic message so real errors don't get mislabeled as a missing page.
     [HttpGet]
     [AllowAnonymous]
-    public new IActionResult StatusCode(int code)
+    public IActionResult StatusCode(int code)
     {
         if (code == 404) return View("NotFound");
 

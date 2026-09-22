@@ -1,42 +1,42 @@
 @model List<ProductVariant>
 @{
     ViewData["Title"] = "Low Stock";
+    Layout = "_StaffLayout";
 }
-<div class="container-fluid py-4">
-    <a asp-controller="Home" asp-action="Dashboard" class="btn btn-outline-secondary btn-sm mb-3">&larr; Dashboard</a>
+<div class="stf-content">
+    <a asp-controller="Home" asp-action="Dashboard" class="stf-btn stf-btn-outline" style="margin-bottom:16px;display:inline-flex;">&larr; Dashboard</a>
 
-    <h2>Low Stock</h2>
-    <p class="text-muted">Every active size/colour currently at or below its style's restock threshold, most urgent first. Click Restock to jump straight to that product's Edit page.</p>
+    <span class="stf-eyebrow">Catalogue</span>
+    <h1 style="margin-bottom:6px;">Low Stock</h1>
+    <p style="color:var(--stf-on-surface-variant);margin-bottom:20px;">Every active size/colour currently at or below its style's restock threshold, most urgent first. Click Restock to jump straight to that product's Edit page.</p>
 
     @if (!Model.Any())
     {
-        <div class="alert alert-success"><i class="bi bi-check-circle"></i> Nothing is low on stock right now.</div>
+        <div class="stf-card" style="text-align:center;padding:40px 20px;color:var(--stf-on-surface-variant);">Nothing is low on stock right now.</div>
     }
     else
     {
-        <table class="table table-hover align-middle">
+        <table class="stf-table">
             <thead><tr><th>Product</th><th>Size/Colour</th><th>SKU</th><th>Category</th><th>Current Stock</th><th>Threshold</th><th></th></tr></thead>
             <tbody>
                 @foreach (var v in Model)
                 {
                     var isOutOfStock = v.StockQuantity == 0;
-                    <tr class="@(isOutOfStock ? "table-danger" : "table-warning")">
-                        <td>@v.Product.Name</td>
+                    <tr style="@(isOutOfStock ? "background:var(--stf-error-container);" : "background:var(--stf-secondary-container);")">
+                        <td style="font-weight:600;">@v.Product.Name</td>
                         <td>@v.Size / @v.Color</td>
-                        <td>@v.SKU</td>
+                        <td><code>@v.SKU</code></td>
                         <td>@v.Product.Category</td>
                         <td>
                             <strong>@v.StockQuantity</strong>
                             @if (isOutOfStock)
                             {
-                                <span class="badge bg-danger ms-1">Out of stock</span>
+                                <span class="stf-badge stf-badge-danger" style="margin-left:4px;">Out of stock</span>
                             }
                         </td>
                         <td>@v.Product.LowStockThreshold</td>
-                        <td class="text-end">
-                            <a asp-controller="Products" asp-action="Edit" asp-route-id="@v.ProductId" class="btn btn-sm btn-danger">
-                                <i class="bi bi-box-seam"></i> Restock
-                            </a>
+                        <td style="text-align:right;">
+                            <a asp-controller="Products" asp-action="Edit" asp-route-id="@v.ProductId" class="stf-btn stf-btn-danger-outline" style="padding:6px 14px;font-size:0.78rem;">Restock</a>
                         </td>
                     </tr>
                 }

@@ -54,12 +54,14 @@
             @if (Can(Permissions.OrdersManage))
             {
                 <a class="@NavClass("Orders")" asp-controller="Orders" asp-action="Index">Orders &amp; Dispatches</a>
-
             }
-            @if (Can(Permissions.OrdersManage))
-{
-    <a class="@NavClass("Orders")" asp-controller="Orders" asp-action="Index">Orders &amp; Dispatches</a>
-}
+            @if (Can(Permissions.StorefrontManage))
+            {
+                <a class="@NavClass("Departments")" asp-controller="Departments" asp-action="Index">Departments</a>
+                <a class="@(currentController == "Storefront" && currentAction == "Trending" ? "stf-nav-link active" : "stf-nav-link")" asp-controller="Storefront" asp-action="Trending">Trending Picks</a>
+                <a class="@(currentController == "Storefront" && currentAction == "Content" ? "stf-nav-link active" : "stf-nav-link")" asp-controller="Storefront" asp-action="Content">Homepage Content</a>
+                <a class="@(currentController == "Storefront" && currentAction == "Reviews" ? "stf-nav-link active" : "stf-nav-link")" asp-controller="Storefront" asp-action="Reviews">Reviews</a>
+            }
 
 @if (Can(Permissions.SuppliersManage) || Can(Permissions.PurchaseOrdersManage) || Can(Permissions.ReturnsProcess))
 {
@@ -83,10 +85,6 @@
 {
     <a class="@NavClass("Reports")" asp-controller="Reports" asp-action="Index">Reports &amp; Margins</a>
 }
-            @if (Can(Permissions.ReportsView))
-            {
-                <a class="@NavClass("Reports")" asp-controller="Reports" asp-action="Index">Reports &amp; Margins</a>
-            }
 
             <div class="stf-sidebar-footer">
                 @if (currentUser is not null)

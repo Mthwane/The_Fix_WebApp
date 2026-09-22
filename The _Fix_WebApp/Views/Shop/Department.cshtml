@@ -239,10 +239,10 @@
                                 <div class="ffs-product-desc">@product.Material@(string.IsNullOrWhiteSpace(product.Fit) ? "" : $" &middot; {product.Fit}")</div>
                             }
                             <div class="ffs-product-price-row">
-                                <span class="ffs-price">@product.SellingPrice.ToString("N0")</span>
+                                <span class="ffs-price">R@product.SellingPrice.ToString("N0")</span>
                                 @if (product.IsOnSale)
                                 {
-                                    <span class="ffs-price-was">@product.CompareAtPrice!.Value.ToString("N0")</span>
+                                    <span class="ffs-price-was">R@product.CompareAtPrice!.Value.ToString("N0")</span>
                                 }
                             </div>
 

@@ -1,112 +1,272 @@
 @model List<Order>
+@using System.Globalization
+@using System.Text
+@using Microsoft.AspNetCore.Html
 @{
     ViewData["Title"] = "Reports & Analytics";
+    Layout = "_StaffLayout";
+    string I(double v) => v.ToString("0.##", CultureInfo.InvariantCulture);
+
     var bestSellers = ViewBag.BestSellers as IEnumerable<dynamic>;
     var revenueByCategory = ViewBag.RevenueByCategory as IEnumerable<dynamic>;
+    var channelSplit = ViewBag.ChannelSplit as IEnumerable<dynamic>;
+    var dailyTrend = ViewBag.DailyTrend as IEnumerable<dynamic>;
+    var revenueByDepartment = ViewBag.RevenueByDepartment as IEnumerable<dynamic>;
+    var recentTransactions = ViewBag.RecentTransactions as IEnumerable<dynamic>;
+    var avgLeadTime = ViewBag.AvgSupplierLeadTimeDays as double?;
+    var sellThrough = ViewBag.SellThroughRate as double?;
+    DateTime from = ViewBag.From;
+    DateTime to = ViewBag.To;
+    OrderType? selectedChannel = ViewBag.SelectedChannel;
+
+    IHtmlContent TrendChart(List<(DateTime Date, decimal Revenue)> points, int w, int h)
+    {
+        if (points.Count < 2)
+        {
+            return new HtmlString($"<div style='display:flex;align-items:center;justify-content:center;height:{h}px;color:var(--stf-on-surface-variant);font-size:0.85rem;'>Not enough data in this range yet.</div>");
+        }
+        var max = Math.Max(points.Max(p => p.Revenue), 1m);
+        int n = points.Count;
+        double padL = 6, padR = 6, padT = 14, padB = 8;
+        double plotW = w - padL - padR, plotH = h - padT - padB;
+        var pts = new List<(double X, double Y)>();
+        for (int i = 0; i < n; i++)
+        {
+            double x = padL + plotW * i / (n - 1);
+            double y = padT + plotH - (double)(points[i].Revenue / max) * plotH;
+            pts.Add((x, y));
+        }
+        var line = new StringBuilder();
+        for (int i = 0; i < pts.Count; i++) line.Append(i == 0 ? $"M{I(pts[i].X)},{I(pts[i].Y)}" : $" L{I(pts[i].X)},{I(pts[i].Y)}");
+        var area = line.ToString() + $" L{I(pts[^1].X)},{I(padT + plotH)} L{I(pts[0].X)},{I(padT + plotH)} Z";
+
+        var sb = new StringBuilder();
+        sb.Append($"<svg viewBox='0 0 {w} {h}' preserveAspectRatio='none' style='width:100%;height:{h}px;' xmlns='http://www.w3.org/2000/svg'>");
+        sb.Append("<defs><linearGradient id='trendFill' x1='0' y1='0' x2='0' y2='1'><stop offset='0%' stop-color='#2f5943' stop-opacity='.3'/><stop offset='100%' stop-color='#2f5943' stop-opacity='0'/></linearGradient></defs>");
+        sb.Append($"<path d='{area}' fill='url(#trendFill)' stroke='none'/>");
+        sb.Append($"<path d='{line}' fill='none' stroke='#2f5943' stroke-width='2.5' vector-effect='non-scaling-stroke'/>");
+        sb.Append("</svg>");
+        return new HtmlString(sb.ToString());
+    }
+
+    IHtmlContent DonutChart(List<(string Label, decimal Value)> segments, int size)
+    {
+        var palette = new[] { "#2f5943", "#c9a227", "#7a9385", "#a0522d", "#5b7a68", "#d9c98a" };
+        var total = segments.Sum(s => s.Value);
+        if (total <= 0) return new HtmlString($"<div style='display:flex;align-items:center;justify-content:center;height:{size}px;color:var(--stf-on-surface-variant);font-size:0.8rem;'>No data yet.</div>");
+        double radius = size / 2.0 - 9, cx = size / 2.0, cy = size / 2.0;
+        double circumference = 2 * Math.PI * radius;
+        double offset = 0;
+        var sb = new StringBuilder();
+        sb.Append($"<svg viewBox='0 0 {size} {size}' style='width:{size}px;height:{size}px;' xmlns='http://www.w3.org/2000/svg'>");
+        sb.Append($"<circle cx='{I(cx)}' cy='{I(cy)}' r='{I(radius)}' fill='none' stroke='var(--stf-surface-container)' stroke-width='14'/>");
+        for (int i = 0; i < segments.Count; i++)
+        {
+            double frac = (double)(segments[i].Value / total);
+            double dash = frac * circumference;
+            sb.Append($"<circle cx='{I(cx)}' cy='{I(cy)}' r='{I(radius)}' fill='none' stroke='{palette[i % palette.Length]}' stroke-width='14' stroke-dasharray='{I(dash)} {I(circumference)}' stroke-dashoffset='-{I(offset)}' transform='rotate(-90 {I(cx)} {I(cy)})' />");
+            offset += dash;
+        }
+        sb.Append("</svg>");
+        return new HtmlString(sb.ToString());
+    }
+
+    var trendPoints = dailyTrend?.Select(d => ((DateTime)d.Date, (decimal)d.Revenue)).ToList() ?? new List<(DateTime, decimal)>();
+    var deptPalette = new[] { "#2f5943", "#c9a227", "#7a9385", "#a0522d", "#5b7a68", "#d9c98a" };
+    var deptSegments = revenueByDepartment?.Select(d => ((string)d.Department, (decimal)d.Revenue)).ToList() ?? new List<(string, decimal)>();
 }
-<div class="container py-4">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2 class="mb-0">Reports & Analytics</h2>
+
+<div class="stf-content">
+    <div class="stf-page-head">
+        <div>
+            <span class="stf-eyebrow">Reports</span>
+            <h1>Sales Performance & Margins</h1>
+            <p>Revenue, cost of goods, and VAT for the selected range - computed live from Orders, never a cached rollup.</p>
+        </div>
     </div>
 
-    <form asp-controller="Reports" asp-action="Index" method="get" class="row g-2 mb-4 align-items-end">
-        <div class="col-auto">
-            <label class="form-label">From</label>
-            <input type="date" name="from" value="@(((DateTime)ViewBag.From).ToString("yyyy-MM-dd"))" class="form-control" />
+    <form asp-controller="Reports" asp-action="Index" method="get" class="stf-card" style="display:flex;gap:12px;flex-wrap:wrap;align-items:end;margin-bottom:20px;">
+        @{ string F = "border:1px solid var(--stf-outline-variant);border-radius:8px;padding:8px 12px;font-size:0.85rem;"; }
+        <div>
+            <label style="font-size:0.78rem;display:block;margin-bottom:4px;">From</label>
+            <input type="date" name="from" value="@from.ToString("yyyy-MM-dd")" style="@F" />
         </div>
-        <div class="col-auto">
-            <label class="form-label">To</label>
-            <input type="date" name="to" value="@(((DateTime)ViewBag.To).ToString("yyyy-MM-dd"))" class="form-control" />
+        <div>
+            <label style="font-size:0.78rem;display:block;margin-bottom:4px;">To</label>
+            <input type="date" name="to" value="@to.ToString("yyyy-MM-dd")" style="@F" />
         </div>
-        <div class="col-auto">
-            <button type="submit" class="btn btn-primary">Update</button>
+        <div>
+            <label style="font-size:0.78rem;display:block;margin-bottom:4px;">Channel</label>
+            <select name="channel" style="@F">
+                <option value="">All Channels</option>
+                <option value="POS" selected="@(selectedChannel == OrderType.POS)">POS (In-Store)</option>
+                <option value="Online" selected="@(selectedChannel == OrderType.Online)">Online</option>
+            </select>
         </div>
-        <div class="col-auto">
-            <a class="btn btn-outline-success"
-               asp-controller="Reports" asp-action="Export"
-               asp-route-format="csv"
-               asp-route-from="@(((DateTime)ViewBag.From).ToString("yyyy-MM-dd"))"
-               asp-route-to="@(((DateTime)ViewBag.To).ToString("yyyy-MM-dd"))">
-                Export CSV
-            </a>
-        </div>
+        <button type="submit" class="stf-btn stf-btn-primary">Update</button>
+        <a class="stf-btn stf-btn-outline" asp-controller="Reports" asp-action="Export" asp-route-format="csv"
+           asp-route-from="@from.ToString("yyyy-MM-dd")" asp-route-to="@to.ToString("yyyy-MM-dd")" asp-route-channel="@selectedChannel">
+            Export CSV
+        </a>
     </form>
 
-    <div class="row g-3 mb-4">
-        <div class="col-md-3">
-            <div class="card"><div class="card-body">
-                <h6 class="text-muted">Total Revenue</h6>
-                <h3>@(((decimal)ViewBag.TotalRevenue).ToString("C"))</h3>
-            </div></div>
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:24px;">
+        <div class="stf-card">
+            <div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:.05em;color:var(--stf-secondary);font-weight:600;">Gross Merchandise Value</div>
+            <div style="font-family:'Newsreader',serif;font-size:1.4rem;margin-top:6px;">@(((decimal)ViewBag.TotalRevenue).ToString("C"))</div>
         </div>
-        <div class="col-md-3">
-            <div class="card"><div class="card-body">
-                <h6 class="text-muted">Orders</h6>
-                <h3>@ViewBag.OrderCount</h3>
-            </div></div>
+        <div class="stf-card">
+            <div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:.05em;color:var(--stf-secondary);font-weight:600;">Cost of Goods Sold</div>
+            <div style="font-family:'Newsreader',serif;font-size:1.4rem;margin-top:6px;">@(((decimal)ViewBag.EstimatedExpenses).ToString("C"))</div>
         </div>
-        <div class="col-md-3">
-            <div class="card"><div class="card-body">
-                <h6 class="text-muted">Est. Cost of Goods</h6>
-                <h3>@(((decimal)ViewBag.EstimatedExpenses).ToString("C"))</h3>
-            </div></div>
+        <div class="stf-card" style="background:var(--stf-primary);color:#fff;">
+            <div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:.05em;opacity:.85;font-weight:600;">Net Profit</div>
+            <div style="font-family:'Newsreader',serif;font-size:1.4rem;margin-top:6px;">@(((decimal)ViewBag.EstimatedProfit).ToString("C"))</div>
         </div>
-        <div class="col-md-3">
-            <div class="card border-success"><div class="card-body">
-                <h6 class="text-muted">Est. Gross Profit</h6>
-                <h3>@(((decimal)ViewBag.EstimatedProfit).ToString("C"))</h3>
-            </div></div>
+        <div class="stf-card">
+            <div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:.05em;color:var(--stf-secondary);font-weight:600;">VAT Collected (15%)</div>
+            <div style="font-family:'Newsreader',serif;font-size:1.4rem;margin-top:6px;">@(((decimal)ViewBag.VatCollected).ToString("C"))</div>
+        </div>
+        <div class="stf-card">
+            <div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:.05em;color:var(--stf-secondary);font-weight:600;">Units Dispatched</div>
+            <div style="font-family:'Newsreader',serif;font-size:1.4rem;margin-top:6px;">@ViewBag.UnitsDispatched</div>
+            <div style="font-size:0.75rem;color:var(--stf-on-surface-variant);margin-top:4px;">Across @ViewBag.OrderCount order(s)</div>
         </div>
     </div>
 
-    <div class="row">
-        <div class="col-md-6">
-            <h5>Best Sellers</h5>
-            <table class="table table-sm">
-                <thead><tr><th>Product</th><th>Units Sold</th><th>Revenue</th></tr></thead>
-                <tbody>
-                @if (bestSellers is not null)
-                {
-                    @foreach (var b in bestSellers)
-                    {
-                        <tr><td>@b.Name</td><td>@b.UnitsSold</td><td>@(((decimal)b.Revenue).ToString("C"))</td></tr>
-                    }
-                }
-                </tbody>
-            </table>
+    <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:20px;align-items:start;margin-bottom:24px;">
+        <div class="stf-card">
+            <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--stf-outline);margin-bottom:2px;">Daily, over the range</div>
+            <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:0 0 12px;">Revenue Trend</h5>
+            @TrendChart(trendPoints, 640, 180)
         </div>
-        <div class="col-md-6">
-            <h5>Revenue by Category</h5>
-            <table class="table table-sm">
-                <thead><tr><th>Category</th><th>Revenue</th></tr></thead>
-                <tbody>
+        <div class="stf-card">
+            <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--stf-outline);margin-bottom:2px;">This range</div>
+            <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:0 0 12px;">Revenue by Department</h5>
+            <div style="text-align:center;">@DonutChart(deptSegments, 150)</div>
+            <div style="margin-top:14px;">
+                @for (int i = 0; i < deptSegments.Count; i++)
+                {
+                    <div style="display:flex;align-items:center;gap:8px;font-size:0.8rem;padding:3px 0;">
+                        <span style="width:10px;height:10px;border-radius:3px;background:@deptPalette[i % deptPalette.Length];flex-shrink:0;"></span>
+                        <span style="flex:1;">@deptSegments[i].Item1</span>
+                        <strong>@deptSegments[i].Item2.ToString("C")</strong>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:20px;align-items:start;margin-bottom:24px;">
+        <div>
+            <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:0 0 12px;">Revenue by Category &middot; POS vs Online</h5>
+            <div class="stf-card">
                 @if (revenueByCategory is not null)
                 {
-                    @foreach (var c in revenueByCategory)
+                    foreach (var c in revenueByCategory)
                     {
-                        <tr><td>@c.Category</td><td>@(((decimal)c.Revenue).ToString("C"))</td></tr>
+                        decimal total = c.Revenue, pos = c.PosRevenue, online = c.OnlineRevenue;
+                        double posPct = total > 0 ? (double)(pos / total) * 100 : 0;
+                        <div style="margin-bottom:14px;">
+                            <div style="display:flex;justify-content:space-between;font-size:0.85rem;margin-bottom:4px;">
+                                <span>@c.Category</span><span>@total.ToString("C")</span>
+                            </div>
+                            <div style="height:8px;background:var(--stf-surface-container);border-radius:4px;overflow:hidden;display:flex;">
+                                <div style="width:@I(posPct)%;background:#2f5943;"></div>
+                                <div style="flex:1;background:#c9a227;"></div>
+                            </div>
+                            <div style="font-size:0.72rem;color:var(--stf-on-surface-variant);margin-top:3px;">POS @pos.ToString("C") &middot; Online @online.ToString("C")</div>
+                        </div>
                     }
                 }
-                </tbody>
-            </table>
+            </div>
+        </div>
+
+        <div>
+            <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:0 0 12px;">Top 5 Best Sellers</h5>
+            <div class="stf-card" style="padding:0;margin-bottom:20px;">
+                @if (bestSellers is not null)
+                {
+                    foreach (var b in bestSellers)
+                    {
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--stf-surface-container);">
+                            <div>
+                                <div style="font-weight:600;font-size:0.85rem;">@b.Name</div>
+                                <div style="font-size:0.75rem;color:var(--stf-on-surface-variant);">@b.UnitsSold units sold</div>
+                            </div>
+                            <strong>@(((decimal)b.Revenue).ToString("C"))</strong>
+                        </div>
+                    }
+                }
+            </div>
+
+            <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:0 0 12px;">Channel Split</h5>
+            <div class="stf-card">
+                @if (channelSplit is not null)
+                {
+                    foreach (var c in channelSplit)
+                    {
+                        <div style="display:flex;justify-content:space-between;font-size:0.85rem;padding:5px 0;">
+                            <span>@c.Channel</span><strong>@(((decimal)c.Revenue).ToString("C")) <span style="color:var(--stf-on-surface-variant);font-weight:400;">(@c.Count)</span></strong>
+                        </div>
+                    }
+                }
+            </div>
         </div>
     </div>
 
-    <h5 class="mt-4">Orders in Range</h5>
-    <table class="table table-sm">
-        <thead><tr><th>Order #</th><th>Date</th><th>Type</th><th>Status</th><th>Payment</th><th>Total</th></tr></thead>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px;">
+        <div class="stf-card">
+            <div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:.05em;color:var(--stf-secondary);font-weight:600;">Avg. Supplier Lead Time</div>
+            <div style="font-family:'Newsreader',serif;font-size:1.5rem;margin-top:6px;">@(avgLeadTime.HasValue ? avgLeadTime.Value.ToString("0.#") + " days" : "-")</div>
+            <div style="font-size:0.75rem;color:var(--stf-on-surface-variant);margin-top:4px;">Average across active suppliers - how long a restock typically takes to arrive.</div>
+        </div>
+        <div class="stf-card">
+            <div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:.05em;color:var(--stf-secondary);font-weight:600;">Sell-Through Rate</div>
+            <div style="font-family:'Newsreader',serif;font-size:1.5rem;margin-top:6px;">@(sellThrough.HasValue ? sellThrough.Value.ToString("0.#") + "%" : "-")</div>
+            <div style="font-size:0.75rem;color:var(--stf-on-surface-variant);margin-top:4px;">Units sold in this range, as a share of units sold plus what's still on hand.</div>
+        </div>
+    </div>
+
+    <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:0 0 12px;">Recent Transactions</h5>
+    <table class="stf-table" style="margin-bottom:24px;">
+        <thead><tr><th>Order #</th><th>Date</th><th>Channel</th><th>GMV</th><th>VAT</th><th>COGS</th><th>Margin</th></tr></thead>
         <tbody>
-        @foreach (var o in Model.OrderByDescending(o => o.DateCreated))
+        @if (recentTransactions is not null)
         {
-            <tr>
-                <td>@o.OrderNumber</td>
-                <td>@o.DateCreated.ToLocalTime()</td>
-                <td>@o.OrderType</td>
-                <td>@o.Status</td>
-                <td>@o.PaymentMethod</td>
-                <td>@o.GrandTotal.ToString("C")</td>
-            </tr>
+            foreach (var t in recentTransactions)
+            {
+                <tr>
+                    <td style="font-weight:600;">@t.OrderNumber</td>
+                    <td style="font-size:0.8rem;color:var(--stf-on-surface-variant);">@(((DateTime)t.DateCreated).ToLocalTime().ToString("dd MMM, HH:mm"))</td>
+                    <td>@t.OrderType</td>
+                    <td>@(((decimal)t.Gmv).ToString("C"))</td>
+                    <td>@(((decimal)t.Vat).ToString("C"))</td>
+                    <td>@(((decimal)t.Cogs).ToString("C"))</td>
+                    <td style="font-weight:600;">@(((decimal)t.Margin).ToString("C"))</td>
+                </tr>
+            }
         }
         </tbody>
     </table>
+
+    <details>
+        <summary style="cursor:pointer;font-size:0.85rem;color:var(--stf-secondary);margin-bottom:10px;">Show all @Model.Count order(s) in range</summary>
+        <table class="stf-table">
+            <thead><tr><th>Order #</th><th>Date</th><th>Type</th><th>Status</th><th>Payment</th><th>Total</th></tr></thead>
+            <tbody>
+            @foreach (var o in Model.OrderByDescending(o => o.DateCreated))
+            {
+                <tr>
+                    <td>@o.OrderNumber</td>
+                    <td>@o.DateCreated.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</td>
+                    <td>@o.OrderType</td>
+                    <td><span class="stf-badge stf-badge-muted">@o.Status</span></td>
+                    <td>@o.PaymentMethod</td>
+                    <td>@o.GrandTotal.ToString("C")</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </details>
 </div>

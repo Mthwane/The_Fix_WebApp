@@ -9,7 +9,7 @@
     var barcodeInput = document.getElementById('barcodeInput');
     if (!barcodeInput) return; // Not on the POS page.
 
-    var cart = []; // { productId, name, sku, quantity, unitPrice }
+    var cart = []; // { productId, variantId, name, sku, size, color, quantity, unitPrice }
     var cartBody = document.getElementById('cartBody');
     var emptyCartRow = document.getElementById('emptyCartRow');
     var cartInputs = document.getElementById('cartInputs');
@@ -54,19 +54,22 @@
 
             var row = document.createElement('tr');
             row.innerHTML =
-                '<td>' + line.name + '</td>' +
+                '<td>' + line.name + (line.size || line.color ? ' <span class="pos-muted">(' + [line.size, line.color].filter(Boolean).join('/') + ')</span>' : '') + '</td>' +
                 '<td>' + line.sku + '</td>' +
-                '<td><input type="number" min="1" value="' + line.quantity + '" class="form-control form-control-sm qty-input" style="width:70px;" data-index="' + index + '" /></td>' +
+                '<td><input type="number" min="1" value="' + line.quantity + '" class="pos-input qty-input" style="width:70px;" data-index="' + index + '" /></td>' +
                 '<td>' + formatCurrency(line.unitPrice) + '</td>' +
                 '<td>' + formatCurrency(lineTotal) + '</td>' +
-                '<td><button type="button" class="btn btn-sm btn-outline-danger remove-btn" data-index="' + index + '" title="Remove from this till - does not delete the product">Remove</button></td>';
+                '<td><button type="button" class="pos-btn-remove remove-btn" data-index="' + index + '" title="Remove from this till - does not delete the product">Remove</button></td>';
             cartBody.appendChild(row);
 
             var prefix = 'CartItems[' + index + ']';
             [
                 ['ProductId', line.productId],
+                ['VariantId', line.variantId],
                 ['ProductName', line.name],
                 ['SKU', line.sku],
+                ['Size', line.size || ''],
+                ['Color', line.color || ''],
                 ['Quantity', line.quantity],
                 ['UnitPrice', line.unitPrice]
             ].forEach(function (pair) {
@@ -109,14 +112,17 @@
     }
 
     function addToCart(product, quantity) {
-        var existing = cart.find(function (l) { return l.productId === product.productId; });
+        var existing = cart.find(function (l) { return l.variantId === product.variantId; });
         if (existing) {
             existing.quantity += quantity;
         } else {
             cart.push({
                 productId: product.productId,
+                variantId: product.variantId,
                 name: product.name,
                 sku: product.sku,
+                size: product.size,
+                color: product.color,
                 quantity: quantity,
                 unitPrice: product.sellingPrice
             });
