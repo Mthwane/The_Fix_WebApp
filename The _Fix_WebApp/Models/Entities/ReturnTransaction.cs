@@ -9,6 +9,11 @@ public enum RefundMethod
     StoreCredit
 }
 
+/// <summary>
+/// A processed return against a line on a past order. Ported from V1 with one substantive change:
+/// restocking now targets the specific ProductVariant that came back, not the parent style, so a
+/// returned "M/Black" goes back into M/Black stock rather than being smeared across the style.
+/// </summary>
 public class ReturnTransaction
 {
     [Key]
@@ -20,11 +25,19 @@ public class ReturnTransaction
     public int OrderItemId { get; set; }
     public OrderItem OrderItem { get; set; } = null!;
 
+    /// <summary>The exact size/colour returned. Nullable because a historical order line raised
+    /// before variants existed has no variant to point at - those restock manually.</summary>
+    public int? ProductVariantId { get; set; }
+    public ProductVariant? ProductVariant { get; set; }
+
     public string ProcessedByUserId { get; set; } = string.Empty;
     public ApplicationUser? ProcessedByUser { get; set; }
 
     public int QuantityReturned { get; set; }
-    public bool IsResalable { get; set; } = true; // whether item is restocked
+
+    /// <summary>Whether the item goes back on the shelf. False (damaged/worn) means the customer
+    /// is still refunded but stock is NOT incremented.</summary>
+    public bool IsResalable { get; set; } = true;
 
     public RefundMethod RefundMethod { get; set; }
 
@@ -35,30 +48,4 @@ public class ReturnTransaction
     public string? Reason { get; set; }
 
     public DateTime DateProcessed { get; set; } = DateTime.UtcNow;
-}
-
-public enum InventoryChangeReason
-{
-    Sale,
-    Return,
-    PurchaseOrderReceived,
-    ManualAdjustment,
-    OrderCancelled
-}
-
-/// <summary>Audit trail of every stock quantity change, for traceability.</summary>
-public class InventoryTransaction
-{
-    [Key]
-    public int InventoryTransactionId { get; set; }
-
-    public int ProductId { get; set; }
-    public Product Product { get; set; } = null!;
-
-    /// <summary>Positive = stock added, Negative = stock removed.</summary>
-    public int QuantityChange { get; set; }
-
-    public InventoryChangeReason Reason { get; set; }
-
-    public DateTime DateRecorded { get; set; } = DateTime.UtcNow;
 }

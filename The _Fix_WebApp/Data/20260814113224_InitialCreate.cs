@@ -372,44 +372,7 @@ namespace The__Fix_WebApp.Data
                         onDelete: ReferentialAction.Cascade);
                 });
 
-            migrationBuilder.CreateTable(
-                name: "ReturnTransactions",
-                columns: table => new
-                {
-                    ReturnId = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("SqlServer:Identity", "1, 1"),
-                    OrderId = table.Column<int>(type: "int", nullable: false),
-                    OrderItemId = table.Column<int>(type: "int", nullable: false),
-                    ProcessedByUserId = table.Column<string>(type: "nvarchar(450)", nullable: false),
-                    QuantityReturned = table.Column<int>(type: "int", nullable: false),
-                    IsResalable = table.Column<bool>(type: "bit", nullable: false),
-                    RefundMethod = table.Column<int>(type: "int", nullable: false),
-                    RefundAmount = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
-                    Reason = table.Column<string>(type: "nvarchar(250)", maxLength: 250, nullable: true),
-                    DateProcessed = table.Column<DateTime>(type: "datetime2", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_ReturnTransactions", x => x.ReturnId);
-                    table.ForeignKey(
-                        name: "FK_ReturnTransactions_AspNetUsers_ProcessedByUserId",
-                        column: x => x.ProcessedByUserId,
-                        principalTable: "AspNetUsers",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_ReturnTransactions_OrderItems_OrderItemId",
-                        column: x => x.OrderItemId,
-                        principalTable: "OrderItems",
-                        principalColumn: "OrderItemId",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_ReturnTransactions_Orders_OrderId",
-                        column: x => x.OrderId,
-                        principalTable: "Orders",
-                        principalColumn: "OrderId",
-                        onDelete: ReferentialAction.Restrict);
-                });
+
 
             migrationBuilder.CreateIndex(
                 name: "IX_AspNetRoleClaims_RoleId",

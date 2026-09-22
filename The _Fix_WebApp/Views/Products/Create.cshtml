@@ -1,6 +1,10 @@
 @model ProductViewModel
 @{
     ViewData["Title"] = "Add Product";
+    var categories = (List<string>)ViewBag.Categories;
+    var sizes = (List<string>)ViewBag.Sizes;
+    var colors = (List<string>)ViewBag.Colors;
+    var brands = (List<string>)ViewBag.Brands;
 }
 
 <h1>Add New Product</h1>
@@ -12,50 +16,86 @@
         <div class="col-md-6 mb-3">
             <label asp-for="Name" class="form-label"></label>
             <input asp-for="Name" class="form-control" />
+            <span asp-validation-for="Name" class="text-danger"></span>
         </div>
         <div class="col-md-6 mb-3">
-            <label asp-for="SKU" class="form-label"></label>
-            <input asp-for="SKU" class="form-control" />
+            <label class="form-label">SKU</label>
+            <input type="text" class="form-control" value="Generated automatically after saving" disabled />
+            <div class="form-text">Assigned from the category (e.g. "CLO-0001") once the product is created - never typed in manually.</div>
         </div>
         <div class="col-md-12 mb-3">
             <label asp-for="Description" class="form-label"></label>
             <textarea asp-for="Description" class="form-control" rows="3" placeholder="Shown to customers browsing the shop, and to staff on the POS scan popup"></textarea>
+            <span asp-validation-for="Description" class="text-danger"></span>
         </div>
-        <div class="col-md-4 mb-3">
+        <div class="col-md-3 mb-3">
             <label asp-for="Category" class="form-label"></label>
-            <input asp-for="Category" class="form-control" />
+            <select asp-for="Category" class="form-select">
+                <option value="">-- Choose a category --</option>
+                @foreach (var c in categories)
+                {
+                    <option value="@c">@c</option>
+                }
+            </select>
+            <span asp-validation-for="Category" class="text-danger"></span>
         </div>
-        <div class="col-md-4 mb-3">
+        <div class="col-md-3 mb-3">
             <label asp-for="Size" class="form-label"></label>
-            <input asp-for="Size" class="form-control" />
+            <input asp-for="Size" class="form-control" list="sizeOptions" autocomplete="off" placeholder="Choose or type a new size" />
+            <datalist id="sizeOptions">
+                @foreach (var s in sizes)
+                {
+                    <option value="@s"></option>
+                }
+            </datalist>
+            <span asp-validation-for="Size" class="text-danger"></span>
         </div>
-        <div class="col-md-4 mb-3">
+        <div class="col-md-3 mb-3">
             <label asp-for="Color" class="form-label"></label>
-            <input asp-for="Color" class="form-control" />
+            <select asp-for="Color" class="form-select">
+                <option value="">-- Choose a colour --</option>
+                @foreach (var c in colors)
+                {
+                    <option value="@c">@c</option>
+                }
+            </select>
+            <span asp-validation-for="Color" class="text-danger"></span>
         </div>
-        <div class="col-md-4 mb-3">
+        <div class="col-md-3 mb-3">
             <label asp-for="Brand" class="form-label"></label>
-            <input asp-for="Brand" class="form-control" />
+            <input asp-for="Brand" class="form-control" list="brandOptions" autocomplete="off" placeholder="Choose or type a new brand" />
+            <datalist id="brandOptions">
+                @foreach (var b in brands)
+                {
+                    <option value="@b"></option>
+                }
+            </datalist>
+            <span asp-validation-for="Brand" class="text-danger"></span>
         </div>
         <div class="col-md-4 mb-3">
             <label asp-for="ImageUrl" class="form-label"></label>
             <input asp-for="ImageUrl" class="form-control" placeholder="https://..." />
+            <span asp-validation-for="ImageUrl" class="text-danger"></span>
         </div>
         <div class="col-md-4 mb-3">
             <label asp-for="CostPrice" class="form-label"></label>
             <input asp-for="CostPrice" class="form-control" />
+            <span asp-validation-for="CostPrice" class="text-danger"></span>
         </div>
         <div class="col-md-4 mb-3">
             <label asp-for="SellingPrice" class="form-label"></label>
             <input asp-for="SellingPrice" class="form-control" />
+            <span asp-validation-for="SellingPrice" class="text-danger"></span>
         </div>
         <div class="col-md-4 mb-3">
             <label asp-for="StockQuantity" class="form-label"></label>
             <input asp-for="StockQuantity" class="form-control" />
+            <span asp-validation-for="StockQuantity" class="text-danger"></span>
         </div>
         <div class="col-md-4 mb-3">
             <label asp-for="LowStockThreshold" class="form-label"></label>
             <input asp-for="LowStockThreshold" class="form-control" />
+            <span asp-validation-for="LowStockThreshold" class="text-danger"></span>
         </div>
     </div>
 

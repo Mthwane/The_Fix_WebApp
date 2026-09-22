@@ -1,49 +1,80 @@
 @model List<PurchaseOrder>
 @{
     ViewData["Title"] = "Purchase Orders";
+    Layout = "_StaffLayout";
+    var counts = ViewBag.StatusCounts as Dictionary<PurchaseOrderStatus, int> ?? new();
+    var selected = ViewBag.SelectedStatus as PurchaseOrderStatus?;
+    int CountFor(PurchaseOrderStatus? s) => s is null ? counts.Values.Sum() : (counts.TryGetValue(s.Value, out var c) ? c : 0);
+
+    (string cls, string? bg, string? fg) BadgeFor(PurchaseOrderStatus s) => s switch
+    {
+        PurchaseOrderStatus.Draft => ("stf-badge stf-badge-muted", null, null),
+        PurchaseOrderStatus.AwaitingApproval => ("stf-badge", "var(--stf-secondary-container)", "var(--stf-secondary)"),
+        PurchaseOrderStatus.Approved => ("stf-badge stf-badge-active", null, null),
+        PurchaseOrderStatus.Rejected => ("stf-badge stf-badge-danger", null, null),
+        PurchaseOrderStatus.Shipped => ("stf-badge", "var(--stf-primary-container)", "var(--stf-on-primary-container)"),
+        PurchaseOrderStatus.Received => ("stf-badge stf-badge-active", null, null),
+        PurchaseOrderStatus.Cancelled => ("stf-badge stf-badge-danger", null, null),
+        _ => ("stf-badge stf-badge-muted", null, null)
+    };
 }
-<div class="container py-4">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2 class="mb-0">Purchase Orders</h2>
+
+<div class="stf-content">
+    <div class="stf-page-head">
         <div>
-            <a asp-controller="Suppliers" asp-action="Index" class="btn btn-outline-secondary">Suppliers</a>
-            <a asp-controller="PurchaseOrders" asp-action="Create" class="btn btn-primary">New Purchase Order</a>
+            <span class="stf-eyebrow">Supply Chain</span>
+            <h1>Purchase Orders</h1>
+            <p>Raise, approve, book and receive restock requests. Stock only moves once an order is actually received.</p>
         </div>
+        <a asp-action="Create" class="stf-btn stf-btn-primary">+ New Purchase Order</a>
     </div>
 
-    <table class="table table-sm">
-        <thead><tr><th>PO #</th><th>Supplier</th><th>Items</th><th>Status</th><th>Created</th><th>Expected</th><th></th></tr></thead>
-        <tbody>
-        @foreach (var po in Model)
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;">
+        <a asp-action="Index" class="stf-chip" style="@(selected is null ? "background:var(--stf-primary);color:#fff;" : "")">All <strong style="margin-left:4px;">@CountFor(null)</strong></a>
+        @foreach (var s in Enum.GetValues<PurchaseOrderStatus>())
         {
-            <tr>
-                <td>@po.PONumber</td>
-                <td>@po.Supplier?.Name</td>
-                <td>@po.Items.Sum(i => i.QuantityOrdered) unit(s) / @po.Items.Count line(s)</td>
-                <td>
-                    @{
-                        var statusClass = po.Status switch
-                        {
-                            PurchaseOrderStatus.Received => "bg-success",
-                            PurchaseOrderStatus.Cancelled => "bg-danger",
-                            PurchaseOrderStatus.Shipped => "bg-info text-dark",
-                            _ => "bg-secondary"
-                        };
-                    }
-                    <span class="badge @statusClass">@po.Status</span>
-                </td>
-                <td>@po.DateCreated.ToLocalTime().ToShortDateString()</td>
-                <td>@(po.DateExpected?.ToShortDateString() ?? "-")</td>
-                <td>
-                    @if (po.Status != PurchaseOrderStatus.Received)
-                    {
-                        <form asp-controller="PurchaseOrders" asp-action="Receive" asp-route-id="@po.PurchaseOrderId" method="post" class="d-inline">
-                            <button type="submit" class="btn btn-sm btn-outline-success">Mark Received</button>
-                        </form>
-                    }
-                </td>
-            </tr>
+            <a asp-action="Index" asp-route-status="@s" class="stf-chip" style="@(selected == s ? "background:var(--stf-primary);color:#fff;" : "")">@s <strong style="margin-left:4px;">@CountFor(s)</strong></a>
         }
-        </tbody>
-    </table>
+    </div>
+
+    @if (Model.Count == 0)
+    {
+        <div class="stf-card" style="text-align:center;padding:40px 20px;color:var(--stf-on-surface-variant);">
+            <p style="margin-bottom:16px;">No purchase orders @(selected is null ? "yet" : $"with status {selected}").</p>
+            <a asp-action="Create" class="stf-btn stf-btn-primary">+ New Purchase Order</a>
+        </div>
+    }
+    else
+    {
+        <table class="stf-table">
+            <thead>
+                <tr>
+                    <th>PO Number</th>
+                    <th>Supplier</th>
+                    <th>Lines</th>
+                    <th>Total Cost</th>
+                    <th>Status</th>
+                    <th>Raised By</th>
+                    <th>Date</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var po in Model)
+                {
+                    var (cls, bg, fg) = BadgeFor(po.Status);
+                    <tr>
+                        <td style="font-weight:600;"><a asp-action="Details" asp-route-id="@po.PurchaseOrderId">@po.PONumber</a></td>
+                        <td>@po.Supplier.Name</td>
+                        <td>@po.Items.Count</td>
+                        <td>@po.TotalCost.ToString("C")</td>
+                        <td><span class="@cls" style="@(bg is null ? "" : $"background:{bg};color:{fg};")">@po.Status</span></td>
+                        <td>@(po.CreatedByUser?.FullName ?? "-")</td>
+                        <td>@po.DateCreated.ToString("dd MMM yyyy")</td>
+                        <td style="text-align:right;"><a asp-action="Details" asp-route-id="@po.PurchaseOrderId" class="stf-btn stf-btn-outline" style="padding:6px 14px;font-size:0.78rem;">View</a></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
 </div>

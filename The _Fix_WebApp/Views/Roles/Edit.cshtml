@@ -9,7 +9,7 @@
     {
         <div class="alert alert-info">
             This is a built-in role.
-            @(Model.Name == "Administrator" ? "Administrators always keep every permission, to guarantee at least one account can always manage the system." : "Its permissions can still be adjusted below.")
+            @(Model.Name == "Administrator" ? "\"Manage Roles & Permissions\" can't be removed from Administrator - that's what guarantees at least one account can always get back in here to restore permissions. Every other permission can be freely adjusted below." : "Its permissions can still be adjusted below.")
         </div>
     }
 
@@ -22,11 +22,17 @@
             @foreach (var permission in Model.AllPermissions)
             {
                 var isChecked = Model.SelectedPermissions.Contains(permission.Key);
-                var isLocked = Model.Name == "Administrator";
+                var isLocked = Model.Name == "Administrator" && permission.Key == FashionFix.Web.Security.Permissions.RolesManage;
                 <div class="form-check">
                     <input type="checkbox" class="form-check-input" name="SelectedPermissions" value="@permission.Key"
                            id="perm_@permission.Key" checked="@isChecked" disabled="@isLocked" />
-                    <label class="form-check-label" for="perm_@permission.Key">@permission.Value</label>
+                    <label class="form-check-label" for="perm_@permission.Key">
+                        @permission.Value
+                        @if (isLocked)
+                        {
+                            <span class="badge bg-secondary ms-1">Required</span>
+                        }
+                    </label>
                     @if (isLocked)
                     {
                         <input type="hidden" name="SelectedPermissions" value="@permission.Key" />

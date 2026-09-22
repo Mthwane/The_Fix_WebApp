@@ -1,0 +1,206 @@
+@model PurchaseOrder
+@{
+    ViewData["Title"] = Model.PONumber;
+    Layout = "_StaffLayout";
+    bool canApprove = ViewBag.CanApprove;
+    var shipment = ViewBag.Shipment as CourierShipment;
+    bool courierConfigured = ViewBag.CourierConfigured;
+
+    (string cls, string? bg, string? fg) badge = Model.Status switch
+    {
+        PurchaseOrderStatus.Draft => ("stf-badge stf-badge-muted", null, null),
+        PurchaseOrderStatus.AwaitingApproval => ("stf-badge", "var(--stf-secondary-container)", "var(--stf-secondary)"),
+        PurchaseOrderStatus.Approved => ("stf-badge stf-badge-active", null, null),
+        PurchaseOrderStatus.Rejected => ("stf-badge stf-badge-danger", null, null),
+        PurchaseOrderStatus.Shipped => ("stf-badge", "var(--stf-primary-container)", "var(--stf-on-primary-container)"),
+        PurchaseOrderStatus.Received => ("stf-badge stf-badge-active", null, null),
+        PurchaseOrderStatus.Cancelled => ("stf-badge stf-badge-danger", null, null),
+        _ => ("stf-badge stf-badge-muted", null, null)
+    };
+
+    bool canReceive = Model.Status is PurchaseOrderStatus.Approved or PurchaseOrderStatus.Shipped;
+    bool canCancel = Model.Status != PurchaseOrderStatus.Received && Model.Status != PurchaseOrderStatus.Cancelled
+        && !Model.Items.Any(i => i.QuantityReceived > 0);
+}
+
+<div class="stf-content">
+    <div class="stf-page-head">
+        <div>
+            <span class="stf-eyebrow">Purchase Order</span>
+            <h1>@Model.PONumber</h1>
+            <p>
+                <span class="@badge.cls" style="@(badge.bg is null ? "" : $"background:{badge.bg};color:{badge.fg};")">@Model.Status</span>
+                &nbsp;Raised by @(Model.CreatedByUser?.FullName ?? "unknown") on @Model.DateCreated.ToString("dd MMM yyyy")
+                @if (Model.RestockBundle is not null)
+                {
+                    <text>&nbsp;&middot; generated from <a asp-controller="RestockBundles" asp-action="Details" asp-route-id="@Model.RestockBundle.RestockBundleId">@Model.RestockBundle.Name</a></text>
+                }
+            </p>
+        </div>
+        <a asp-action="Index" class="stf-btn stf-btn-outline">&larr; Back to Purchase Orders</a>
+    </div>
+
+    <div style="display:grid;grid-template-columns:2fr 1fr;gap:20px;align-items:start;">
+        <div>
+            <table class="stf-table" style="margin-bottom:20px;">
+                <thead>
+                    <tr>
+                        <th>Variant</th>
+                        <th>SKU</th>
+                        <th style="width:90px;">Ordered</th>
+                        <th style="width:90px;">Received</th>
+                        <th style="width:100px;">Unit Cost</th>
+                        <th style="width:100px;">Line Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in Model.Items)
+                    {
+                        <tr>
+                            <td>@item.ProductVariant.Product.Name <span style="color:var(--stf-on-surface-variant);">(@item.ProductVariant.Size/@item.ProductVariant.Color)</span></td>
+                            <td><code>@item.ProductVariant.SKU</code></td>
+                            <td>@item.QuantityOrdered</td>
+                            <td>@item.QuantityReceived @(item.QuantityOutstanding > 0 ? $"({item.QuantityOutstanding} outstanding)" : "")</td>
+                            <td>@item.UnitCost.ToString("C")</td>
+                            <td>@((item.QuantityOrdered * item.UnitCost).ToString("C"))</td>
+                        </tr>
+                    }
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="5" style="text-align:right;font-weight:600;">Total Cost</td>
+                        <td style="font-weight:600;">@Model.TotalCost.ToString("C")</td>
+                    </tr>
+                </tfoot>
+            </table>
+
+            @if (!string.IsNullOrWhiteSpace(Model.Notes))
+            {
+                <div class="stf-card" style="margin-bottom:20px;">
+                    <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--stf-outline);margin-bottom:6px;">Notes</div>
+                    <p style="margin:0;font-size:0.88rem;">@Model.Notes</p>
+                </div>
+            }
+
+            @if (Model.Status == PurchaseOrderStatus.Rejected && !string.IsNullOrWhiteSpace(Model.ReviewNotes))
+            {
+                <div class="stf-card" style="margin-bottom:20px;border-color:var(--stf-error);">
+                    <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--stf-error);margin-bottom:6px;">Rejection Reason (@(Model.ApprovedByUser?.FullName ?? "reviewer"), @Model.DateApproved?.ToString("dd MMM yyyy"))</div>
+                    <p style="margin:0;font-size:0.88rem;">@Model.ReviewNotes</p>
+                </div>
+            }
+
+            @if (Model.Status is PurchaseOrderStatus.Approved or PurchaseOrderStatus.Shipped or PurchaseOrderStatus.Received)
+            {
+                <div class="stf-card" style="margin-bottom:20px;">
+                    <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--stf-outline);margin-bottom:6px;">Courier Collection</div>
+                    @if (shipment is not null)
+                    {
+                        <p style="margin:0 0 4px;font-size:0.88rem;"><strong>Waybill:</strong> @shipment.TrackingReference &nbsp; <strong>Status:</strong> @shipment.Stage</p>
+                        <p style="margin:0;font-size:0.8rem;color:var(--stf-on-surface-variant);">Last synced @shipment.LastSyncedAt?.ToString("dd MMM yyyy, HH:mm")</p>
+                    }
+                    else if (Model.Status == PurchaseOrderStatus.Approved)
+                    {
+                        <p style="margin:0 0 12px;font-size:0.85rem;color:var(--stf-on-surface-variant);">
+                            @(courierConfigured ? "No collection booked yet." : "The Courier Guy isn't configured in this environment - collection has to be arranged manually.")
+                        </p>
+                        @if (courierConfigured)
+                        {
+                            <form asp-action="BookCollection" asp-route-id="@Model.PurchaseOrderId" method="post">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="stf-btn stf-btn-primary" style="padding:8px 16px;font-size:0.8rem;">Book Collection</button>
+                            </form>
+                        }
+                    }
+                    else
+                    {
+                        <p style="margin:0;font-size:0.85rem;color:var(--stf-on-surface-variant);">No collection was booked for this order.</p>
+                    }
+                </div>
+            }
+
+            @if (canReceive)
+            {
+                var outstanding = Model.Items.Where(i => i.QuantityOutstanding > 0).ToList();
+                <div class="stf-card">
+                    <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--stf-outline);margin-bottom:10px;">Receive Stock</div>
+                    @if (outstanding.Count == 0)
+                    {
+                        <p style="margin:0;font-size:0.85rem;color:var(--stf-on-surface-variant);">Everything on this order has already been received.</p>
+                    }
+                    else
+                    {
+                        <form asp-action="Receive" asp-route-id="@Model.PurchaseOrderId" method="post">
+                            @Html.AntiForgeryToken()
+                            <table class="stf-table" style="margin-bottom:12px;">
+                                <thead><tr><th>Variant</th><th style="width:100px;">Outstanding</th><th style="width:130px;">Receiving Now</th></tr></thead>
+                                <tbody>
+                                    @foreach (var item in outstanding)
+                                    {
+                                        <tr>
+                                            <td>@item.ProductVariant.Product.Name (@item.ProductVariant.Size/@item.ProductVariant.Color)</td>
+                                            <td>@item.QuantityOutstanding</td>
+                                            <td>
+                                                <input type="hidden" name="itemIds" value="@item.PurchaseOrderItemId" />
+                                                <input type="number" name="receivedQuantities" min="0" max="@item.QuantityOutstanding" value="0" style="width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:6px 10px;" />
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                            <button type="submit" class="stf-btn stf-btn-primary" style="padding:8px 16px;font-size:0.8rem;">Record Receipt</button>
+                        </form>
+                    }
+                </div>
+            }
+        </div>
+
+        <div>
+            @if (Model.IsEditable)
+            {
+                <div class="stf-card" style="margin-bottom:16px;">
+                    <p style="margin:0 0 12px;font-size:0.85rem;color:var(--stf-on-surface-variant);">This order is a @(Model.Status == PurchaseOrderStatus.Rejected ? "rejected" : "draft") - submit it when it's ready for approval.</p>
+                    <form asp-action="Submit" asp-route-id="@Model.PurchaseOrderId" method="post">
+                        @Html.AntiForgeryToken()
+                        <button type="submit" class="stf-btn stf-btn-primary" style="width:100%;justify-content:center;">Submit for Approval</button>
+                    </form>
+                </div>
+            }
+
+            @if (Model.Status == PurchaseOrderStatus.AwaitingApproval)
+            {
+                if (canApprove)
+                {
+                    <div class="stf-card" style="margin-bottom:16px;">
+                        <p style="margin:0 0 12px;font-size:0.85rem;font-weight:600;">Authorise @Model.TotalCost.ToString("C") in spend?</p>
+                        <form asp-action="Approve" asp-route-id="@Model.PurchaseOrderId" method="post" style="margin-bottom:10px;">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="stf-btn stf-btn-primary" style="width:100%;justify-content:center;">Approve</button>
+                        </form>
+                        <form asp-action="Reject" asp-route-id="@Model.PurchaseOrderId" method="post">
+                            @Html.AntiForgeryToken()
+                            <textarea name="reviewNotes" rows="2" placeholder="Reason for rejecting (sent back to the raiser)" style="width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:8px 12px;font-size:0.82rem;margin-bottom:8px;"></textarea>
+                            <button type="submit" class="stf-btn stf-btn-danger-outline" style="width:100%;justify-content:center;">Reject</button>
+                        </form>
+                    </div>
+                }
+                else
+                {
+                    <div class="stf-card" style="margin-bottom:16px;">
+                        <p style="margin:0;font-size:0.85rem;color:var(--stf-on-surface-variant);">Awaiting approval from a manager or administrator - you don't have approval rights.</p>
+                    </div>
+                }
+            }
+
+            @if (canCancel)
+            {
+                <div class="stf-card">
+                    <form asp-action="Cancel" asp-route-id="@Model.PurchaseOrderId" method="post" onsubmit="return confirm('Cancel @Model.PONumber? This can\'t be undone.');">
+                        @Html.AntiForgeryToken()
+                        <button type="submit" class="stf-btn stf-btn-danger-outline" style="width:100%;justify-content:center;">Cancel Purchase Order</button>
+                    </form>
+                </div>
+            }
+        </div>
+    </div>
+</div>

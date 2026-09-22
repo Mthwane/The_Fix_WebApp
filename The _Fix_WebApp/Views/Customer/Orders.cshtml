@@ -3,6 +3,13 @@
     ViewData["Title"] = "My Orders";
     var cancellableStatuses = ViewBag.CancellableStatuses as OrderStatus[] ?? Array.Empty<OrderStatus>();
     var fallbackImage = "https://placehold.co/80x80?text=No+Image";
+
+    var selectedCategory = ViewBag.SelectedCategory as OrderCategory?;
+    var search = ViewBag.Search as string;
+    var categoryCounts = (Dictionary<OrderCategory, int>)ViewBag.CategoryCounts;
+    var allCount = (int)ViewBag.AllCount;
+
+    string CategoryUrl(OrderCategory? cat) => Url.Action("Orders", new { category = cat, search }) ?? "#";
 }
 
 <div class="container py-4">
@@ -13,14 +20,65 @@
         </div>
         <div class="d-flex gap-2">
             <a asp-controller="Customer" asp-action="Profile" class="btn btn-outline-secondary">My Profile</a>
-            <a asp-controller="Shop" asp-action="Index" class="btn btn-danger">🛒 Shop Now</a>
+            <a asp-controller="Shop" asp-action="Index" class="btn btn-danger"><i class="bi bi-cart3"></i> Shop Now</a>
         </div>
     </div>
+
+    <!-- Quick-filter tabs: Pending / Completed / Past - same grouping the staff Orders
+         screen uses (see OrderCategorizer), so "Completed" means the same thing everywhere. -->
+    <ul class="nav nav-pills mb-3">
+        <li class="nav-item">
+            <a class="nav-link @(selectedCategory is null ? "active" : "")" href="@CategoryUrl(null)">
+                All <span class="badge bg-secondary ms-1">@allCount</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(selectedCategory == OrderCategory.Pending ? "active" : "")" href="@CategoryUrl(OrderCategory.Pending)">
+                <i class="bi bi-hourglass-split"></i> Pending <span class="badge bg-warning text-dark ms-1">@categoryCounts[OrderCategory.Pending]</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(selectedCategory == OrderCategory.Completed ? "active" : "")" href="@CategoryUrl(OrderCategory.Completed)">
+                <i class="bi bi-check-circle"></i> Completed <span class="badge bg-success ms-1">@categoryCounts[OrderCategory.Completed]</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(selectedCategory == OrderCategory.Past ? "active" : "")" href="@CategoryUrl(OrderCategory.Past)">
+                <i class="bi bi-archive"></i> Past <span class="badge bg-danger ms-1">@categoryCounts[OrderCategory.Past]</span>
+            </a>
+        </li>
+    </ul>
+
+    <form asp-controller="Customer" asp-action="Orders" method="get" class="row g-2 mb-3">
+        <input type="hidden" name="category" value="@selectedCategory" />
+        <div class="col-auto flex-grow-1" style="min-width: 220px;">
+            <div class="input-group">
+                <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+                <input type="text" name="search" value="@search" class="form-control" placeholder="Search by order number" />
+            </div>
+        </div>
+        <div class="col-auto">
+            <button type="submit" class="btn btn-outline-secondary"><i class="bi bi-filter"></i> Search</button>
+        </div>
+        @if (!string.IsNullOrWhiteSpace(search) || selectedCategory.HasValue)
+        {
+            <div class="col-auto">
+                <a asp-controller="Customer" asp-action="Orders" class="btn btn-outline-danger"><i class="bi bi-x-circle"></i> Clear</a>
+            </div>
+        }
+    </form>
 
     @if (!Model.Any())
     {
         <div class="alert alert-info d-flex justify-content-between align-items-center">
-            <span>You haven't placed any orders yet.</span>
+            @if (selectedCategory.HasValue || !string.IsNullOrWhiteSpace(search))
+            {
+                <span>No orders match this filter.</span>
+            }
+            else
+            {
+                <span>You haven't placed any orders yet.</span>
+            }
             <a asp-controller="Shop" asp-action="Index" class="btn btn-sm btn-danger">Start Shopping</a>
         </div>
     }
@@ -28,37 +86,44 @@
     {
         @foreach (var order in Model)
         {
+            var badgeClass = order.Status switch
+            {
+                OrderStatus.Completed or OrderStatus.Delivered => "bg-success",
+                OrderStatus.Cancelled or OrderStatus.Returned => "bg-danger",
+                OrderStatus.Shipped or OrderStatus.Processing => "bg-info text-dark",
+                _ => "bg-secondary"
+            };
+            var statusIcon = order.Status switch
+            {
+                OrderStatus.Delivered or OrderStatus.Completed => "bi-check-circle",
+                OrderStatus.Cancelled => "bi-x-circle",
+                OrderStatus.Returned => "bi-arrow-return-left",
+                OrderStatus.Shipped => "bi-truck",
+                OrderStatus.Processing => "bi-gear",
+                _ => "bi-hourglass-split"
+            };
             <div class="card mb-3">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <div>
                         <strong>Order #@order.OrderNumber</strong>
                         <span class="text-muted ms-2">@order.DateCreated.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</span>
                     </div>
-                    @{
-                        var badgeClass = order.Status switch
-                        {
-                            OrderStatus.Completed or OrderStatus.Delivered => "bg-success",
-                            OrderStatus.Cancelled or OrderStatus.Returned => "bg-danger",
-                            OrderStatus.Shipped or OrderStatus.Processing => "bg-info text-dark",
-                            _ => "bg-secondary"
-                        };
-                    }
-                    <span class="badge @badgeClass">@order.Status</span>
+                    <span class="badge @badgeClass"><i class="bi @statusIcon"></i> @order.Status</span>
                 </div>
                 <div class="card-body">
                     <table class="table table-sm mb-2 align-middle">
                         <tbody>
-                        @foreach (var item in order.OrderItems)
-                        {
-                            <tr>
-                                <td style="width:64px;">
-                                    <img src="@(string.IsNullOrWhiteSpace(item.Product?.ImageUrl) ? fallbackImage : item.Product.ImageUrl)"
-                                         alt="@item.Product?.Name" class="rounded border" style="width:56px;height:56px;object-fit:cover;" />
-                                </td>
-                                <td>@item.Product?.Name <span class="text-muted">(x@item.Quantity)</span></td>
-                                <td class="text-end">@item.LineTotal.ToString("C")</td>
-                            </tr>
-                        }
+                            @foreach (var item in order.OrderItems)
+                            {
+                                <tr>
+                                    <td style="width:64px;">
+                                        <img src="@(string.IsNullOrWhiteSpace(item.Product?.ImageUrl) ? fallbackImage : item.Product.ImageUrl)"
+                                             alt="@item.Product?.Name" class="rounded border" style="width:56px;height:56px;object-fit:cover;" />
+                                    </td>
+                                    <td>@item.Product?.Name <span class="text-muted">(@item.Quantity)</span></td>
+                                    <td class="text-end">@item.LineTotal.ToString("C")</td>
+                                </tr>
+                            }
                         </tbody>
                     </table>
                     <div class="d-flex justify-content-between align-items-center">

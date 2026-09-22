@@ -1,40 +1,102 @@
 @model Order
 @{
-    ViewData["Title"] = "Process Return";
+    ViewData["Title"] = "Process a Return";
+    Layout = "_StaffLayout";
+    var alreadyReturned = ViewBag.AlreadyReturned as Dictionary<int, int> ?? new();
+    string? orderNumber = ViewBag.OrderNumber;
 }
 
-<div class="container py-4">
-    <h2>Process Return</h2>
-    <p class="text-muted">Order #@Model.OrderNumber - @Model.DateCreated.ToLocalTime()</p>
+<div class="stf-content">
+    <span class="stf-eyebrow">Supply Chain</span>
+    <h1 style="margin-bottom:20px;">Process a Return</h1>
 
-    <table class="table">
-        <thead><tr><th>Product</th><th>Qty Sold</th><th>Unit Price</th><th></th></tr></thead>
-        <tbody>
-        @foreach (var item in Model.OrderItems)
+    <form asp-action="Lookup" method="get" class="stf-card" style="display:flex;gap:10px;align-items:center;margin-bottom:24px;max-width:640px;">
+        <input type="text" name="orderNumber" value="@orderNumber" placeholder="Order number, e.g. WEB-20260913171501313"
+               style="flex:1;border:1px solid var(--stf-outline-variant);border-radius:999px;padding:10px 18px;font-size:0.9rem;" />
+        <button type="submit" class="stf-btn stf-btn-primary">Find Order</button>
+    </form>
+
+    @if (Model is null)
+    {
+        if (!string.IsNullOrWhiteSpace(orderNumber))
         {
-            <tr>
-                <td>@item.Product.Name (@item.Product.SKU)</td>
-                <td>@item.Quantity</td>
-                <td>@item.UnitPrice.ToString("C")</td>
-                <td>
-                    <form asp-controller="Returns" asp-action="Process" method="post" class="d-flex gap-2 align-items-center">
-                        <input type="hidden" name="orderItemId" value="@item.OrderItemId" />
-                        <input type="number" name="quantity" min="1" max="@item.Quantity" value="1" class="form-control form-control-sm" style="width:70px;" />
-                        <select name="refundMethod" class="form-select form-select-sm" style="width:150px;">
-                            <option value="OriginalPayment">Original Payment</option>
-                            <option value="StoreCredit">Store Credit</option>
-                        </select>
-                        <div class="form-check">
-                            <input type="checkbox" name="isResalable" value="true" class="form-check-input" checked />
-                            <label class="form-check-label small">Resalable</label>
-                        </div>
-                        <button type="submit" class="btn btn-sm btn-primary">Process</button>
-                    </form>
-                </td>
-            </tr>
+            <div class="stf-card" style="color:var(--stf-on-surface-variant);">No order found with number '@orderNumber'.</div>
         }
-        </tbody>
-    </table>
+    }
+    else
+    {
+        <div class="stf-card" style="margin-bottom:20px;">
+            <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+                <div>
+                    <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--stf-outline);">Order</div>
+                    <div style="font-weight:600;">@Model.OrderNumber</div>
+                </div>
+                <div>
+                    <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--stf-outline);">Customer</div>
+                    <div>@(Model.Customer?.FullName ?? "-")</div>
+                </div>
+                <div>
+                    <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--stf-outline);">Placed</div>
+                    <div>@Model.DateCreated.ToString("dd MMM yyyy")</div>
+                </div>
+                <div>
+                    <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--stf-outline);">Status</div>
+                    <div><span class="stf-badge stf-badge-muted">@Model.Status</span></div>
+                </div>
+            </div>
+        </div>
 
-    <a asp-controller="Returns" asp-action="Index" class="btn btn-link">&larr; Back to Returns</a>
+        <table class="stf-table">
+            <thead>
+                <tr>
+                    <th>Product</th>
+                    <th style="width:70px;">Ordered</th>
+                    <th style="width:80px;">Returnable</th>
+                    <th style="width:520px;">Process Return</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in Model.OrderItems)
+                {
+                    var already = alreadyReturned.TryGetValue(item.OrderItemId, out var a) ? a : 0;
+                    var returnable = item.Quantity - already;
+                    <tr>
+                        <td>
+                            @item.Product?.Name
+                            @if (item.ProductVariant is not null)
+                            {
+                                <span style="color:var(--stf-on-surface-variant);"> (@item.ProductVariant.Size/@item.ProductVariant.Color)</span>
+                            }
+                            <div style="font-size:0.75rem;color:var(--stf-on-surface-variant);">@item.UnitPrice.ToString("C") each</div>
+                        </td>
+                        <td>@item.Quantity</td>
+                        <td>@returnable @(already > 0 ? $"({already} returned)" : "")</td>
+                        <td>
+                            @if (returnable <= 0)
+                            {
+                                <span style="color:var(--stf-outline);font-size:0.82rem;">Fully returned</span>
+                            }
+                            else
+                            {
+                                <form asp-action="Process" method="post" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="orderItemId" value="@item.OrderItemId" />
+                                    <input type="number" name="quantity" min="1" max="@returnable" value="1" style="width:60px;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:6px 8px;font-size:0.82rem;" />
+                                    <select name="refundMethod" style="border:1px solid var(--stf-outline-variant);border-radius:8px;padding:6px 8px;font-size:0.82rem;">
+                                        <option value="OriginalPayment">Refund to Original Payment</option>
+                                        <option value="StoreCredit">Store Credit</option>
+                                    </select>
+                                    <label style="font-size:0.78rem;display:flex;align-items:center;gap:4px;">
+                                        <input type="checkbox" name="isResalable" value="true" checked /> Resalable
+                                    </label>
+                                    <input type="text" name="reason" placeholder="Reason (optional)" style="flex:1;min-width:120px;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:6px 8px;font-size:0.82rem;" />
+                                    <button type="submit" class="stf-btn stf-btn-primary" style="padding:6px 14px;font-size:0.78rem;">Process</button>
+                                </form>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
 </div>

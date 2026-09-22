@@ -1,0 +1,139 @@
+/* =====================================================================
+   FashionFix Staff Portal - design tokens + shared chrome, matching the
+   "Botanical Bio-Sciences" design system (same palette as storefront.css,
+   applied to the internal Administrator/Manager/Employee screens).
+   Prefixed stf- to keep it distinct from the ffs- storefront classes.
+   ===================================================================== */
+
+:root {
+    --stf-primary: #0a2217;
+    --stf-primary-container: #20382b;
+    --stf-on-primary-container: #87a291;
+    --stf-secondary: #695c4c;
+    --stf-secondary-container: #f1e0cb;
+    --stf-surface: #faf9f5;
+    --stf-surface-container-low: #f4f4f0;
+    --stf-surface-container: #efeeea;
+    --stf-surface-container-high: #e9e8e4;
+    --stf-on-surface: #1b1c1a;
+    --stf-on-surface-variant: #424844;
+    --stf-outline: #727973;
+    --stf-outline-variant: #c2c8c2;
+    --stf-error: #ba1a1a;
+    --stf-error-container: #ffdad6;
+    --stf-primary-fixed: #cde9d6;
+    --stf-radius: 14px;
+    --stf-radius-lg: 20px;
+}
+
+.stf-page { background: var(--stf-surface); color: var(--stf-on-surface); font-family: 'Plus Jakarta Sans', 'Inter', sans-serif; min-height: 100vh; }
+.stf-page h1, .stf-page h2, .stf-page h3 { font-family: 'Newsreader', serif; font-weight: 400; color: var(--stf-on-surface); margin: 0; }
+.stf-page a { text-decoration: none; color: inherit; }
+
+/* ---------- Shell layout ---------- */
+.stf-shell { display: flex; min-height: 100vh; }
+.stf-sidebar { width: 240px; flex-shrink: 0; background: var(--stf-surface-container-low); border-right: 1px solid var(--stf-outline-variant); padding: 20px 14px; display: flex; flex-direction: column; }
+.stf-brand { font-family: 'Newsreader', serif; font-size: 1.15rem; font-weight: 500; margin-bottom: 4px; }
+.stf-brand-sub { font-size: 0.68rem; text-transform: uppercase; letter-spacing: .08em; color: var(--stf-outline); margin-bottom: 20px; }
+.stf-nav-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: .06em; color: var(--stf-outline); margin: 16px 8px 8px; }
+.stf-nav-link { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 10px; font-size: 0.85rem; color: var(--stf-on-surface-variant); margin-bottom: 2px; }
+.stf-nav-link:hover { background: var(--stf-surface-container); }
+.stf-nav-link.active { background: var(--stf-primary); color: #fff; }
+.stf-nav-link .stf-badge { margin-left: auto; background: var(--stf-secondary-container); color: var(--stf-secondary); font-size: 0.68rem; padding: 1px 7px; border-radius: 999px; }
+.stf-nav-link.active .stf-badge { background: rgba(255,255,255,.2); color: #fff; }
+.stf-sidebar-footer { margin-top: auto; padding-top: 14px; border-top: 1px solid var(--stf-outline-variant); }
+.stf-user-chip { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; padding: 8px; }
+.stf-user-avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--stf-primary); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 0.72rem; font-weight: 600; flex-shrink: 0; }
+
+.stf-main { flex: 1; min-width: 0; }
+.stf-topbar { display: flex; justify-content: space-between; align-items: center; padding: 14px 28px; border-bottom: 1px solid var(--stf-outline-variant); background: var(--stf-surface); flex-wrap: wrap; gap: 10px; }
+.stf-topbar-left { display: flex; gap: 10px; align-items: center; font-size: 0.8rem; color: var(--stf-on-surface-variant); }
+.stf-chip { background: var(--stf-surface-container); border-radius: 999px; padding: 5px 12px; display: inline-flex; align-items: center; gap: 6px; }
+.stf-content { padding: 28px; max-width: 1280px; }
+
+.stf-eyebrow { font-size: 0.72rem; letter-spacing: .1em; text-transform: uppercase; color: var(--stf-secondary); font-weight: 600; margin-bottom: 8px; display: block; }
+.stf-page-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; margin-bottom: 24px; flex-wrap: wrap; }
+.stf-page-head h1 { font-size: 1.9rem; margin-bottom: 8px; }
+.stf-page-head p { color: var(--stf-on-surface-variant); font-size: 0.9rem; max-width: 560px; margin: 0; }
+
+/* ---------- Buttons ---------- */
+.stf-btn { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 10px 20px; font-size: 0.85rem; font-weight: 500; border: 1px solid transparent; cursor: pointer; font-family: inherit; }
+.stf-btn-primary { background: var(--stf-primary); color: #fff; }
+.stf-btn-outline { background: var(--stf-surface); border-color: var(--stf-outline-variant); color: var(--stf-on-surface); }
+.stf-btn-danger-outline { background: var(--stf-surface); border-color: var(--stf-error); color: var(--stf-error); }
+.stf-btn:hover { opacity: .9; }
+.stf-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ---------- Cards / stats ---------- */
+.stf-card { background: #fff; border: 1px solid var(--stf-outline-variant); border-radius: var(--stf-radius); padding: 18px; }
+.stf-stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 24px; }
+.stf-stat { background: #fff; border: 1px solid var(--stf-outline-variant); border-radius: var(--stf-radius); padding: 16px 18px; }
+.stf-stat-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--stf-outline); margin-bottom: 6px; }
+.stf-stat-value { font-family: 'Newsreader', serif; font-size: 1.6rem; }
+.stf-stat-sub { font-size: 0.75rem; color: var(--stf-outline); margin-top: 4px; }
+
+/* ---------- Tables ---------- */
+.stf-table { width: 100%; border-collapse: collapse; background: #fff; border-radius: var(--stf-radius); overflow: hidden; border: 1px solid var(--stf-outline-variant); }
+.stf-table th { text-align: left; font-size: 0.68rem; text-transform: uppercase; letter-spacing: .05em; color: var(--stf-outline); background: var(--stf-surface-container-low); padding: 12px 14px; }
+.stf-table td { padding: 12px 14px; font-size: 0.85rem; border-top: 1px solid var(--stf-outline-variant); vertical-align: middle; }
+.stf-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 0.7rem; font-weight: 600; padding: 4px 10px; border-radius: 999px; }
+.stf-badge-active { background: var(--stf-primary-fixed); color: var(--stf-primary); }
+.stf-badge-muted { background: var(--stf-surface-container); color: var(--stf-outline); }
+.stf-badge-danger { background: var(--stf-error-container); color: var(--stf-error); }
+
+/* ---------- Permission matrix ---------- */
+.stf-role-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin-bottom: 28px; }
+.stf-role-card { background: #fff; border: 1px solid var(--stf-outline-variant); border-radius: var(--stf-radius); padding: 14px 16px; }
+.stf-role-card.locked { background: var(--stf-primary); color: #fff; }
+.stf-role-card.locked .stf-role-name { color: #fff; }
+.stf-role-card .stf-role-tag { font-size: 0.65rem; text-transform: uppercase; letter-spacing: .05em; color: var(--stf-outline); }
+.stf-role-card .stf-role-name { font-family: 'Newsreader', serif; font-size: 1.1rem; margin: 4px 0 8px; }
+.stf-role-card .stf-role-bar-bg { background: var(--stf-surface-container); border-radius: 999px; height: 4px; margin: 8px 0; overflow: hidden; }
+.stf-role-card.locked .stf-role-bar-bg { background: rgba(255,255,255,.2); }
+.stf-role-card .stf-role-bar-fill { background: var(--stf-primary); height: 100%; }
+.stf-role-card.locked .stf-role-bar-fill { background: #fff; }
+.stf-role-card .stf-role-meta { display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--stf-outline); }
+.stf-role-card.locked .stf-role-meta { color: rgba(255,255,255,.7); }
+
+.stf-matrix-wrap { overflow-x: auto; border: 1px solid var(--stf-outline-variant); border-radius: var(--stf-radius); background: #fff; }
+.stf-matrix { width: 100%; border-collapse: collapse; min-width: 760px; }
+.stf-matrix th, .stf-matrix td { padding: 12px 14px; border-top: 1px solid var(--stf-outline-variant); text-align: center; }
+.stf-matrix th { background: var(--stf-surface-container-low); font-size: 0.72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--stf-outline); }
+.stf-matrix td:first-child, .stf-matrix th:first-child { text-align: left; min-width: 220px; }
+.stf-matrix .stf-perm-name { font-weight: 600; font-size: 0.85rem; }
+.stf-matrix .stf-perm-desc { font-size: 0.75rem; color: var(--stf-outline); margin-top: 2px; }
+.stf-matrix input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--stf-primary); cursor: pointer; }
+.stf-matrix input[type="checkbox"]:disabled { accent-color: var(--stf-outline); cursor: not-allowed; }
+.stf-lock-icon { font-size: 0.7rem; color: var(--stf-outline); }
+
+.stf-save-bar { position: sticky; bottom: 0; background: var(--stf-primary); color: #fff; border-radius: var(--stf-radius); padding: 14px 20px; margin-top: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+.stf-save-bar .stf-btn-outline { background: transparent; border-color: rgba(255,255,255,.4); color: #fff; }
+
+@media (max-width: 900px) {
+    .stf-sidebar { display: none; }
+    .stf-stat-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* --- Bootstrap Toast shim ---
+   _StaffLayout loads Bootstrap's JS bundle (for the Toast component's show/hide/timer
+   behaviour) but not Bootstrap's CSS, since the rest of this design system is hand-built.
+   Bootstrap's JS only toggles classes (.show/.fade) - it injects no visual styling itself -
+   so without these rules every toast across the whole staff portal renders as a bare,
+   unstyled box. Keyed off the exact classes _StaffLayout's toast markup already uses
+   (.toast, .text-bg-success/.text-bg-danger/.text-bg-warning, .toast-body, .btn-close) so
+   no markup or JS changes were needed, just the missing visual layer. */
+.toast { border-radius: var(--stf-radius); padding: 14px 16px; min-width: 280px; max-width: 380px;
+    box-shadow: 0 8px 24px rgba(10,34,23,.18); font-size: 0.88rem; opacity: 0; transition: opacity .15s ease; }
+.toast.show { opacity: 1; }
+.toast .d-flex { display: flex; align-items: center; gap: 10px; }
+.toast .toast-body { flex: 1; }
+.toast.text-bg-success { background: var(--stf-primary); color: #fff; }
+.toast.text-bg-danger { background: var(--stf-error); color: #fff; }
+.toast.text-bg-warning { background: var(--stf-secondary-container); color: var(--stf-secondary); }
+.toast .btn-close { width: 14px; height: 14px; border: none; background: transparent; position: relative;
+    cursor: pointer; opacity: .8; flex-shrink: 0; }
+.toast .btn-close::before, .toast .btn-close::after { content: ''; position: absolute; top: 50%; left: 50%;
+    width: 14px; height: 2px; background: currentColor; transform-origin: center; }
+.toast .btn-close::before { transform: translate(-50%, -50%) rotate(45deg); }
+.toast .btn-close::after { transform: translate(-50%, -50%) rotate(-45deg); }
+.toast .btn-close:hover { opacity: 1; }

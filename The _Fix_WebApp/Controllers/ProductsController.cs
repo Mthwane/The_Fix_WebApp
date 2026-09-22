@@ -2,6 +2,7 @@ using FashionFix.Web.Data;
 using FashionFix.Web.Models.Entities;
 using FashionFix.Web.Models.ViewModels;
 using FashionFix.Web.Security;
+using FashionFix.Web.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -14,11 +15,29 @@ public class ProductsController : Controller
 {
     private readonly ApplicationDbContext _context;
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly IInventoryService _inventoryService;
 
-    public ProductsController(ApplicationDbContext context, UserManager<ApplicationUser> userManager)
+    public ProductsController(ApplicationDbContext context, UserManager<ApplicationUser> userManager, IInventoryService inventoryService)
     {
         _context = context;
         _userManager = userManager;
+        _inventoryService = inventoryService;
+    }
+
+    // GET: /Products/LowStock - dedicated restock queue. Reached by clicking the "Low Stock"
+    // card/table on the Dashboard. Same [Authorize(Permissions.ProductsManage)] as the rest of
+    // this controller, so it's available to whichever roles that permission is granted to
+    // (Manager and Administrator by default) - see Security/Permissions.cs.
+    [HttpGet]
+    public async Task<IActionResult> LowStock()
+    {
+        var products = await _context.Products
+            .AsNoTracking()
+            .Where(p => p.IsActive && p.StockQuantity <= p.LowStockThreshold)
+            .OrderBy(p => p.StockQuantity)
+            .ToListAsync();
+
+        return View(products);
     }
 
     // GET: /Products?SearchTerm=&Category=&Size=&Color=&InStockOnly=
@@ -26,7 +45,7 @@ public class ProductsController : Controller
     [HttpGet]
     public async Task<IActionResult> Index(ProductFilterViewModel filter)
     {
-        var query = _context.Products.Where(p => p.IsActive).AsQueryable();
+        var query = _context.Products.AsNoTracking().Where(p => p.IsActive).AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(filter.SearchTerm))
         {
@@ -52,24 +71,42 @@ public class ProductsController : Controller
         ViewBag.Filter = filter;
         return View(products);
     }
-
     // GET: /Products/Create
     [HttpGet]
-    public IActionResult Create() => View(new ProductViewModel());
+    public async Task<IActionResult> Create()
+    {
+        await PopulateDropdownsAsync();
+        return View(new ProductViewModel());
+    }
 
     // POST: /Products/Create
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(ProductViewModel model)
     {
+        // SKU is never taken from the posted form - it's always server-generated,
+        // so clear whatever ModelState has for it and re-validate without it.
+        ModelState.Remove(nameof(ProductViewModel.SKU));
+
+        // Category/Colour are a closed list on a real <select>, but nothing stops a
+        // crafted POST from sending a value outside that list - reject it here rather
+        // than trusting the browser to have enforced it.
+        if (!ProductViewModel.Categories.Contains(model.Category))
+            ModelState.AddModelError(nameof(model.Category), "Please choose a category from the list.");
+        if (!string.IsNullOrEmpty(model.Color) && !ProductViewModel.Colors.Contains(model.Color))
+            ModelState.AddModelError(nameof(model.Color), "Please choose a colour from the list.");
+
         if (!ModelState.IsValid)
+        {
+            await PopulateDropdownsAsync();
             return View(model);
+        }
 
         var product = new Product
         {
             Name = model.Name,
             Description = model.Description,
-            SKU = model.SKU,
+            SKU = await GenerateUniqueSkuAsync(model.Category),
             Category = model.Category,
             Size = model.Size,
             Color = model.Color,
@@ -98,6 +135,8 @@ public class ProductsController : Controller
         var product = await _context.Products.FindAsync(id);
         if (product is null) return NotFound();
 
+        await PopulateDropdownsAsync();
+
         var model = new ProductViewModel
         {
             ProductId = product.ProductId,
@@ -125,14 +164,27 @@ public class ProductsController : Controller
     public async Task<IActionResult> Edit(int id, ProductViewModel model)
     {
         if (id != model.ProductId) return BadRequest();
-        if (!ModelState.IsValid) return View(model);
+
+        // SKU is read-only on Edit - never overwrite it from the posted form.
+        ModelState.Remove(nameof(ProductViewModel.SKU));
+
+        if (!ProductViewModel.Categories.Contains(model.Category))
+            ModelState.AddModelError(nameof(model.Category), "Please choose a category from the list.");
+        if (!string.IsNullOrEmpty(model.Color) && !ProductViewModel.Colors.Contains(model.Color))
+            ModelState.AddModelError(nameof(model.Color), "Please choose a colour from the list.");
+
+        if (!ModelState.IsValid)
+        {
+            await PopulateDropdownsAsync();
+            return View(model);
+        }
 
         var product = await _context.Products.FindAsync(id);
         if (product is null) return NotFound();
 
         product.Name = model.Name;
         product.Description = model.Description;
-        product.SKU = model.SKU;
+        // product.SKU intentionally left unchanged - it's fixed at creation time.
         product.Category = model.Category;
         product.Size = model.Size;
         product.Color = model.Color;
@@ -142,10 +194,22 @@ public class ProductsController : Controller
         product.ImageUrl = model.ImageUrl;
         product.LowStockThreshold = model.LowStockThreshold;
         product.DateUpdated = DateTime.UtcNow;
-        // NOTE: StockQuantity is intentionally NOT edited here directly - it should
-        // only change via InventoryService (sales, returns, PO receipts, adjustments).
 
         await _context.SaveChangesAsync();
+
+        // Stock is the one field that doesn't just get overwritten - it goes through
+        // InventoryService so the change is logged in InventoryTransactions (same audit
+        // trail a sale or a return would create), instead of silently vanishing into an
+        // untracked UPDATE. This is what lets a manager restock straight from this form.
+        var stockDelta = model.StockQuantity - product.StockQuantity;
+        if (stockDelta > 0)
+        {
+            await _inventoryService.IncrementStockAsync(product.ProductId, stockDelta, InventoryChangeReason.ManualAdjustment);
+        }
+        else if (stockDelta < 0)
+        {
+            await _inventoryService.DecrementStockAsync(product.ProductId, -stockDelta, InventoryChangeReason.ManualAdjustment);
+        }
 
         await LogAuditAsync("ProductUpdated", $"Updated product '{product.Name}' (SKU {product.SKU}).");
         this.ToastSuccess($"'{product.Name}' was updated.");
@@ -171,6 +235,55 @@ public class ProductsController : Controller
         return RedirectToAction(nameof(Index));
     }
 
+    /// <summary>
+    /// Builds the four attribute dropdowns. Category and Colour are a closed list - always
+    /// exactly ProductViewModel.Categories / .Colors, picked from a real &lt;select&gt;, so no
+    /// junk value typed on one product can ever leak into another product's dropdown. Size
+    /// and Brand stay "self-sustaining": the seed list unioned with whatever's already used
+    /// on existing products, so typing a new one there still works itself into future
+    /// suggestions without a separate admin screen.
+    /// </summary>
+    private async Task PopulateDropdownsAsync()
+    {
+        ViewBag.Categories = ProductViewModel.Categories.ToList();
+        ViewBag.Colors = ProductViewModel.Colors.ToList();
+
+        var dbSizes = await _context.Products.AsNoTracking()
+            .Where(p => p.Size != null && p.Size != "").Select(p => p.Size!).Distinct().ToListAsync();
+        var dbBrands = await _context.Products.AsNoTracking()
+            .Where(p => p.Brand != null && p.Brand != "").Select(p => p.Brand!).Distinct().ToListAsync();
+
+        ViewBag.Sizes = ProductViewModel.Sizes.Union(dbSizes, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(s => s, StringComparer.OrdinalIgnoreCase).ToList();
+        ViewBag.Brands = ProductViewModel.Brands.Union(dbBrands, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(b => b, StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    /// <summary>
+    /// Builds a SKU as "{CATEGORY-PREFIX}-{4-digit sequence}", e.g. "CLO-0001", and
+    /// retries with the next number on the rare chance of a collision, so Create()
+    /// never has to trust a client-supplied SKU.
+    /// </summary>
+    private async Task<string> GenerateUniqueSkuAsync(string category)
+    {
+        var prefix = new string((category ?? "GEN")
+            .Where(char.IsLetter)
+            .Take(3)
+            .ToArray()).ToUpperInvariant();
+        if (prefix.Length == 0) prefix = "GEN";
+
+        var existingSkus = await _context.Products
+            .Where(p => p.SKU.StartsWith(prefix + "-"))
+            .Select(p => p.SKU)
+            .ToListAsync();
+        var existingSet = existingSkus.ToHashSet();
+
+        for (var attempt = existingSkus.Count + 1; ; attempt++)
+        {
+            var candidate = $"{prefix}-{attempt:D4}";
+            if (!existingSet.Contains(candidate)) return candidate;
+        }
+    }
     private async Task LogAuditAsync(string action, string details)
     {
         _context.AuditLogs.Add(new AuditLog

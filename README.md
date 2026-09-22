@@ -4,7 +4,8 @@ A full-stack ASP.NET Core MVC application for managing a fashion retail store:
 product catalogue, point-of-sale, purchase orders/suppliers, returns, staff and
 role management, business reporting, and a customer-facing storefront with
 online checkout. Built against the product backlog user stories (US-01 through
-US-20) in the original requirements document.
+US-20) in the original requirements document, for APDP201 (Applications
+Development Project 2B) Sprint 1.
 
 This README is written for someone who does **not** have the app running
 anywhere yet and needs to get it from zero to a working local instance.
@@ -22,9 +23,9 @@ anywhere yet and needs to get it from zero to a working local instance.
 - **Product catalogue** - full CRUD, search/filter, low-stock thresholds.
 - **Point of Sale** - barcode/SKU scan with an image preview popup, cart,
   automatic 15% VAT calculation, receipts (with optional emailed copy).
-- **Customer storefront** - browse, cart, checkout, order tracking, order
-  cancellation, "My Profile" self-service (with a visible Customer ID to give
-  staff at the till).
+- **Customer storefront** - browse, cart, checkout with **Paystack** payment
+  integration (test mode), order tracking, order cancellation, "My Profile"
+  self-service (with a visible Customer ID to give staff at the till).
 - **Staff order fulfillment** - move online orders through
   Processing -> Shipped -> Delivered, or cancel and auto-restock.
 - **Returns & refunds**, **Purchase Orders & Suppliers**, **Employee
@@ -48,6 +49,7 @@ Install these before doing anything else:
 | SQL Server (or SQL Server Express / LocalDB) | Any edition works. |
 | EF Core CLI tools | `dotnet tool install --global dotnet-ef` |
 | A code editor | Visual Studio 2022, VS Code, or Rider all work. |
+| Postman (optional) | Used for the API test collection - see section 9. |
 
 ---
 
@@ -76,6 +78,11 @@ dotnet ef database update
 # 4. Run it
 dotnet run
 ```
+
+> Note: `Program.cs` now calls `Database.Migrate()` on startup, so migrations
+> are applied automatically the moment the app boots - this was previously
+> missing and caused an `Invalid object name 'AspNetRoles'` error on a fresh
+> database.
 
 The console will print something like `Now listening on: https://localhost:7160`
 - open that URL in a browser.
@@ -112,14 +119,14 @@ Models/
 Views/           Razor views, one folder per controller.
 Data/            ApplicationDbContext + EF Core migrations.
   SeedScripts/   Optional demo-data scripts (see section 6).
-Services/        IInventoryService, IEmailSender, SessionCart.
+Services/        IInventoryService, IEmailSender, IPaymentService, SessionCart.
 Security/        Permissions.cs (the permission catalog) and TaxSettings.cs (VAT rate).
 wwwroot/         Static assets - site.css, site.js (POS scanning + cart JS).
 ```
 
 Controllers: `Account`, `Home`, `Customer`, `Shop`, `Products`, `Pos`,
 `Orders`, `Returns`, `PurchaseOrders`, `Suppliers`, `Employees`, `Roles`,
-`Reports`.
+`Reports`, `Payments`.
 
 ---
 
@@ -185,7 +192,83 @@ re-run - it won't collide with data from a previous run.
 
 ---
 
-## 7. Known gotchas
+## 7. Payment integration (Paystack)
+
+Checkout is wired to **Paystack** in test mode:
+
+- `IPaymentService` / `PaystackPaymentService` handle transaction initialization.
+- `ShopController.Checkout` initializes a Paystack transaction and redirects
+  the customer to Paystack's hosted payment page.
+- `PaymentsController.Callback` verifies the payment server-side before it
+  creates the `Order`, decrements stock, and sends the confirmation email.
+
+Add your Paystack test secret/public keys to `appsettings.json` (or
+user-secrets) before testing checkout end-to-end.
+
+---
+
+## 8. What's done so far
+
+- Full folder structure, EF Core entities + relationships, DbContext, Identity
+  + role seeding, controllers wired to their views.
+- Branded login pages (customer + employee), registration, role/permission
+  management.
+- Online storefront: browse, cart, checkout.
+- **Paystack payment integration** (test mode) end-to-end: initialize ->
+  redirect -> callback verification -> order creation -> stock decrement ->
+  confirmation email.
+- Fixed startup bug: missing `Database.Migrate()` call in `Program.cs` that
+  caused `Invalid object name 'AspNetRoles'` on a fresh database.
+- Fixed a Razor bug in `Confirmation.cshtml` where `@item.Quantity` was
+  rendering as literal text instead of the value.
+- POS (`PosController`) confirmed as a genuine second, in-person sales
+  channel alongside the online store - not leftover/contradictory spec.
+- Staff order fulfillment flow (Processing -> Shipped -> Delivered / cancel
+  + restock).
+- Returns processing wired to inventory restock.
+- Employee creation flow (`EmployeesController`): validation, duplicate
+  checks, role assignment, audit log entries.
+- Customer self-registration flow, assigns "Customer" role, signs user in.
+- Postman API test collection ("Fashion Fix payment API Tests") started:
+  - **Test 1** - successful Paystack initialize: **passed 4/4**.
+
+---
+
+## 9. Incomplete / in progress
+
+**API & database testing (active work):**
+- Test 2 - invalid key, expect 401 response: **in progress**.
+- Test 3 - own `/Payments/Callback` endpoint: **not started**.
+- Database-level tests still outstanding: stock decrement correctness,
+  order integrity, foreign-key constraint checks.
+
+**Features still marked `// TODO` in code:**
+- Employee **Edit**/deactivate form (Create is done, Edit is not).
+- Full audit log coverage on login/product/sale events (role-change and
+  employee-create are already logged; other events are not yet).
+- POS barcode-scan JS wiring (`site.js`) and cart -> `CartItems`
+  serialization.
+- Receipt email/SMS delivery beyond the current basic confirmation email.
+- Reports: best-sellers, stock turnover, revenue-by-category, PDF export
+  (CSV export works; PDF via iTextSharp is planned but not built).
+- Purchase order create form + receiving logic - entities are modelled but
+  the `Receive` action is currently a no-op stub.
+- Return refund/store-credit ledger hookup (the processing + restock side
+  already works; the actual refund/credit accounting does not).
+
+**Not started:**
+- Docker packaging for easier team sharing.
+- General UI/visual polish pass - currently functional Bootstrap styling,
+  not custom-branded.
+
+> Reminder for Sprint 1: the rubric only requires 50-65% functionality
+> completed for full marks on that criterion, so not everything above needs
+> to be finished before submission - just prioritise what maps to the
+> highest-weighted rubric items (UI/UX, MVC architecture & functionality).
+
+---
+
+## 10. Known gotchas
 
 - **Only one `.csproj` file should exist** in the project root
   (`The _Fix_WebApp.csproj`). If you ever see a second one appear, delete it -
@@ -202,10 +285,3 @@ re-run - it won't collide with data from a previous run.
   survive an app restart. Don't delete that folder in the middle of testing,
   or everyone gets logged out.
 
----
-
-## 8. What's next
-
-Planned but not yet done: Docker packaging for easier team sharing, and a
-general UI/visual polish pass (the app is currently functional Bootstrap
-styling, not custom-branded).

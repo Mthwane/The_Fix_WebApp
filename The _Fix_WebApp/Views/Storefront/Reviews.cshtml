@@ -1,0 +1,50 @@
+@model List<ProductReview>
+@{
+    ViewData["Title"] = "Review Moderation";
+    Layout = "_StaffLayout";
+}
+<div class="stf-content">
+    <span class="stf-eyebrow">Storefront</span>
+    <h1 style="margin-bottom:6px;">Review Moderation</h1>
+    <p style="color:var(--stf-on-surface-variant);margin-bottom:10px;">Most recent 200 reviews across the catalogue.</p>
+    <div class="stf-card" style="background:var(--stf-surface-container);border:none;margin-bottom:20px;">
+        <p style="margin:0;font-size:0.82rem;color:var(--stf-on-surface-variant);">Backlog item: filtering by product/rating/date isn't built yet - this is a flat chronological list for now.</p>
+    </div>
+
+    @if (!Model.Any())
+    {
+        <div class="stf-card" style="text-align:center;padding:40px 20px;color:var(--stf-on-surface-variant);">No reviews yet.</div>
+    }
+    else
+    {
+        <table class="stf-table">
+            <thead>
+                <tr><th>Product</th><th>Customer</th><th>Rating</th><th>Comment</th><th>Date</th><th></th></tr>
+            </thead>
+            <tbody>
+                @foreach (var r in Model)
+                {
+                    <tr>
+                        <td style="font-weight:600;">@r.Product.Name</td>
+                        <td>
+                            @(r.Customer?.FullName ?? "(deleted account)")
+                            @if (r.IsVerifiedPurchase)
+                            {
+                                <span class="stf-badge stf-badge-active" style="margin-left:6px;">Verified</span>
+                            }
+                        </td>
+                        <td><span style="color:#c9a227;">@(new string('\u2605', r.Rating))</span><span style="color:var(--stf-outline-variant);">@(new string('\u2606', 5 - r.Rating))</span></td>
+                        <td style="max-width:320px;">@r.Comment</td>
+                        <td style="font-size:0.8rem;color:var(--stf-on-surface-variant);">@r.DateCreated.ToString("MMM d, yyyy")</td>
+                        <td>
+                            <form asp-action="DeleteReview" asp-route-id="@r.ProductReviewId" method="post" style="display:inline;">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="stf-btn stf-btn-danger-outline" style="padding:6px 14px;font-size:0.78rem;" onclick="return confirm('Delete this review? This recalculates the product rating.');">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>

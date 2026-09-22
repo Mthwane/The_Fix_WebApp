@@ -14,12 +14,10 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Product> Products => Set<Product>();
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
-    public DbSet<Supplier> Suppliers => Set<Supplier>();
-    public DbSet<PurchaseOrder> PurchaseOrders => Set<PurchaseOrder>();
-    public DbSet<PurchaseOrderItem> PurchaseOrderItems => Set<PurchaseOrderItem>();
-    public DbSet<ReturnTransaction> ReturnTransactions => Set<ReturnTransaction>();
     public DbSet<InventoryTransaction> InventoryTransactions => Set<InventoryTransaction>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<CustomerAddress> CustomerAddresses => Set<CustomerAddress>();
+    public DbSet<CustomerPaymentMethod> CustomerPaymentMethods => Set<CustomerPaymentMethod>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -34,9 +32,24 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             .HasIndex(o => o.OrderNumber)
             .IsUnique();
 
-        builder.Entity<PurchaseOrder>()
-            .HasIndex(po => po.PONumber)
-            .IsUnique();
+        // --- Performance indexes: cover the columns that are actually filtered/sorted on ---
+        // Products.Index / Shop.Index filter on IsActive + Category (and friends) and always
+        // sort by Name - this pair of indexes lets SQL Server seek instead of scanning the
+        // whole table on every catalogue page load.
+        builder.Entity<Product>()
+            .HasIndex(p => new { p.IsActive, p.Category });
+
+        builder.Entity<Product>()
+            .HasIndex(p => p.Name);
+
+        // Reports.Index/Export filters by a DateCreated range; Orders.Index filters by
+        // Status/OrderType. Neither had a supporting index, so both were doing full table
+        // scans that get slower as the Orders table grows.
+        builder.Entity<Order>()
+            .HasIndex(o => o.DateCreated);
+
+        builder.Entity<Order>()
+            .HasIndex(o => new { o.Status, o.OrderType });
 
         // --- Order relationships ---
         builder.Entity<Order>()
@@ -63,31 +76,31 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             .HasForeignKey(oi => oi.ProductId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        // --- Purchase order relationships ---
-        builder.Entity<PurchaseOrderItem>()
-            .HasOne(poi => poi.PurchaseOrder)
-            .WithMany(po => po.Items)
-            .HasForeignKey(poi => poi.PurchaseOrderId)
+        // --- Customer addresses / saved cards ---
+        // Both are owned by exactly one customer and should disappear if that account is
+        // deleted (unlike Orders, which are kept for financial history via Restrict).
+        builder.Entity<CustomerAddress>()
+            .HasOne(a => a.Customer)
+            .WithMany(u => u.Addresses)
+            .HasForeignKey(a => a.CustomerId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        builder.Entity<PurchaseOrderItem>()
-            .HasOne(poi => poi.Product)
-            .WithMany(p => p.PurchaseOrderItems)
-            .HasForeignKey(poi => poi.ProductId)
-            .OnDelete(DeleteBehavior.Restrict);
+        builder.Entity<CustomerAddress>()
+            .HasIndex(a => a.CustomerId);
 
-        // --- Return relationships ---
-        builder.Entity<ReturnTransaction>()
-            .HasOne(r => r.Order)
-            .WithMany(o => o.Returns)
-            .HasForeignKey(r => r.OrderId)
-            .OnDelete(DeleteBehavior.Restrict);
+        builder.Entity<CustomerPaymentMethod>()
+            .HasOne(p => p.Customer)
+            .WithMany(u => u.PaymentMethods)
+            .HasForeignKey(p => p.CustomerId)
+            .OnDelete(DeleteBehavior.Cascade);
 
-        builder.Entity<ReturnTransaction>()
-            .HasOne(r => r.OrderItem)
-            .WithMany()
-            .HasForeignKey(r => r.OrderItemId)
-            .OnDelete(DeleteBehavior.Restrict);
+        builder.Entity<CustomerPaymentMethod>()
+            .HasIndex(p => p.CustomerId);
+
+        // A customer should never end up with the exact same saved card twice.
+        builder.Entity<CustomerPaymentMethod>()
+            .HasIndex(p => new { p.CustomerId, p.AuthorizationCode })
+            .IsUnique();
 
         // --- Decimal precision guards (belt-and-braces alongside [Column] attributes) ---
         builder.Entity<Product>().Property(p => p.CostPrice).HasPrecision(18, 2);

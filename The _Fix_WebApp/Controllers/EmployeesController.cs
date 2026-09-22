@@ -31,21 +31,28 @@ public class EmployeesController : Controller
     [Authorize(Policy = Permissions.EmployeesManage)]
     public async Task<IActionResult> Index()
     {
-        // Staff = any user NOT solely in the Customer role.
-        var customerRoleUsers = await _userManager.GetUsersInRoleAsync("Customer");
-        var customerIds = customerRoleUsers.Select(u => u.Id).ToHashSet();
 
-        var employees = await _context.Users
-            .Where(u => !customerIds.Contains(u.Id))
-            .OrderBy(u => u.FullName)
-            .ToListAsync();
+        // Staff = any user NOT solely in the Customer role. Previously this called
+        // GetRolesAsync per user (twice - once to filter, once to build the label), which is
+        // 2N+1 round trips for N users. One joined query gets every user's roles at once.
+        var allUsers = await _context.Users.AsNoTracking().OrderBy(u => u.FullName).ToListAsync();
 
-        var roleLookup = new Dictionary<string, string>();
-        foreach (var employee in employees)
-        {
-            var roles = await _userManager.GetRolesAsync(employee);
-            roleLookup[employee.Id] = string.Join(", ", roles);
-        }
+        var rolesByUserId = (await (
+            from ur in _context.UserRoles
+            join r in _context.Roles on ur.RoleId equals r.Id
+            select new { ur.UserId, RoleName = r.Name }
+            ).ToListAsync())
+            .GroupBy(x => x.UserId)
+            .ToDictionary(g => g.Key, g => g.Select(x => x.RoleName ?? string.Empty).ToList());
+
+        var employees = allUsers
+            .Where(u => rolesByUserId.TryGetValue(u.Id, out var roles) && roles.Any(r => r != "Customer"))
+            .ToList();
+
+        var roleLookup = employees.ToDictionary(
+            e => e.Id,
+            e => string.Join(", ", rolesByUserId.TryGetValue(e.Id, out var roles) ? roles : new List<string>()));
+
         ViewBag.Roles = roleLookup;
         ViewBag.AssignableRoles = await GetAssignableRoleNamesAsync();
 
@@ -122,6 +129,8 @@ public class EmployeesController : Controller
 
         await _userManager.AddToRoleAsync(user, model.Role);
 
+      
+
         _context.AuditLogs.Add(new AuditLog
         {
             UserId = _userManager.GetUserId(User),
@@ -133,6 +142,7 @@ public class EmployeesController : Controller
         this.ToastSuccess($"'{user.UserName}' was created as a {model.Role}.");
         return RedirectToAction(nameof(Index));
     }
+   
 
     // POST: /Employees/AssignRole - role/permission assignment (US-16).
     [HttpPost]
@@ -146,7 +156,8 @@ public class EmployeesController : Controller
         var currentRoles = await _userManager.GetRolesAsync(user);
         var previousRoles = string.Join(", ", currentRoles);
 
-        await _userManager.RemoveFromRolesAsync(user, currentRoles);
+        var rolesToRemove = currentRoles.Where(r => r != "Customer").ToList();
+        await _userManager.RemoveFromRolesAsync(user, rolesToRemove);
         await _userManager.AddToRoleAsync(user, role);
 
         _context.AuditLogs.Add(new AuditLog
@@ -302,6 +313,7 @@ public class EmployeesController : Controller
         return RedirectToAction(nameof(Index));
     }
 
+
     // GET: /Employees/AuditLogs - admin-only audit trail (NFR-11).
     [Authorize(Policy = Permissions.AuditLogsView)]
     [HttpGet]
@@ -315,4 +327,5 @@ public class EmployeesController : Controller
 
         return View(logs);
     }
+
 }

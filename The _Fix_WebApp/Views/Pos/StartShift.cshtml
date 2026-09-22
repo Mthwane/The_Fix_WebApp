@@ -1,0 +1,18 @@
+@{
+    ViewData["Title"] = "Start Shift";
+    Layout = "_StaffLayout";
+}
+<div class="stf-content" style="max-width:440px;">
+    <span class="stf-eyebrow">Operations Core</span>
+    <h1 style="margin-bottom:6px;">Start Shift</h1>
+    <p style="color:var(--stf-on-surface-variant);margin-bottom:20px;">Count the cash in the drawer before your first sale, so anything short or over at close-out is visible.</p>
+
+    <form asp-action="StartShift" method="post" class="stf-card">
+        @Html.AntiForgeryToken()
+        <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;">Opening Float</label>
+        <input type="number" name="openingFloat" step="0.01" min="0" required autofocus
+               style="width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:11px 16px;font-size:1.1rem;margin-bottom:16px;" />
+        <button type="submit" class="stf-btn stf-btn-primary" style="width:100%;justify-content:center;">Start Shift</button>
+        <a asp-action="Index" style="display:block;text-align:center;margin-top:10px;font-size:0.85rem;color:var(--stf-on-surface-variant);">Skip for now</a>
+    </form>
+</div>

@@ -1,16 +1,58 @@
 @model List<Order>
 @{
     ViewData["Title"] = "Orders";
+    var selectedCategory = ViewBag.SelectedCategory as OrderCategory?;
     var selectedStatus = ViewBag.SelectedStatus as OrderStatus?;
     var selectedType = ViewBag.SelectedType as OrderType?;
+    var search = ViewBag.Search as string;
+    var categoryCounts = (Dictionary<OrderCategory, int>)ViewBag.CategoryCounts;
+    var allCount = (int)ViewBag.AllCount;
+
+    string CategoryUrl(OrderCategory? cat) =>
+        Url.Action("Index", new { category = cat, type = selectedType, search }) ?? "#";
 }
 <div class="container-fluid py-4">
     <h2>Orders</h2>
     <p class="text-muted">Move online orders through Processing &rarr; Shipped &rarr; Delivered, or cancel one that can't be fulfilled.</p>
 
-    <form asp-controller="Orders" asp-action="Index" method="get" class="row g-2 mb-3">
+    <!-- Quick-filter tabs: Pending / Completed / Past, grouped from the underlying statuses
+         (see OrdersController.CategoryStatuses). Selecting a tab clears the detailed status
+         dropdown below, since the two filters are mutually exclusive ways of doing the same thing. -->
+    <ul class="nav nav-pills mb-3">
+        <li class="nav-item">
+            <a class="nav-link @(selectedCategory is null ? "active" : "")" href="@CategoryUrl(null)">
+                All <span class="badge bg-secondary ms-1">@allCount</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(selectedCategory == OrderCategory.Pending ? "active" : "")" href="@CategoryUrl(OrderCategory.Pending)">
+                <i class="bi bi-hourglass-split"></i> Pending <span class="badge bg-warning text-dark ms-1">@categoryCounts[OrderCategory.Pending]</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(selectedCategory == OrderCategory.Completed ? "active" : "")" href="@CategoryUrl(OrderCategory.Completed)">
+                <i class="bi bi-check-circle"></i> Completed <span class="badge bg-success ms-1">@categoryCounts[OrderCategory.Completed]</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(selectedCategory == OrderCategory.Past ? "active" : "")" href="@CategoryUrl(OrderCategory.Past)">
+                <i class="bi bi-archive"></i> Past <span class="badge bg-danger ms-1">@categoryCounts[OrderCategory.Past]</span>
+            </a>
+        </li>
+    </ul>
+
+    <form asp-controller="Orders" asp-action="Index" method="get" class="row g-2 mb-3 align-items-center">
+        <input type="hidden" name="category" value="@selectedCategory" />
+
+        <div class="col-auto flex-grow-1" style="min-width: 220px;">
+            <div class="input-group">
+                <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+                <input type="text" name="search" value="@search" class="form-control" placeholder="Search by order #, customer name or email" />
+            </div>
+        </div>
+
         <div class="col-auto">
-            <select name="status" class="form-select" onchange="this.form.submit()">
+            <select name="status" class="form-select" onchange="this.form.submit()" @(selectedCategory.HasValue ? "disabled" : "")>
                 <option value="">All Statuses</option>
                 @foreach (OrderStatus s in Enum.GetValues(typeof(OrderStatus)))
                 {
@@ -27,7 +69,21 @@
                 }
             </select>
         </div>
+        <div class="col-auto">
+            <button type="submit" class="btn btn-outline-secondary"><i class="bi bi-filter"></i> Apply</button>
+        </div>
+        @if (selectedStatus.HasValue || selectedType.HasValue || !string.IsNullOrWhiteSpace(search) || selectedCategory.HasValue)
+        {
+            <div class="col-auto">
+                <a asp-controller="Orders" asp-action="Index" class="btn btn-outline-danger"><i class="bi bi-x-circle"></i> Clear</a>
+            </div>
+        }
     </form>
+
+    @if (selectedCategory.HasValue)
+    {
+        <p class="text-muted small"><i class="bi bi-info-circle"></i> Showing the <strong>@selectedCategory</strong> tab - clear it above to filter by an individual status instead.</p>
+    }
 
     @if (!Model.Any())
     {
@@ -35,6 +91,7 @@
     }
     else
     {
+        <p class="text-muted small">@Model.Count order(s) shown (max 200).</p>
         <table class="table table-hover align-middle">
             <thead><tr><th>Order #</th><th>Type</th><th>Customer</th><th>Items</th><th>Total</th><th>Status</th><th>Placed</th><th></th></tr></thead>
             <tbody>
@@ -47,6 +104,15 @@
                     OrderStatus.Shipped => "bg-info text-dark",
                     OrderStatus.Processing => "bg-warning text-dark",
                     _ => "bg-secondary"
+                };
+                var statusIcon = o.Status switch
+                {
+                    OrderStatus.Delivered or OrderStatus.Completed => "bi-check-circle",
+                    OrderStatus.Cancelled => "bi-x-circle",
+                    OrderStatus.Returned => "bi-arrow-return-left",
+                    OrderStatus.Shipped => "bi-truck",
+                    OrderStatus.Processing => "bi-gear",
+                    _ => "bi-hourglass-split"
                 };
                 var canAdvance = o.Status is OrderStatus.Pending or OrderStatus.Processing or OrderStatus.Shipped;
                 var canCancel = o.Status is OrderStatus.Pending or OrderStatus.Processing or OrderStatus.Shipped;
@@ -63,7 +129,7 @@
                     <td>@(o.Customer?.FullName ?? "Walk-in")</td>
                     <td>@o.OrderItems.Sum(i => i.Quantity) item(s)</td>
                     <td>@o.GrandTotal.ToString("C")</td>
-                    <td><span class="badge @badgeClass">@o.Status</span></td>
+                    <td><span class="badge @badgeClass"><i class="bi @statusIcon"></i> @o.Status</span></td>
                     <td>@o.DateCreated.ToLocalTime().ToString("dd MMM, HH:mm")</td>
                     <td class="text-end text-nowrap">
                         @if (canAdvance)

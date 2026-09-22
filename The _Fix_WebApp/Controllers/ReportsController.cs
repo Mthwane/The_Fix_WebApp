@@ -26,6 +26,9 @@ public class ReportsController : Controller
         var end = (to ?? DateTime.UtcNow).Date.AddDays(1).AddTicks(-1);
 
         var orders = await _context.Orders
+
+            .AsNoTracking()
+
             .Include(o => o.OrderItems).ThenInclude(oi => oi.Product)
             .Where(o => o.DateCreated >= start && o.DateCreated <= end)
             .ToListAsync();
@@ -61,48 +64,6 @@ public class ReportsController : Controller
         return View(orders);
     }
 
-    // GET: /Reports/Inventory - stock turnover / low-stock overview.
-    [HttpGet]
-    public async Task<IActionResult> Inventory()
-    {
-        var products = await _context.Products
-            .Where(p => p.IsActive)
-            .OrderBy(p => p.StockQuantity)
-            .ToListAsync();
-
-        var thirtyDaysAgo = DateTime.UtcNow.AddDays(-30);
-        var unitsSoldLast30Days = await _context.OrderItems
-            .Where(oi => oi.Order.DateCreated >= thirtyDaysAgo)
-            .GroupBy(oi => oi.ProductId)
-            .Select(g => new { ProductId = g.Key, Units = g.Sum(oi => oi.Quantity) })
-            .ToDictionaryAsync(x => x.ProductId, x => x.Units);
-
-        ViewBag.UnitsSoldLast30Days = unitsSoldLast30Days;
-        return View(products);
-    }
-
-    // GET: /Reports/Employees - employee performance overview (sales processed per staff member).
-    [HttpGet]
-    public async Task<IActionResult> Employees()
-    {
-        var thirtyDaysAgo = DateTime.UtcNow.AddDays(-30);
-
-        var performance = await _context.Orders
-            .Where(o => o.DateCreated >= thirtyDaysAgo && o.ProcessedByUserId != null)
-            .Include(o => o.ProcessedByUser)
-            .GroupBy(o => new { o.ProcessedByUserId, o.ProcessedByUser!.FullName })
-            .Select(g => new
-            {
-                g.Key.FullName,
-                SalesCount = g.Count(),
-                Revenue = g.Sum(o => o.GrandTotal)
-            })
-            .OrderByDescending(g => g.Revenue)
-            .ToListAsync();
-
-        return View(performance);
-    }
-
     // GET: /Reports/Export?format=csv - export the sales report for the given date range.
     [HttpGet]
     public async Task<IActionResult> Export(string format, DateTime? from, DateTime? to)
@@ -111,6 +72,9 @@ public class ReportsController : Controller
         var end = (to ?? DateTime.UtcNow).Date.AddDays(1).AddTicks(-1);
 
         var orders = await _context.Orders
+
+            .AsNoTracking()
+
             .Where(o => o.DateCreated >= start && o.DateCreated <= end)
             .OrderBy(o => o.DateCreated)
             .ToListAsync();

@@ -30,5 +30,19 @@ public class CheckoutViewModel
     [Display(Name = "Payment Method")]
     public PaymentMethod PaymentMethod { get; set; } = PaymentMethod.CreditCard;
 
+    [Required(ErrorMessage = "Please choose where this order should be delivered.")]
+    [Display(Name = "Deliver To")]
+    public int? SelectedAddressId { get; set; }
+
+    /// <summary>A saved Paystack card to charge directly. Null = pay with a new card via Paystack's page.</summary>
+    [Display(Name = "Pay With")]
+    public int? SelectedPaymentMethodId { get; set; }
+
+    /// <summary>Only relevant when paying with a brand-new card (SelectedPaymentMethodId is null).</summary>
+    [Display(Name = "Save this card for next time")]
+    public bool SaveCard { get; set; } = true;
+
     public CartViewModel Cart { get; set; } = new();
+    public List<CustomerAddress> Addresses { get; set; } = new();
+    public List<CustomerPaymentMethod> SavedCards { get; set; } = new();
 }

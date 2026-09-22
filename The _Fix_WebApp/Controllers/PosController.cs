@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Net;
 
 namespace FashionFix.Web.Controllers;
 
@@ -63,11 +64,19 @@ public class PosController : Controller
         }
 
         // Stock can move between scanning and completing the sale (another till, a return,
-        // etc.) - re-check right before committing so we never oversell.
+
+        // etc.) - re-check right before committing so we never oversell. One query for the
+        // whole basket (not one per line) via an IN-clause lookup.
+        var cartProductIds = model.CartItems.Select(l => l.ProductId).Distinct().ToList();
+        var currentProducts = await _context.Products
+            .AsNoTracking()
+            .Where(p => cartProductIds.Contains(p.ProductId))
+            .ToDictionaryAsync(p => p.ProductId);
+
         foreach (var line in model.CartItems)
         {
-            var product = await _context.Products.AsNoTracking().FirstOrDefaultAsync(p => p.ProductId == line.ProductId);
-            if (product is null || !product.IsActive)
+            if (!currentProducts.TryGetValue(line.ProductId, out var product) || !product.IsActive)
+
             {
                 this.ToastError($"'{line.ProductName}' is no longer available - it's been removed from the till.");
                 return View(nameof(Index), model);
@@ -112,14 +121,19 @@ public class PosController : Controller
             _context.Orders.Add(order);
             await _context.SaveChangesAsync();
 
-            var newlyLowStock = new List<string>();
-            foreach (var line in model.CartItems)
-            {
-                await _inventoryService.DecrementStockAsync(line.ProductId, line.Quantity);
 
-                if (await _inventoryService.IsLowStockAsync(line.ProductId))
-                    newlyLowStock.Add(line.ProductName);
-            }
+            // One round trip and one commit for the whole basket, instead of looping
+            // DecrementStockAsync + IsLowStockAsync per line (which was N queries + N
+            // separate commits for an N-item sale).
+            var updatedProducts = await _inventoryService.DecrementStockBatchAsync(
+                model.CartItems.Select(l => (l.ProductId, l.Quantity)));
+
+            var lowStockProductIds = updatedProducts.Where(p => p.IsLowStock).Select(p => p.ProductId).ToHashSet();
+            var newlyLowStock = model.CartItems
+                .Where(l => lowStockProductIds.Contains(l.ProductId))
+                .Select(l => l.ProductName)
+                .ToList();
+
 
             _context.AuditLogs.Add(new AuditLog
             {
@@ -196,6 +210,9 @@ public class PosController : Controller
     public async Task<IActionResult> Product(string sku)
     {
         var product = await _context.Products
+
+            .AsNoTracking()
+
             .Where(p => p.SKU == sku && p.IsActive)
             .Select(p => new
             {

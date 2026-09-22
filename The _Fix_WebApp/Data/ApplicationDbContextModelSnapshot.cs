@@ -136,6 +136,121 @@ namespace The__Fix_WebApp.Data
                     b.ToTable("AuditLogs");
                 });
 
+            modelBuilder.Entity("FashionFix.Web.Models.Entities.CustomerAddress", b =>
+                {
+                    b.Property<int>("CustomerAddressId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("CustomerAddressId"));
+
+                    b.Property<string>("AddressLine1")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("AddressLine2")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("City")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("CustomerId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("PhoneNumber")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("PostalCode")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("Province")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("RecipientName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("CustomerAddressId");
+
+                    b.HasIndex("CustomerId");
+
+                    b.ToTable("CustomerAddresses");
+                });
+
+            modelBuilder.Entity("FashionFix.Web.Models.Entities.CustomerPaymentMethod", b =>
+                {
+                    b.Property<int>("CustomerPaymentMethodId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("CustomerPaymentMethodId"));
+
+                    b.Property<string>("AuthorizationCode")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Bank")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("CardType")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("CustomerId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("DateAdded")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("ExpiryMonth")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ExpiryYear")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Last4")
+                        .HasMaxLength(4)
+                        .HasColumnType("nvarchar(4)");
+
+                    b.HasKey("CustomerPaymentMethodId");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("CustomerId", "AuthorizationCode")
+                        .IsUnique();
+
+                    b.ToTable("CustomerPaymentMethods");
+                });
+
             modelBuilder.Entity("FashionFix.Web.Models.Entities.InventoryTransaction", b =>
                 {
                     b.Property<int>("InventoryTransactionId")
@@ -180,6 +295,34 @@ namespace The__Fix_WebApp.Data
                     b.Property<DateTime?>("DateFulfilled")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("DeliveryAddressLine1")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("DeliveryAddressLine2")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("DeliveryCity")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("DeliveryPhoneNumber")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("DeliveryPostalCode")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("DeliveryProvince")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("DeliveryRecipientName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<decimal>("DiscountTotal")
                         .HasColumnType("decimal(18,2)");
 
@@ -213,10 +356,14 @@ namespace The__Fix_WebApp.Data
 
                     b.HasIndex("CustomerId");
 
+                    b.HasIndex("DateCreated");
+
                     b.HasIndex("OrderNumber")
                         .IsUnique();
 
                     b.HasIndex("ProcessedByUserId");
+
+                    b.HasIndex("Status", "OrderType");
 
                     b.ToTable("Orders");
                 });
@@ -320,163 +467,14 @@ namespace The__Fix_WebApp.Data
 
                     b.HasKey("ProductId");
 
+                    b.HasIndex("Name");
+
                     b.HasIndex("SKU")
                         .IsUnique();
 
+                    b.HasIndex("IsActive", "Category");
+
                     b.ToTable("Products");
-                });
-
-            modelBuilder.Entity("FashionFix.Web.Models.Entities.PurchaseOrder", b =>
-                {
-                    b.Property<int>("PurchaseOrderId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("PurchaseOrderId"));
-
-                    b.Property<string>("CreatedByUserId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<DateTime>("DateCreated")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("DateExpected")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("DateReceived")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("PONumber")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("nvarchar(30)");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("int");
-
-                    b.Property<int>("SupplierId")
-                        .HasColumnType("int");
-
-                    b.HasKey("PurchaseOrderId");
-
-                    b.HasIndex("CreatedByUserId");
-
-                    b.HasIndex("PONumber")
-                        .IsUnique();
-
-                    b.HasIndex("SupplierId");
-
-                    b.ToTable("PurchaseOrders");
-                });
-
-            modelBuilder.Entity("FashionFix.Web.Models.Entities.PurchaseOrderItem", b =>
-                {
-                    b.Property<int>("PurchaseOrderItemId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("PurchaseOrderItemId"));
-
-                    b.Property<int>("ProductId")
-                        .HasColumnType("int");
-
-                    b.Property<int>("PurchaseOrderId")
-                        .HasColumnType("int");
-
-                    b.Property<int>("QuantityOrdered")
-                        .HasColumnType("int");
-
-                    b.Property<int>("QuantityReceived")
-                        .HasColumnType("int");
-
-                    b.Property<decimal>("UnitCost")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.HasKey("PurchaseOrderItemId");
-
-                    b.HasIndex("ProductId");
-
-                    b.HasIndex("PurchaseOrderId");
-
-                    b.ToTable("PurchaseOrderItems");
-                });
-
-            modelBuilder.Entity("FashionFix.Web.Models.Entities.ReturnTransaction", b =>
-                {
-                    b.Property<int>("ReturnId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ReturnId"));
-
-                    b.Property<DateTime>("DateProcessed")
-                        .HasColumnType("datetime2");
-
-                    b.Property<bool>("IsResalable")
-                        .HasColumnType("bit");
-
-                    b.Property<int>("OrderId")
-                        .HasColumnType("int");
-
-                    b.Property<int>("OrderItemId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("ProcessedByUserId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<int>("QuantityReturned")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Reason")
-                        .HasMaxLength(250)
-                        .HasColumnType("nvarchar(250)");
-
-                    b.Property<decimal>("RefundAmount")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<int>("RefundMethod")
-                        .HasColumnType("int");
-
-                    b.HasKey("ReturnId");
-
-                    b.HasIndex("OrderId");
-
-                    b.HasIndex("OrderItemId");
-
-                    b.HasIndex("ProcessedByUserId");
-
-                    b.ToTable("ReturnTransactions");
-                });
-
-            modelBuilder.Entity("FashionFix.Web.Models.Entities.Supplier", b =>
-                {
-                    b.Property<int>("SupplierId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("SupplierId"));
-
-                    b.Property<string>("ContactEmail")
-                        .HasMaxLength(150)
-                        .HasColumnType("nvarchar(150)");
-
-                    b.Property<string>("ContactPhone")
-                        .HasMaxLength(30)
-                        .HasColumnType("nvarchar(30)");
-
-                    b.Property<int>("LeadTimeDays")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(150)
-                        .HasColumnType("nvarchar(150)");
-
-                    b.HasKey("SupplierId");
-
-                    b.ToTable("Suppliers");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>
@@ -621,6 +619,28 @@ namespace The__Fix_WebApp.Data
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("FashionFix.Web.Models.Entities.CustomerAddress", b =>
+                {
+                    b.HasOne("FashionFix.Web.Models.Entities.ApplicationUser", "Customer")
+                        .WithMany("Addresses")
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
+                });
+
+            modelBuilder.Entity("FashionFix.Web.Models.Entities.CustomerPaymentMethod", b =>
+                {
+                    b.HasOne("FashionFix.Web.Models.Entities.ApplicationUser", "Customer")
+                        .WithMany("PaymentMethods")
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
+                });
+
             modelBuilder.Entity("FashionFix.Web.Models.Entities.InventoryTransaction", b =>
                 {
                     b.HasOne("FashionFix.Web.Models.Entities.Product", "Product")
@@ -666,71 +686,6 @@ namespace The__Fix_WebApp.Data
                     b.Navigation("Order");
 
                     b.Navigation("Product");
-                });
-
-            modelBuilder.Entity("FashionFix.Web.Models.Entities.PurchaseOrder", b =>
-                {
-                    b.HasOne("FashionFix.Web.Models.Entities.ApplicationUser", "CreatedByUser")
-                        .WithMany()
-                        .HasForeignKey("CreatedByUserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("FashionFix.Web.Models.Entities.Supplier", "Supplier")
-                        .WithMany("PurchaseOrders")
-                        .HasForeignKey("SupplierId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("CreatedByUser");
-
-                    b.Navigation("Supplier");
-                });
-
-            modelBuilder.Entity("FashionFix.Web.Models.Entities.PurchaseOrderItem", b =>
-                {
-                    b.HasOne("FashionFix.Web.Models.Entities.Product", "Product")
-                        .WithMany("PurchaseOrderItems")
-                        .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("FashionFix.Web.Models.Entities.PurchaseOrder", "PurchaseOrder")
-                        .WithMany("Items")
-                        .HasForeignKey("PurchaseOrderId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Product");
-
-                    b.Navigation("PurchaseOrder");
-                });
-
-            modelBuilder.Entity("FashionFix.Web.Models.Entities.ReturnTransaction", b =>
-                {
-                    b.HasOne("FashionFix.Web.Models.Entities.Order", "Order")
-                        .WithMany("Returns")
-                        .HasForeignKey("OrderId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("FashionFix.Web.Models.Entities.OrderItem", "OrderItem")
-                        .WithMany()
-                        .HasForeignKey("OrderItemId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("FashionFix.Web.Models.Entities.ApplicationUser", "ProcessedByUser")
-                        .WithMany()
-                        .HasForeignKey("ProcessedByUserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Order");
-
-                    b.Navigation("OrderItem");
-
-                    b.Navigation("ProcessedByUser");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
@@ -786,16 +741,18 @@ namespace The__Fix_WebApp.Data
 
             modelBuilder.Entity("FashionFix.Web.Models.Entities.ApplicationUser", b =>
                 {
+                    b.Navigation("Addresses");
+
                     b.Navigation("AuditLogs");
 
                     b.Navigation("Orders");
+
+                    b.Navigation("PaymentMethods");
                 });
 
             modelBuilder.Entity("FashionFix.Web.Models.Entities.Order", b =>
                 {
                     b.Navigation("OrderItems");
-
-                    b.Navigation("Returns");
                 });
 
             modelBuilder.Entity("FashionFix.Web.Models.Entities.Product", b =>
@@ -803,18 +760,6 @@ namespace The__Fix_WebApp.Data
                     b.Navigation("InventoryTransactions");
 
                     b.Navigation("OrderItems");
-
-                    b.Navigation("PurchaseOrderItems");
-                });
-
-            modelBuilder.Entity("FashionFix.Web.Models.Entities.PurchaseOrder", b =>
-                {
-                    b.Navigation("Items");
-                });
-
-            modelBuilder.Entity("FashionFix.Web.Models.Entities.Supplier", b =>
-                {
-                    b.Navigation("PurchaseOrders");
                 });
 #pragma warning restore 612, 618
         }

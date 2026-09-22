@@ -1,0 +1,53 @@
+@model RoleEditViewModel
+@{
+    ViewData["Title"] = "Edit Role";
+    Layout = "_StaffLayout";
+}
+<div class="stf-content" style="max-width:640px;">
+    <span class="stf-eyebrow">Access Control</span>
+    <h1 style="margin-bottom:16px;">Edit Role: @Model.Name</h1>
+
+    @if (Model.IsProtected)
+    {
+        <div class="stf-card" style="margin-bottom:16px;background:var(--stf-secondary-container);border:none;">
+            <p style="margin:0;font-size:0.85rem;">
+                This is a built-in role.
+                @(Model.Name == "Administrator" ? "\"Manage Roles & Permissions\" can't be removed from Administrator - that's what guarantees at least one account can always get back in here to restore permissions. Every other permission can be freely adjusted below." : "Its permissions can still be adjusted below.")
+            </p>
+        </div>
+    }
+
+    <form asp-controller="Roles" asp-action="Edit" asp-route-id="@Model.Id" method="post" class="stf-card">
+        <input type="hidden" asp-for="Id" />
+        <input type="hidden" asp-for="Name" />
+
+        <div style="font-size:0.85rem;font-weight:600;margin-bottom:10px;">Permissions</div>
+        <div style="border:1px solid var(--stf-outline-variant);border-radius:10px;padding:14px 16px;margin-bottom:16px;">
+            @foreach (var permission in Model.AllPermissions)
+            {
+                var isChecked = Model.SelectedPermissions.Contains(permission.Key);
+                var isLocked = Model.Name == "Administrator" && permission.Key == FashionFix.Web.Security.Permissions.RolesManage;
+                <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--stf-surface-container);">
+                    <input type="checkbox" name="SelectedPermissions" value="@permission.Key"
+                           id="perm_@permission.Key" checked="@isChecked" disabled="@isLocked" />
+                    <label for="perm_@permission.Key" style="font-size:0.85rem;">
+                        @permission.Value
+                        @if (isLocked)
+                        {
+                            <span class="stf-badge stf-badge-muted" style="margin-left:6px;">Required</span>
+                        }
+                    </label>
+                    @if (isLocked)
+                    {
+                        <input type="hidden" name="SelectedPermissions" value="@permission.Key" />
+                    }
+                </div>
+            }
+        </div>
+
+        <div style="display:flex;gap:10px;">
+            <button type="submit" class="stf-btn stf-btn-primary">Save Permissions</button>
+            <a asp-controller="Roles" asp-action="Index" style="font-size:0.85rem;color:var(--stf-on-surface-variant);align-self:center;">Cancel</a>
+        </div>
+    </form>
+</div>

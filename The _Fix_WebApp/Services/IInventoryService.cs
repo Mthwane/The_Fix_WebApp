@@ -15,4 +15,17 @@ public interface IInventoryService
 
     /// <summary>True if a product's stock is at or below its configured threshold.</summary>
     Task<bool> IsLowStockAsync(int productId);
+
+
+    /// <summary>
+    /// Decrements stock for every (productId, quantity) line in a single round trip and a
+    /// single SaveChanges - use this instead of looping DecrementStockAsync per line (e.g.
+    /// POS checkout), which otherwise does one query + one commit per cart line.
+    /// Returns the updated products so callers can check IsLowStock without re-querying.
+    /// </summary>
+    Task<List<Product>> DecrementStockBatchAsync(IEnumerable<(int ProductId, int Quantity)> lines, InventoryChangeReason reason = InventoryChangeReason.Sale);
+
+    /// <summary>Batch equivalent of IncrementStockAsync - one round trip for the whole order.</summary>
+    Task<List<Product>> IncrementStockBatchAsync(IEnumerable<(int ProductId, int Quantity)> lines, InventoryChangeReason reason = InventoryChangeReason.PurchaseOrderReceived);
+
 }

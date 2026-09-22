@@ -1,7 +1,7 @@
 using FashionFix.Web.Data;
 using FashionFix.Web.Models.Entities;
-using FashionFix.Web.Services;
 using FashionFix.Web.Security;
+using FashionFix.Web.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -9,98 +9,139 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FashionFix.Web.Controllers;
 
-/// <summary>Process returns and exchanges against a valid receipt or transaction ID (US-09).</summary>
+/// <summary>
+/// Over-the-counter returns. Ported from V1 with one substantive change: a resalable return now
+/// restocks the exact ProductVariant that came back, not the parent style.
+/// </summary>
 [Authorize(Policy = Permissions.ReturnsProcess)]
 public class ReturnsController : Controller
 {
     private readonly ApplicationDbContext _context;
-    private readonly IInventoryService _inventoryService;
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly IInventoryService _inventoryService;
 
-    public ReturnsController(
-        ApplicationDbContext context,
-        IInventoryService inventoryService,
-        UserManager<ApplicationUser> userManager)
+    public ReturnsController(ApplicationDbContext context, UserManager<ApplicationUser> userManager, IInventoryService inventoryService)
     {
         _context = context;
-        _inventoryService = inventoryService;
         _userManager = userManager;
+        _inventoryService = inventoryService;
     }
 
-    // GET: /Returns
+    // GET: /Returns - recent returns, newest first.
     [HttpGet]
     public async Task<IActionResult> Index()
     {
         var returns = await _context.ReturnTransactions
+            .AsNoTracking()
             .Include(r => r.Order)
-            .Include(r => r.OrderItem).ThenInclude(oi => oi.Product)
+            .Include(r => r.OrderItem).ThenInclude(i => i.Product)
+            .Include(r => r.ProductVariant)
+            .Include(r => r.ProcessedByUser)
             .OrderByDescending(r => r.DateProcessed)
-            .Take(50)
+            .Take(100)
             .ToListAsync();
 
         return View(returns);
     }
 
-    // GET: /Returns/Lookup?orderNumber= - find a sale by receipt/transaction ID.
+    // GET: /Returns/Lookup?orderNumber=WEB-123 - find the order to return against.
     [HttpGet]
-    public async Task<IActionResult> Lookup(string orderNumber)
+    public async Task<IActionResult> Lookup(string? orderNumber)
     {
+        if (string.IsNullOrWhiteSpace(orderNumber)) return View(null);
+
         var order = await _context.Orders
-            .Include(o => o.OrderItems).ThenInclude(oi => oi.Product)
+            .AsNoTracking()
+            .Include(o => o.Customer)
+            .Include(o => o.OrderItems).ThenInclude(i => i.Product)
+            .Include(o => o.OrderItems).ThenInclude(i => i.ProductVariant)
             .FirstOrDefaultAsync(o => o.OrderNumber == orderNumber);
 
         if (order is null)
         {
-            this.ToastError($"No order found with receipt/transaction ID '{orderNumber}'.");
-            return RedirectToAction(nameof(Index));
+            this.ToastError($"No order found with number '{orderNumber}'.");
+            return View(null);
         }
 
+        // Show what's already been returned per line, so staff can't over-refund a line by
+        // processing the same return twice.
+        ViewBag.AlreadyReturned = await _context.ReturnTransactions
+            .Where(r => r.OrderId == order.OrderId)
+            .GroupBy(r => r.OrderItemId)
+            .Select(g => new { OrderItemId = g.Key, Quantity = g.Sum(x => x.QuantityReturned) })
+            .ToDictionaryAsync(x => x.OrderItemId, x => x.Quantity);
+
+        ViewBag.OrderNumber = orderNumber;
         return View(order);
     }
 
-    // POST: /Returns/Process - reverses the sale, restocks if resalable, issues refund/credit.
+    // POST: /Returns/Process
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Process(int orderItemId, int quantity, bool isResalable, RefundMethod refundMethod)
+    public async Task<IActionResult> Process(int orderItemId, int quantity, bool isResalable, RefundMethod refundMethod, string? reason)
     {
-        var orderItem = await _context.OrderItems
-            .Include(oi => oi.Order)
-            .Include(oi => oi.Product)
-            .FirstOrDefaultAsync(oi => oi.OrderItemId == orderItemId);
+        var item = await _context.OrderItems
+            .Include(i => i.Order)
+            .Include(i => i.Product)
+            .Include(i => i.ProductVariant)
+            .FirstOrDefaultAsync(i => i.OrderItemId == orderItemId);
 
-        if (orderItem is null) return NotFound();
+        if (item is null) return NotFound();
 
-        var refundAmount = orderItem.UnitPrice * quantity;
-        var processedByUserId = _userManager.GetUserId(User) ?? string.Empty;
+        if (quantity <= 0)
+        {
+            this.ToastError("Enter a quantity greater than zero.");
+            return RedirectToAction(nameof(Lookup), new { orderNumber = item.Order.OrderNumber });
+        }
+
+        var alreadyReturned = await _context.ReturnTransactions
+            .Where(r => r.OrderItemId == orderItemId)
+            .SumAsync(r => (int?)r.QuantityReturned) ?? 0;
+
+        var returnable = item.Quantity - alreadyReturned;
+        if (quantity > returnable)
+        {
+            this.ToastError($"Only {returnable} unit(s) left to return on that line ({alreadyReturned} already returned).");
+            return RedirectToAction(nameof(Lookup), new { orderNumber = item.Order.OrderNumber });
+        }
+
+        var refundAmount = item.UnitPrice * quantity;
 
         _context.ReturnTransactions.Add(new ReturnTransaction
         {
-            OrderId = orderItem.OrderId,
-            OrderItemId = orderItem.OrderItemId,
-            ProcessedByUserId = processedByUserId,
+            OrderId = item.OrderId,
+            OrderItemId = item.OrderItemId,
+            ProductVariantId = item.ProductVariantId,
+            ProcessedByUserId = _userManager.GetUserId(User)!,
             QuantityReturned = quantity,
             IsResalable = isResalable,
             RefundMethod = refundMethod,
-            RefundAmount = refundAmount
+            RefundAmount = refundAmount,
+            Reason = reason
         });
 
-        orderItem.Order.Status = OrderStatus.Returned;
+        // Only resalable stock goes back on the shelf. Damaged goods are still refunded but
+        // written off - incrementing stock for them would silently inflate inventory.
+        if (isResalable && item.ProductVariantId.HasValue)
+        {
+            await _inventoryService.IncrementStockAsync(item.ProductVariantId.Value, quantity, InventoryChangeReason.Return);
+        }
+        else if (isResalable)
+        {
+            // Pre-variant historical line: refund stands, but there's no variant to restock into.
+            this.ToastWarning("Refund processed, but this is a legacy order line with no size/colour recorded - restock it manually.");
+        }
 
         _context.AuditLogs.Add(new AuditLog
         {
-            UserId = processedByUserId,
+            UserId = _userManager.GetUserId(User),
             Action = "ReturnProcessed",
-            // NOTE: store-credit ledger integration (when RefundMethod == StoreCredit) is a
-            // follow-up item - for now the credit is recorded here but not yet redeemable.
-            Details = $"Returned {quantity}x '{orderItem.Product.Name}' from order {orderItem.Order.OrderNumber} - {refundAmount:C} via {refundMethod}."
+            Details = $"Returned {quantity}x {item.Product?.Name} on {item.Order.OrderNumber}. Refund {refundAmount:C} via {refundMethod}. Resalable: {isResalable}."
         });
 
         await _context.SaveChangesAsync();
 
-        if (isResalable)
-            await _inventoryService.IncrementStockAsync(orderItem.ProductId, quantity, InventoryChangeReason.Return);
-
         this.ToastSuccess($"Return processed - {refundAmount:C} refunded via {refundMethod}.");
-        return RedirectToAction(nameof(Index));
+        return RedirectToAction(nameof(Lookup), new { orderNumber = item.Order.OrderNumber });
     }
 }
