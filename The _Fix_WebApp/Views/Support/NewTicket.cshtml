@@ -1,0 +1,48 @@
+@{
+    ViewData["Title"] = "New Support Ticket";
+    Layout = "_StorefrontLayout";
+    int? orderId = ViewBag.OrderId as int?;
+}
+
+<section class="ffs-section" style="padding-top:32px;">
+    <div class="ffs-container" style="max-width:640px;">
+        <span class="ffs-eyebrow">Support</span>
+        <h1 style="font-family:'Fraunces',serif;font-size:1.9rem;margin-bottom:20px;">New Support Ticket</h1>
+
+        <form asp-action="NewTicket" method="post" style="border:1px solid var(--ffs-border);border-radius:var(--ffs-radius);padding:24px;background:var(--ffs-card);">
+            @Html.AntiForgeryToken()
+            @if (orderId.HasValue)
+            {
+                <input type="hidden" name="orderId" value="@orderId" />
+                <div style="background:var(--ffs-cream-alt);border-radius:8px;padding:10px 14px;font-size:0.85rem;margin-bottom:16px;">
+                    This ticket will be linked to order #@orderId.
+                </div>
+            }
+
+            <div style="margin-bottom:16px;">
+                <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;">What's this about?</label>
+                <select name="category" style="width:100%;border:1px solid var(--ffs-border);border-radius:8px;padding:9px 14px;font-size:0.9rem;">
+                    <option value="@TicketCategory.General">General Question</option>
+                    <option value="@TicketCategory.OrderQuery">Question About an Order</option>
+                    <option value="@TicketCategory.RefundRequest">Request a Refund</option>
+                    <option value="@TicketCategory.CancelOrder">Cancel an Order</option>
+                </select>
+            </div>
+
+            <div style="margin-bottom:16px;">
+                <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;">Subject</label>
+                <input type="text" name="subject" required maxlength="150" style="width:100%;border:1px solid var(--ffs-border);border-radius:8px;padding:9px 14px;font-size:0.9rem;" />
+            </div>
+
+            <div style="margin-bottom:20px;">
+                <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;">Message</label>
+                <textarea name="message" required rows="6" style="width:100%;border:1px solid var(--ffs-border);border-radius:8px;padding:9px 14px;font-size:0.9rem;"></textarea>
+            </div>
+
+            <div style="display:flex;gap:10px;">
+                <button type="submit" class="ffs-btn ffs-btn-forest">Submit Ticket</button>
+                <a asp-action="Tickets" style="align-self:center;color:var(--ffs-ink-muted);font-size:0.85rem;">Cancel</a>
+            </div>
+        </form>
+    </div>
+</section>

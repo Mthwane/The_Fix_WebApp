@@ -1,0 +1,133 @@
+@model SupportTicket
+@using FashionFix.Web.Models.Entities
+@{
+    ViewData["Title"] = $"Ticket: {Model.Subject}";
+    Layout = "_StaffLayout";
+    var staffOptions = (ViewBag.StaffOptions as List<ApplicationUser>) ?? new List<ApplicationUser>();
+    var managerOptions = (ViewBag.ManagerOptions as IList<ApplicationUser>) ?? new List<ApplicationUser>();
+
+    (string bg, string fg) BadgeFor(TicketStatus s) => s switch
+    {
+        TicketStatus.Resolved or TicketStatus.Closed => ("var(--stf-surface-container)", "var(--stf-on-surface-variant)"),
+        TicketStatus.Escalated => ("var(--stf-error-container)", "var(--stf-error)"),
+        TicketStatus.InProgress => ("var(--stf-secondary-container)", "var(--stf-secondary)"),
+        _ => ("var(--stf-primary-container)", "var(--stf-on-primary-container)")
+    };
+    var (badgeBg, badgeFg) = BadgeFor(Model.Status);
+}
+
+<div class="stf-content" style="max-width:900px;">
+    <div style="margin-bottom:14px;">
+        <a asp-action="Index" style="color:var(--stf-on-surface-variant);font-size:0.85rem;text-decoration:none;">&larr; Back to Support Tickets</a>
+    </div>
+
+    <div class="stf-page-head">
+        <div>
+            <span class="stf-eyebrow">@Model.Category &bull; @Model.Priority Priority</span>
+            <h1>@Model.Subject</h1>
+            <p>
+                @Model.Customer?.FullName (@Model.Customer?.Email) &bull; Opened @Model.DateCreated.ToLocalTime().ToString("dd MMM yyyy, HH:mm")
+                @if (Model.Order is not null)
+                {
+                    <text> &bull; <a asp-controller="Orders" asp-action="Details" asp-route-id="@Model.Order.OrderId">Order #@Model.Order.OrderNumber</a></text>
+                }
+            </p>
+        </div>
+        <span style="background:@badgeBg;color:@badgeFg;font-size:0.8rem;font-weight:600;padding:6px 14px;border-radius:999px;white-space:nowrap;">@Model.Status</span>
+    </div>
+
+    @if (Model.Category is TicketCategory.RefundRequest or TicketCategory.CancelOrder && Model.Order is not null)
+    {
+        <div class="stf-card" style="margin-bottom:16px;display:flex;gap:10px;align-items:center;">
+            <strong style="font-size:0.85rem;">Quick action:</strong>
+            @if (Model.Category == TicketCategory.RefundRequest)
+            {
+                <a asp-controller="Returns" asp-action="Lookup" asp-route-orderNumber="@Model.Order.OrderNumber" class="stf-btn stf-btn-outline" style="padding:6px 14px;font-size:0.78rem;">Process Refund for This Order</a>
+            }
+            else
+            {
+                <a asp-controller="Orders" asp-action="Details" asp-route-id="@Model.Order.OrderId" class="stf-btn stf-btn-outline" style="padding:6px 14px;font-size:0.78rem;">Go Cancel This Order</a>
+            }
+        </div>
+    }
+
+    <div class="stf-card" style="margin-bottom:16px;">
+        <div style="display:flex;flex-direction:column;gap:14px;max-height:420px;overflow-y:auto;padding-right:4px;">
+            @foreach (var m in Model.Messages.OrderBy(m => m.DateSent))
+            {
+                var isEmployee = m.SenderType == TicketSenderType.Employee;
+                var isSystem = m.SenderType == TicketSenderType.System;
+                <div style="align-self:@(isEmployee ? "flex-end" : "flex-start");max-width:80%;">
+                    @if (isSystem)
+                    {
+                        <div style="text-align:center;color:var(--stf-on-surface-variant);font-size:0.78rem;font-style:italic;">@m.Body</div>
+                    }
+                    else
+                    {
+                        <div style="background:@(isEmployee ? "var(--stf-primary)" : "var(--stf-surface-container)");color:@(isEmployee ? "#fff" : "var(--stf-on-surface)");border-radius:12px;padding:12px 16px;">
+                            <div style="font-size:0.72rem;font-weight:600;margin-bottom:4px;opacity:0.8;">
+                                @(m.Sender?.FullName ?? (isEmployee ? "Staff" : "Customer")) &bull; @m.DateSent.ToLocalTime().ToString("dd MMM, HH:mm")
+                            </div>
+                            <div style="font-size:0.9rem;white-space:pre-line;">@m.Body</div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+
+    <form asp-action="Reply" asp-route-id="@Model.SupportTicketId" method="post" class="stf-card" style="margin-bottom:16px;">
+        @Html.AntiForgeryToken()
+        <textarea name="message" rows="3" placeholder="Reply to the customer..." style="width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:9px 14px;font-size:0.9rem;margin-bottom:10px;"></textarea>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+            <button type="submit" class="stf-btn stf-btn-primary">Send Reply</button>
+            <label style="font-size:0.82rem;display:flex;align-items:center;gap:6px;">
+                and set status to
+                <select name="newStatus" style="border:1px solid var(--stf-outline-variant);border-radius:8px;padding:6px 10px;font-size:0.85rem;">
+                    <option value="">(no change)</option>
+                    @foreach (TicketStatus s in Enum.GetValues<TicketStatus>())
+                    {
+                        <option value="@s" selected="@(s == Model.Status)">@s</option>
+                    }
+                </select>
+            </label>
+        </div>
+    </form>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <form asp-action="Assign" asp-route-id="@Model.SupportTicketId" method="post" class="stf-card">
+            @Html.AntiForgeryToken()
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:8px;">Assign To</label>
+            <div style="display:flex;gap:8px;">
+                <select name="employeeId" style="flex:1;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:8px 12px;font-size:0.85rem;">
+                    @foreach (var s in staffOptions)
+                    {
+                        <option value="@s.Id" selected="@(s.Id == Model.AssignedEmployeeId)">@s.FullName</option>
+                    }
+                </select>
+                <button type="submit" class="stf-btn stf-btn-outline" style="padding:8px 16px;font-size:0.82rem;">Assign</button>
+            </div>
+        </form>
+
+        <form asp-action="Escalate" asp-route-id="@Model.SupportTicketId" method="post" class="stf-card">
+            @Html.AntiForgeryToken()
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:8px;">Escalate To Manager</label>
+            @if (managerOptions.Any())
+            {
+                <div style="display:flex;gap:8px;">
+                    <select name="managerId" style="flex:1;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:8px 12px;font-size:0.85rem;">
+                        @foreach (var m in managerOptions)
+                        {
+                            <option value="@m.Id" selected="@(m.Id == Model.EscalatedToManagerId)">@m.FullName</option>
+                        }
+                    </select>
+                    <button type="submit" class="stf-btn stf-btn-outline" style="padding:8px 16px;font-size:0.82rem;color:var(--stf-error);border-color:var(--stf-error);">Escalate</button>
+                </div>
+            }
+            else
+            {
+                <p style="color:var(--stf-on-surface-variant);font-size:0.82rem;">No managers on file to escalate to.</p>
+            }
+        </form>
+    </div>
+</div>

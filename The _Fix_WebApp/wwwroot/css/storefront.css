@@ -8,6 +8,13 @@
    ===================================================================== */
 
 :root {
+    /* This design is light-only - no dark palette is defined anywhere in this file. Without
+       this, browsers with forced/auto dark mode (common on Android Chrome, Samsung Internet)
+       try to repaint the page themselves and can mangle explicit colours - e.g. a dark green
+       button background getting auto-inverted while its white text doesn't, leaving text
+       invisible against its own button. This opts the page out of that repainting entirely. */
+    color-scheme: light;
+
     --ffs-forest: #0F2A1C;        /* primary dark green - buttons, active nav pill, cart icon */
     --ffs-forest-deep: #0A2217;   /* darkest green - big banners (Style Box, ethics) */
     --ffs-sage: #CFE9D8;          /* light mint - accent buttons/text on dark green */
@@ -174,7 +181,43 @@
 .ffs-dept-links .ffs-btn { padding: 8px 16px; font-size: 0.8rem; }
 .ffs-dept-links a.ffs-dept-sub { font-size: 0.78rem; color: var(--ffs-ink-muted); }
 
-/* ---------- Product cards ---------- */
+/* ---------- Toasts ----------
+   The storefront layout uses Bootstrap's Toast JS component (for its show/hide/auto-dismiss
+   behaviour) but does NOT load Bootstrap's CSS - only this stylesheet. Without this, .toast
+   has no styling at all: plain unformatted text, and an invisible/blank close button (its "X"
+   normally comes from Bootstrap's CSS). This block gives the same .toast/.toast-body/.btn-close
+   markup Bootstrap's JS expects a proper look matching the rest of the site, without pulling in
+   all of Bootstrap's CSS (which would clash with the ffs- design system elsewhere). */
+#toastContainer .toast {
+    display: none; /* Bootstrap JS toggles the .show class below; this is the hidden default */
+    min-width: 280px;
+    max-width: 380px;
+    background: var(--ffs-card);
+    border: 1px solid var(--ffs-border);
+    border-left: 4px solid var(--ffs-forest);
+    border-radius: var(--ffs-radius);
+    box-shadow: 0 10px 30px rgba(0,0,0,.14);
+    overflow: hidden;
+}
+#toastContainer .toast.show { display: block; }
+#toastContainer .toast[data-toast-type="danger"] { border-left-color: var(--ffs-clay); }
+#toastContainer .toast[data-toast-type="warning"] { border-left-color: #C58F4E; }
+#toastContainer .toast-body {
+    display: flex; align-items: center; justify-content: space-between; gap: 14px;
+    padding: 14px 16px; font-size: 0.88rem; line-height: 1.4; color: var(--ffs-ink);
+}
+#toastContainer .btn-close {
+    appearance: none; -webkit-appearance: none; border: none; background: transparent;
+    cursor: pointer; width: 20px; height: 20px; flex-shrink: 0; opacity: .5; position: relative;
+    padding: 0;
+}
+#toastContainer .btn-close:hover { opacity: 1; }
+#toastContainer .btn-close::before, #toastContainer .btn-close::after {
+    content: ""; position: absolute; top: 50%; left: 50%; width: 14px; height: 2px;
+    background: var(--ffs-ink); border-radius: 1px;
+}
+#toastContainer .btn-close::before { transform: translate(-50%, -50%) rotate(45deg); }
+#toastContainer .btn-close::after { transform: translate(-50%, -50%) rotate(-45deg); }
 .ffs-product-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
 .ffs-product-card { position: relative; }
 .ffs-product-img-wrap { position: relative; border-radius: var(--ffs-radius); overflow: hidden; aspect-ratio: 3/4; background: var(--ffs-border); }

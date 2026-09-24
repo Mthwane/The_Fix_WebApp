@@ -22,6 +22,11 @@ public class EmailOptions
     public bool EnableSsl { get; set; } = true;
     public string FromAddress { get; set; } = "no-reply@fashionfix.local";
     public string FromName { get; set; } = "Fashion Fix";
+
+    /// <summary>Where a "new support ticket" staff notification is sent. Falls back to
+    /// FromAddress if unset - a small shop's own inbox doubling as the support inbox is a
+    /// completely normal setup, and it means this needs no extra configuration to work.</summary>
+    public string? SupportNotifyEmail { get; set; }
 }
 
 public class SmtpEmailSender : IEmailSender

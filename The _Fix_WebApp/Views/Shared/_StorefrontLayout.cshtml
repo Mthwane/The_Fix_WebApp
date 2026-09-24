@@ -30,6 +30,7 @@
             </div>
             <div class="ffs-utility-right">
                 <span>FixRewards: Earn 5% Back</span>
+                <a asp-controller="Support" asp-action="Faq">Help</a>
                 @if (User.Identity?.IsAuthenticated == true)
                 {
                     <a asp-controller="Customer" asp-action="Orders">My Account</a>
@@ -101,7 +102,7 @@
                     <h5>Join the Conservatory Dispatch</h5>
                     <form class="ffs-footer-newsletter" asp-controller="Newsletter" asp-action="Subscribe" method="post">
                         @Html.AntiForgeryToken()
-                        <input type="hidden" name="returnUrl" value="@Context.Request.Path@Context.Request.QueryString" />
+                        <input type="hidden" name="returnUrl" value="@(Context.Request.Path)@(Context.Request.QueryString)" />
                         <input type="email" name="email" placeholder="Enter your botanical address" required />
                         <button type="submit" class="ffs-btn ffs-btn-forest">Subscribe</button>
                     </form>
@@ -119,8 +120,8 @@
                     <h5>Customer Services</h5>
                     <ul>
                         <li><a asp-controller="Customer" asp-action="Orders">Track Your Order</a></li>
-                        <li><a href="#">Returns &amp; Exchanges</a></li>
-                        <li><a href="#">Boutique Concierge</a></li>
+                        <li><a asp-controller="Support" asp-action="Faq">Help &amp; FAQ</a></li>
+                        <li><a asp-controller="Support" asp-action="NewTicket">Contact Support</a></li>
                         <li><a href="#">Shipping &amp; Duties</a></li>
                     </ul>
                 </div>

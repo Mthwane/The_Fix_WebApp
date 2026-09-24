@@ -2,6 +2,7 @@ using FashionFix.Web.Data;
 using FashionFix.Web.Models.Entities;
 using FashionFix.Web.Models.ViewModels;
 using FashionFix.Web.Services;
+using FashionFix.Web.Services.Courier;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -81,6 +82,40 @@ public class CustomerController : Controller
 
         ViewBag.CancellableStatuses = CustomerCancellableStatuses;
         return View(orders);
+    }
+
+    // GET: /Customer/Orders/5/Track - live delivery tracking for a single online order (US-13).
+    // The background service (OrderFulfillmentBackgroundService) already books the shipment and
+    // keeps its status synced every 20 minutes; this page just renders whatever it last knew,
+    // and opportunistically nudges a refresh if the customer happens to load the page and the
+    // cached tracking is stale (RefreshTrackingAsync respects its own cache window, so this can
+    // never turn into the customer hammering the courier's API by refreshing the page a lot).
+    [HttpGet]
+    public async Task<IActionResult> Track(int id, [FromServices] ICourierService courier)
+    {
+        var userId = _userManager.GetUserId(User);
+
+        var order = await _context.Orders
+            .Include(o => o.OrderItems).ThenInclude(oi => oi.Product)
+            .Include(o => o.OrderItems).ThenInclude(oi => oi.ProductVariant)
+            .FirstOrDefaultAsync(o => o.OrderId == id && o.CustomerId == userId);
+
+        if (order is null) return NotFound();
+
+        var shipment = await _context.CourierShipments
+            .Include(s => s.TrackingEvents)
+            .Where(s => s.OrderId == order.OrderId)
+            .OrderByDescending(s => s.DateCreated)
+            .FirstOrDefaultAsync();
+
+        if (shipment is not null && !shipment.IsComplete)
+        {
+            var result = await courier.RefreshTrackingAsync(shipment.CourierShipmentId);
+            if (result.Success) shipment = result.Data;
+        }
+
+        ViewBag.Shipment = shipment;
+        return View(order);
     }
 
     // POST: /Customer/CancelOrder/5 - self-service cancellation while it's still early enough.

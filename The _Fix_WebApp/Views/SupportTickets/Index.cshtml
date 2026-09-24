@@ -1,0 +1,63 @@
+@model List<SupportTicket>
+@{
+    ViewData["Title"] = "Support Tickets";
+    Layout = "_StaffLayout";
+    var status = ViewBag.Status as TicketStatus?;
+    var assignedToMe = ViewBag.AssignedToMe as bool?;
+    var unassigned = ViewBag.Unassigned as bool?;
+
+    string ChipUrl(TicketStatus? s, bool? mine, bool? none) => Url.Action("Index", new { status = s, assignedToMe = mine, unassigned = none }) ?? "#";
+    bool ChipActive(TicketStatus? s, bool? mine, bool? none) => status == s && assignedToMe == mine && unassigned == none;
+
+    (string bg, string fg) BadgeFor(TicketStatus s) => s switch
+    {
+        TicketStatus.Resolved or TicketStatus.Closed => ("var(--stf-surface-container)", "var(--stf-on-surface-variant)"),
+        TicketStatus.Escalated => ("var(--stf-error-container)", "var(--stf-error)"),
+        TicketStatus.InProgress => ("var(--stf-secondary-container)", "var(--stf-secondary)"),
+        _ => ("var(--stf-primary-container)", "var(--stf-on-primary-container)")
+    };
+}
+
+<div class="stf-content">
+    <div class="stf-page-head">
+        <div>
+            <span class="stf-eyebrow">Support</span>
+            <h1>Support Tickets</h1>
+            <p>Customer queries, refund requests, and order cancellations raised through the support system.</p>
+        </div>
+    </div>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
+        <a href="@ChipUrl(null, null, null)" class="stf-chip" style="@(ChipActive(null, null, null) ? "background:var(--stf-primary);color:#fff;" : "")">All</a>
+        <a href="@ChipUrl(null, true, null)" class="stf-chip" style="@(ChipActive(null, true, null) ? "background:var(--stf-primary);color:#fff;" : "")">Assigned to Me</a>
+        <a href="@ChipUrl(null, null, true)" class="stf-chip" style="@(ChipActive(null, null, true) ? "background:var(--stf-primary);color:#fff;" : "")">Unassigned</a>
+        <a href="@ChipUrl(TicketStatus.Open, null, null)" class="stf-chip" style="@(ChipActive(TicketStatus.Open, null, null) ? "background:var(--stf-primary);color:#fff;" : "")">Open</a>
+        <a href="@ChipUrl(TicketStatus.Escalated, null, null)" class="stf-chip" style="@(ChipActive(TicketStatus.Escalated, null, null) ? "background:var(--stf-primary);color:#fff;" : "")">Escalated</a>
+        <a href="@ChipUrl(TicketStatus.Resolved, null, null)" class="stf-chip" style="@(ChipActive(TicketStatus.Resolved, null, null) ? "background:var(--stf-primary);color:#fff;" : "")">Resolved</a>
+    </div>
+
+    <table class="stf-table">
+        <thead>
+            <tr><th>Subject</th><th>Customer</th><th>Category</th><th>Priority</th><th>Assigned To</th><th>Opened</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+            @foreach (var t in Model)
+            {
+                var (bg, fg) = BadgeFor(t.Status);
+                <tr style="cursor:pointer;" onclick="location.href='@Url.Action("Details", new { id = t.SupportTicketId })'">
+                    <td style="font-weight:600;max-width:280px;">@t.Subject @if (t.Order is not null) { <span style="color:var(--stf-on-surface-variant);font-weight:400;">(#@t.Order.OrderNumber)</span> }</td>
+                    <td>@t.Customer?.FullName</td>
+                    <td>@t.Category</td>
+                    <td>@t.Priority</td>
+                    <td>@(t.AssignedEmployee?.FullName ?? "—")</td>
+                    <td>@t.DateCreated.ToLocalTime().ToString("dd MMM")</td>
+                    <td><span style="background:@bg;color:@fg;font-size:0.75rem;font-weight:600;padding:4px 10px;border-radius:999px;white-space:nowrap;">@t.Status</span></td>
+                </tr>
+            }
+            @if (!Model.Any())
+            {
+                <tr><td colspan="7" style="text-align:center;color:var(--stf-on-surface-variant);padding:24px;">No tickets match this filter.</td></tr>
+            }
+        </tbody>
+    </table>
+</div>

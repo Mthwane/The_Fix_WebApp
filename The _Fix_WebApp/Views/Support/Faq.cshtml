@@ -1,0 +1,36 @@
+@model List<IGrouping<string, Faq>>
+@{
+    ViewData["Title"] = "Help & FAQ";
+    Layout = "_StorefrontLayout";
+}
+
+<section class="ffs-section" style="padding-top:32px;">
+    <div class="ffs-container" style="max-width:760px;">
+        <span class="ffs-eyebrow">Help</span>
+        <h1 style="font-family:'Fraunces',serif;font-size:2.1rem;margin-bottom:8px;">Frequently Asked Questions</h1>
+        <p style="color:var(--ffs-ink-muted);margin-bottom:28px;">
+            Can't find what you're looking for? <a asp-controller="Support" asp-action="NewTicket" style="color:var(--ffs-forest);font-weight:600;">Get in touch</a> and we'll help directly.
+        </p>
+
+        @if (!Model.Any())
+        {
+            <p style="color:var(--ffs-ink-muted);">Nothing here yet - check back soon.</p>
+        }
+
+        @foreach (var group in Model)
+        {
+            <div style="margin-bottom:28px;">
+                <h2 style="font-family:'Fraunces',serif;font-size:1.3rem;margin-bottom:12px;">@group.Key</h2>
+                <div style="display:flex;flex-direction:column;gap:10px;">
+                    @foreach (var faq in group.OrderBy(f => f.DisplayOrder))
+                    {
+                        <details style="border:1px solid var(--ffs-border);border-radius:var(--ffs-radius);padding:14px 18px;background:var(--ffs-card);">
+                            <summary style="cursor:pointer;font-weight:600;font-size:0.95rem;">@faq.Question</summary>
+                            <p style="margin:10px 0 0;color:var(--ffs-ink-muted);font-size:0.9rem;line-height:1.6;white-space:pre-line;">@faq.Answer</p>
+                        </details>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+</section>

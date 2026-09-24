@@ -1,0 +1,47 @@
+@model Faq
+@{
+    ViewData["Title"] = "Edit FAQ";
+    Layout = "_StaffLayout";
+}
+<div class="stf-content" style="max-width:760px;">
+    <span class="stf-eyebrow">Support</span>
+    <h1 style="margin-bottom:20px;">Edit FAQ</h1>
+
+    <form asp-action="Edit" asp-route-id="@Model.FaqId" method="post" class="stf-card">
+        <input type="hidden" asp-for="FaqId" />
+        <div asp-validation-summary="ModelOnly" style="color:var(--stf-error);margin-bottom:10px;"></div>
+        @{ string L = "font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;"; string F = "width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:9px 14px;font-size:0.9rem;"; }
+
+        <div style="margin-bottom:14px;">
+            <label asp-for="Question" style="@L"></label>
+            <input asp-for="Question" style="@F" />
+            <span asp-validation-for="Question" style="color:var(--stf-error);font-size:0.8rem;"></span>
+        </div>
+
+        <div style="margin-bottom:14px;">
+            <label asp-for="Answer" style="@L"></label>
+            <textarea asp-for="Answer" rows="5" style="@F"></textarea>
+            <span asp-validation-for="Answer" style="color:var(--stf-error);font-size:0.8rem;"></span>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+            <div>
+                <label asp-for="Category" style="@L"></label>
+                <input asp-for="Category" style="@F" />
+            </div>
+            <div>
+                <label asp-for="DisplayOrder" style="@L"></label>
+                <input asp-for="DisplayOrder" style="@F" />
+            </div>
+        </div>
+
+        <label style="font-size:0.85rem;display:flex;align-items:center;gap:8px;margin-bottom:20px;">
+            <input asp-for="IsActive" /> Visible on the public FAQ page
+        </label>
+
+        <div style="display:flex;gap:10px;">
+            <button type="submit" class="stf-btn stf-btn-primary">Save Changes</button>
+            <a asp-action="Index" style="font-size:0.85rem;color:var(--stf-on-surface-variant);align-self:center;">Cancel</a>
+        </div>
+    </form>
+</div>

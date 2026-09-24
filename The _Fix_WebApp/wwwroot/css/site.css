@@ -1,5 +1,9 @@
 /* FashionFix brand tokens - pulled from the login page design so every screen shares one system */
 :root {
+    /* Light-only design, no dark palette defined - opt out of browser forced/auto dark mode
+       (see the same note in storefront.css/staff.css for why this matters). */
+    color-scheme: light;
+
     --ff-page-bg: #F3EEE3;
     --ff-cream: #F6F1E7;
     --ff-card: #FFFDF9;

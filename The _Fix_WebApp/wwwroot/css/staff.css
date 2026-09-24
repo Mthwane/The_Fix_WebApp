@@ -6,6 +6,11 @@
    ===================================================================== */
 
 :root {
+    /* Same reasoning as storefront.css - this is a light-only design with no dark palette
+       defined, so it needs to opt out of browser forced/auto dark mode explicitly or risk
+       colours (e.g. button text) getting auto-repainted into invisibility. */
+    color-scheme: light;
+
     --stf-primary: #0a2217;
     --stf-primary-container: #20382b;
     --stf-on-primary-container: #87a291;

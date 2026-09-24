@@ -42,6 +42,9 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     // --- Courier integration ---
     public DbSet<CourierShipment> CourierShipments => Set<CourierShipment>();
     public DbSet<CourierTrackingEvent> CourierTrackingEvents => Set<CourierTrackingEvent>();
+    public DbSet<Faq> Faqs => Set<Faq>();
+    public DbSet<SupportTicket> SupportTickets => Set<SupportTicket>();
+    public DbSet<TicketMessage> TicketMessages => Set<TicketMessage>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -119,17 +122,17 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         .HasForeignKey(p => p.CreatedByUserId)
         .OnDelete(DeleteBehavior.Restrict);
 
-       builder.Entity<RestockBundle>()
-      .HasOne(b => b.CreatedByUser)
-      .WithMany()
-      .HasForeignKey(b => b.CreatedByUserId)
-      .OnDelete(DeleteBehavior.Restrict);
+        builder.Entity<RestockBundle>()
+       .HasOne(b => b.CreatedByUser)
+       .WithMany()
+       .HasForeignKey(b => b.CreatedByUserId)
+       .OnDelete(DeleteBehavior.Restrict);
 
-     builder.Entity<ReturnTransaction>()
-    .HasOne(r => r.ProcessedByUser)
-    .WithMany()
-    .HasForeignKey(r => r.ProcessedByUserId)
-    .OnDelete(DeleteBehavior.Restrict);
+        builder.Entity<ReturnTransaction>()
+       .HasOne(r => r.ProcessedByUser)
+       .WithMany()
+       .HasForeignKey(r => r.ProcessedByUserId)
+       .OnDelete(DeleteBehavior.Restrict);
 
         // The sellable/scannable SKU lives on the variant now, and must be unique across
         // the whole catalogue (POS scans and storefront URLs both key off this).
@@ -262,6 +265,46 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     .WithMany()
     .HasForeignKey(r => r.ProcessedByUserId)
     .OnDelete(DeleteBehavior.Restrict);
+
+        // SupportTicket has three separate FKs to ApplicationUser (Customer, AssignedEmployee,
+        // EscalatedToManager) - all Restrict, same reasoning as ReturnTransaction.ProcessedByUser
+        // above: deleting a user must never cascade-delete unrelated support history, and SQL
+        // Server would reject multiple cascade paths into the same table anyway.
+        builder.Entity<SupportTicket>()
+            .HasOne(t => t.Customer)
+            .WithMany()
+            .HasForeignKey(t => t.CustomerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<SupportTicket>()
+            .HasOne(t => t.AssignedEmployee)
+            .WithMany()
+            .HasForeignKey(t => t.AssignedEmployeeId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<SupportTicket>()
+            .HasOne(t => t.EscalatedToManager)
+            .WithMany()
+            .HasForeignKey(t => t.EscalatedToManagerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<SupportTicket>()
+            .HasOne(t => t.Order)
+            .WithMany()
+            .HasForeignKey(t => t.OrderId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<TicketMessage>()
+            .HasOne(m => m.SupportTicket)
+            .WithMany(t => t.Messages)
+            .HasForeignKey(m => m.SupportTicketId)
+            .OnDelete(DeleteBehavior.Cascade); // deleting a ticket deletes its own thread
+
+        builder.Entity<TicketMessage>()
+            .HasOne(m => m.Sender)
+            .WithMany()
+            .HasForeignKey(m => m.SenderId)
+            .OnDelete(DeleteBehavior.Restrict);
 
 
         // --- Courier ---

@@ -61,6 +61,11 @@
                 <a class="@(currentController == "Storefront" && currentAction == "Trending" ? "stf-nav-link active" : "stf-nav-link")" asp-controller="Storefront" asp-action="Trending">Trending Picks</a>
                 <a class="@(currentController == "Storefront" && currentAction == "Content" ? "stf-nav-link active" : "stf-nav-link")" asp-controller="Storefront" asp-action="Content">Homepage Content</a>
                 <a class="@(currentController == "Storefront" && currentAction == "Reviews" ? "stf-nav-link active" : "stf-nav-link")" asp-controller="Storefront" asp-action="Reviews">Reviews</a>
+                <a class="@NavClass("Faqs")" asp-controller="Faqs" asp-action="Index">FAQs</a>
+            }
+            @if (Can(Permissions.SupportTicketsManage))
+            {
+                <a class="@NavClass("SupportTickets")" asp-controller="SupportTickets" asp-action="Index">Support Tickets</a>
             }
 
 @if (Can(Permissions.SuppliersManage) || Can(Permissions.PurchaseOrdersManage) || Can(Permissions.ReturnsProcess))

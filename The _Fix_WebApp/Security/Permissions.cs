@@ -37,6 +37,9 @@ public static class Permissions
     public const string ReportsView = "reports.view";
     public const string AuditLogsView = "auditlogs.view";
 
+    // Support
+    public const string SupportTicketsManage = "supporttickets.manage";
+
     /// <summary>Every permission in the system, with a human-readable label for the Roles UI.</summary>
     public static readonly IReadOnlyDictionary<string, string> All = new Dictionary<string, string>
     {
@@ -53,6 +56,7 @@ public static class Permissions
         [DashboardView] = "View Business Dashboard",
         [ReportsView] = "View Reports & Analytics",
         [AuditLogsView] = "View Audit Logs",
+        [SupportTicketsManage] = "Manage Support Tickets (respond, assign, escalate)",
     };
 
     /// <summary>Default permission bundles seeded for the built-in roles the first time each role is created.</summary>
@@ -60,10 +64,10 @@ public static class Permissions
     {
         ["Administrator"] = All.Keys.ToArray(), // everything
         // Manager can raise AND approve purchase orders - they hold the restock budget.
-        ["Manager"] = new[] { ProductsManage, StorefrontManage, PosUse, DashboardView, ReportsView, OrdersManage, SuppliersManage, PurchaseOrdersManage, PurchaseOrdersApprove, ReturnsProcess },
+        ["Manager"] = new[] { ProductsManage, StorefrontManage, PosUse, DashboardView, ReportsView, OrdersManage, SuppliersManage, PurchaseOrdersManage, PurchaseOrdersApprove, ReturnsProcess, SupportTicketsManage },
         // Employee can raise a restock request and process returns at the till, but NOT approve
         // spend - that's the whole point of the approval gate.
-        ["Employee"] = new[] { PosUse, DashboardView, OrdersManage, PurchaseOrdersManage, ReturnsProcess },
+        ["Employee"] = new[] { PosUse, DashboardView, OrdersManage, PurchaseOrdersManage, ReturnsProcess, SupportTicketsManage },
         ["Owner"] = new[] { DashboardView, ReportsView },
         ["Customer"] = Array.Empty<string>(), // customers use the self-service area, not permission-gated staff screens
     };

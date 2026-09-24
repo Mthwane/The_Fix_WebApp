@@ -1,0 +1,58 @@
+@model List<SupportTicket>
+@{
+    ViewData["Title"] = "My Support Tickets";
+    Layout = "_StorefrontLayout";
+
+    (string bg, string fg) BadgeColors(TicketStatus s) => s switch
+    {
+        TicketStatus.Resolved or TicketStatus.Closed => ("var(--ffs-cream-alt)", "var(--ffs-ink-muted)"),
+        TicketStatus.Escalated => ("var(--ffs-clay)", "#fff"),
+        TicketStatus.InProgress => ("var(--ffs-sage)", "var(--ffs-sage-text)"),
+        _ => ("var(--ffs-forest)", "#fff")
+    };
+}
+
+<section class="ffs-section" style="padding-top:32px;">
+    <div class="ffs-container" style="max-width:820px;">
+        <div class="ffs-section-head">
+            <div>
+                <span class="ffs-eyebrow">Support</span>
+                <h1 style="font-family:'Fraunces',serif;font-size:1.9rem;">My Support Tickets</h1>
+            </div>
+            <a asp-action="NewTicket" class="ffs-btn ffs-btn-forest">New Ticket</a>
+        </div>
+
+        @if (!Model.Any())
+        {
+            <div style="border:1px solid var(--ffs-border);border-radius:var(--ffs-radius);padding:32px;text-align:center;color:var(--ffs-ink-muted);">
+                <p style="margin:0 0 14px;">You haven't opened any support tickets yet.</p>
+                <a asp-action="NewTicket" class="ffs-btn ffs-btn-forest">Start a Ticket</a>
+            </div>
+        }
+        else
+        {
+            <div style="display:flex;flex-direction:column;gap:12px;">
+                @foreach (var t in Model)
+                {
+                    var (bg, fg) = BadgeColors(t.Status);
+                    <a asp-action="TicketDetails" asp-route-id="@t.SupportTicketId"
+                       style="display:block;border:1px solid var(--ffs-border);border-radius:var(--ffs-radius);padding:16px 20px;text-decoration:none;color:inherit;background:var(--ffs-card);">
+                        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+                            <div>
+                                <strong>@t.Subject</strong>
+                                <div style="color:var(--ffs-ink-muted);font-size:0.82rem;margin-top:4px;">
+                                    @t.Category.ToString() &bull; Opened @t.DateCreated.ToLocalTime().ToString("dd MMM yyyy")
+                                    @if (t.Order is not null)
+                                    {
+                                        <text> &bull; Order #@t.Order.OrderNumber</text>
+                                    }
+                                </div>
+                            </div>
+                            <span style="background:@bg;color:@fg;font-size:0.75rem;font-weight:600;padding:5px 12px;border-radius:999px;white-space:nowrap;">@t.Status</span>
+                        </div>
+                    </a>
+                }
+            </div>
+        }
+    </div>
+</section>

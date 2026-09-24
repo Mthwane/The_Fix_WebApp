@@ -69,7 +69,6 @@
                         <img src="@(dept.TileImageUrl ?? Ph(dept.Name, 500, 620))" alt="@dept.Name" />
                     </div>
                     <div class="ffs-dept-body">
-                        <span class="ffs-dept-label">Department 0@(i + 1)</span>
                         <h3>@dept.Name</h3>
                         <p>@(dept.HeroSubheadline ?? "Curated pieces built for tactile comfort and lasting wear.")</p>
                         <div class="ffs-dept-links">
@@ -123,10 +122,10 @@
                                 <div class="ffs-product-desc">@product.Material</div>
                             }
                             <div class="ffs-product-price-row">
-                                <span class="ffs-price">R@product.SellingPrice.ToString("N0")</span>
+                                <span class="ffs-price">R@(product.SellingPrice.ToString("N0"))</span>
                                 @if (product.IsOnSale)
                                 {
-                                    <span class="ffs-price-was">R@product.CompareAtPrice!.Value.ToString("N0")</span>
+                                    <span class="ffs-price-was">R@(product.CompareAtPrice!.Value.ToString("N0"))</span>
                                 }
                             </div>
                             @{ var swatchColors = product.DistinctColors.Take(4).ToList(); }

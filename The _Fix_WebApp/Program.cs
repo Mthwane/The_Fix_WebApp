@@ -4,7 +4,9 @@ using FashionFix.Web.Security;
 using FashionFix.Web.Services;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Localization;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
 using The__Fix_WebApp.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -92,13 +94,41 @@ builder.Services.Configure<PaystackOptions>(builder.Configuration.GetSection("Pa
 builder.Services.AddHttpClient<IPaymentService, PaystackPaymentService>();
 builder.Services.AddScoped<IOrderFulfillmentService, OrderFulfillmentService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
-builder.Services.AddHostedService<OrderFulfillmentBackgroundService>();
+// Registered as a singleton (rather than plain AddHostedService<T>) so the same instance can
+// also be injected into a controller for a manual "run now" trigger (see
+// OrdersController.RunFulfillmentCycle) - the hosted service and the on-demand trigger are the
+// same object, coordinated by its internal cycle lock.
+builder.Services.AddSingleton<OrderFulfillmentBackgroundService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<OrderFulfillmentBackgroundService>());
 
 // --- The Courier Guy (Shiplogic) integration ---
 // API key lives in user-secrets / env vars, never appsettings.json. Registered via
 // AddHttpClient so it gets a pooled, properly-disposed HttpClient rather than a new one per call.
 builder.Services.Configure<FashionFix.Web.Services.Courier.CourierGuyOptions>(builder.Configuration.GetSection("CourierGuy"));
-builder.Services.AddHttpClient<FashionFix.Web.Services.Courier.ICourierService, FashionFix.Web.Services.Courier.CourierGuyService>();
+// CourierGuy:Provider = "Fake" (only honoured in Development - structurally impossible to
+// accidentally ship to production) swaps in FakeCourierService: an in-process double that
+// simulates the full booking/tracking lifecycle with no network calls and no cost. "EasyPost"
+// (also Development-only) swaps in a REAL courier API call, using EasyPost's free test mode
+// (never charges, no card required) instead - useful when you specifically want to exercise
+// real HTTP/JSON handling. The real sandbox at shiplogic.com is a billed account with its own
+// balance, so iterating on this feature against it repeatedly burns real (if sandbox) money for
+// no benefit - use "Fake" or "EasyPost" while building/testing, and "Live" (the default) only
+// for a final, deliberately limited pass against the real sandbox before going live.
+var courierProvider = builder.Environment.IsDevelopment() ? builder.Configuration["CourierGuy:Provider"] : null;
+
+if (string.Equals(courierProvider, "Fake", StringComparison.OrdinalIgnoreCase))
+{
+    builder.Services.AddScoped<FashionFix.Web.Services.Courier.ICourierService, FashionFix.Web.Services.Courier.FakeCourierService>();
+}
+else if (string.Equals(courierProvider, "EasyPost", StringComparison.OrdinalIgnoreCase))
+{
+    builder.Services.Configure<FashionFix.Web.Services.Courier.EasyPostOptions>(builder.Configuration.GetSection("EasyPost"));
+    builder.Services.AddHttpClient<FashionFix.Web.Services.Courier.ICourierService, FashionFix.Web.Services.Courier.EasyPostCourierService>();
+}
+else
+{
+    builder.Services.AddHttpClient<FashionFix.Web.Services.Courier.ICourierService, FashionFix.Web.Services.Courier.CourierGuyService>();
+}
 
 // --- Session (backs the customer's shopping cart - no new DB table needed) ---
 builder.Services.AddDistributedMemoryCache();
@@ -227,6 +257,58 @@ using (var scope = app.Services.CreateScope())
         dbContext.PricingSettings.Add(new PricingSettings());
         await dbContext.SaveChangesAsync();
     }
+
+    // --- Optional: a couple of sample products with stocked variants, purely so there's
+    // something in the catalogue to check out with while testing the order -> courier ->
+    // email pipeline end to end. Development-only and off unless explicitly enabled - never
+    // touches a real/production catalogue, and only ever inserts once (skipped the moment
+    // any Product already exists, seeded or otherwise).
+    if (app.Environment.IsDevelopment()
+        && app.Configuration.GetValue<bool>("DemoData:SeedSampleCatalog")
+        && !await dbContext.Products.AnyAsync())
+    {
+        var women = await dbContext.Departments.FirstOrDefaultAsync(d => d.Slug == "women");
+        var footwear = await dbContext.Departments.FirstOrDefaultAsync(d => d.Slug == "footwear");
+
+        var tee = new Product
+        {
+            Name = "Demo Test - Classic Tee",
+            Description = "Seeded test product - safe to delete once you're done testing checkout.",
+            SKU = "DEMO-0001",
+            Category = "Clothing",
+            Brand = "Fashion Fix",
+            CostPrice = 60,
+            SellingPrice = 150,
+            ImageUrl = "https://placehold.co/400x400/E4DEC9/24211B?text=Demo+Tee",
+            DepartmentId = women?.DepartmentId,
+            IsActive = true
+        };
+        tee.Variants.Add(new ProductVariant { SKU = "DEMO-0001-M-BLK", Size = "M", Color = "Black", ColorHex = "#000000", StockQuantity = 25, IsActive = true });
+        tee.Variants.Add(new ProductVariant { SKU = "DEMO-0001-L-BLK", Size = "L", Color = "Black", ColorHex = "#000000", StockQuantity = 25, IsActive = true });
+
+        var sneaker = new Product
+        {
+            Name = "Demo Test - Canvas Sneaker",
+            Description = "Seeded test product - safe to delete once you're done testing checkout.",
+            SKU = "DEMO-0002",
+            Category = "Footwear",
+            Brand = "Fashion Fix",
+            CostPrice = 220,
+            SellingPrice = 550,
+            ImageUrl = "https://placehold.co/400x400/E4DEC9/24211B?text=Demo+Sneaker",
+            DepartmentId = footwear?.DepartmentId,
+            IsActive = true
+        };
+        sneaker.Variants.Add(new ProductVariant { SKU = "DEMO-0002-8-WHT", Size = "8", Color = "White", ColorHex = "#FFFFFF", StockQuantity = 15, IsActive = true });
+        sneaker.Variants.Add(new ProductVariant { SKU = "DEMO-0002-9-WHT", Size = "9", Color = "White", ColorHex = "#FFFFFF", StockQuantity = 15, IsActive = true });
+
+        dbContext.Products.AddRange(tee, sneaker);
+        await dbContext.SaveChangesAsync();
+
+        app.Logger.LogWarning(
+            "DemoData:SeedSampleCatalog is enabled - seeded 2 demo products (DEMO-0001, DEMO-0002) for testing. " +
+            "Turn this off in appsettings.Development.json once you're done, and remove the demo products from Product Management.");
+    }
 }
 
 // --- HTTP pipeline ---
@@ -244,6 +326,20 @@ else
 // Friendly fallback for 404s instead of a bare status page.
 app.UseStatusCodePagesWithReExecute("/Home/StatusCode/{0}");
 
+// Fixes every .ToString("C") call site across the app (Orders, POS, Reports, Checkout, Cart,
+// Dashboard, etc.) rendering with the wrong currency symbol - with no culture configured at
+// all, that call falls back to whatever the host OS/container's default locale is (commonly
+// "$" on en-US, or the generic "¤" sign if the environment has no locale data), instead of
+// "R" for Rand. Storefront pages that build their own "R" + number string are unaffected
+// either way, but this is what makes .ToString("C") consistent with them everywhere else.
+var siteCulture = new CultureInfo("en-ZA");
+CultureInfo.DefaultThreadCurrentCulture = siteCulture;
+CultureInfo.DefaultThreadCurrentUICulture = siteCulture;
+app.UseRequestLocalization(new RequestLocalizationOptions()
+    .SetDefaultCulture("en-ZA")
+    .AddSupportedCultures("en-ZA")
+    .AddSupportedUICultures("en-ZA"));
+
 app.UseHttpsRedirection();
 app.UseStaticFiles();
 
@@ -258,6 +354,11 @@ app.MapControllerRoute(
     name: "department",
     pattern: "Shop/Department/{slug}",
     defaults: new { controller = "Shop", action = "Department" });
+
+app.MapControllerRoute(
+    name: "orderTracking",
+    pattern: "Customer/Orders/{id}/Track",
+    defaults: new { controller = "Customer", action = "Track" });
 
 app.MapControllerRoute(
     name: "default",

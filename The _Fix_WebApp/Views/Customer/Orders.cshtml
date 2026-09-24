@@ -113,16 +113,24 @@
                                 <strong style="font-family:'Fraunces',serif;">Total: @order.GrandTotal.ToString("C")</strong>
                             </div>
 
-                            @if (cancellableStatuses.Contains(order.Status))
-                            {
-                                <form asp-controller="Customer" asp-action="CancelOrder" asp-route-id="@order.OrderId" method="post" style="text-align:right;margin-top:10px;">
-                                    @Html.AntiForgeryToken()
-                                    <button type="submit" class="ffs-btn ffs-btn-outline" style="padding:6px 14px;font-size:0.78rem;color:var(--ffs-clay);border-color:var(--ffs-clay);"
-                                            onclick="return confirm('Cancel this order? Items will be released back to stock.');">
-                                        Cancel Order
-                                    </button>
-                                </form>
-                            }
+                            <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:10px;">
+                                @if (order.OrderType == OrderType.Online && order.Status is OrderStatus.Processing or OrderStatus.Shipped or OrderStatus.Delivered or OrderStatus.Completed)
+                                {
+                                    <a asp-controller="Customer" asp-action="Track" asp-route-id="@order.OrderId" class="ffs-btn ffs-btn-outline" style="padding:6px 14px;font-size:0.78rem;">
+                                        Track Order
+                                    </a>
+                                }
+                                @if (cancellableStatuses.Contains(order.Status))
+                                {
+                                    <form asp-controller="Customer" asp-action="CancelOrder" asp-route-id="@order.OrderId" method="post">
+                                        @Html.AntiForgeryToken()
+                                        <button type="submit" class="ffs-btn ffs-btn-outline" style="padding:6px 14px;font-size:0.78rem;color:var(--ffs-clay);border-color:var(--ffs-clay);"
+                                                onclick="return confirm('Cancel this order? Items will be released back to stock.');">
+                                            Cancel Order
+                                        </button>
+                                    </form>
+                                }
+                            </div>
                         </div>
                     </div>
                 }

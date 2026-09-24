@@ -1,0 +1,53 @@
+@model List<Faq>
+@{
+    ViewData["Title"] = "FAQs";
+    Layout = "_StaffLayout";
+}
+
+<div class="stf-content">
+    <div class="stf-page-head">
+        <div>
+            <span class="stf-eyebrow">Support</span>
+            <h1>FAQs</h1>
+            <p>Shown on the public Help &amp; FAQ page, grouped by category.</p>
+        </div>
+        <a asp-action="Create" class="stf-btn stf-btn-primary">+ Add FAQ</a>
+    </div>
+
+    <table class="stf-table">
+        <thead>
+            <tr><th>Question</th><th>Category</th><th style="width:80px;">Order</th><th>Status</th><th></th></tr>
+        </thead>
+        <tbody>
+            @foreach (var f in Model)
+            {
+                <tr>
+                    <td style="font-weight:600;max-width:420px;">@f.Question</td>
+                    <td>@f.Category</td>
+                    <td>@f.DisplayOrder</td>
+                    <td>
+                        @if (f.IsActive)
+                        {
+                            <span class="stf-badge stf-badge-active">Active</span>
+                        }
+                        else
+                        {
+                            <span class="stf-badge stf-badge-muted">Hidden</span>
+                        }
+                    </td>
+                    <td style="text-align:right;display:flex;gap:8px;justify-content:flex-end;">
+                        <a asp-action="Edit" asp-route-id="@f.FaqId" class="stf-btn stf-btn-outline" style="padding:6px 14px;font-size:0.78rem;">Edit</a>
+                        <form asp-action="Delete" asp-route-id="@f.FaqId" method="post" onsubmit="return confirm('Delete this FAQ?');">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="stf-btn stf-btn-outline" style="padding:6px 14px;font-size:0.78rem;color:var(--stf-error);border-color:var(--stf-error);">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+            }
+            @if (!Model.Any())
+            {
+                <tr><td colspan="5" style="text-align:center;color:var(--stf-on-surface-variant);padding:24px;">No FAQs yet.</td></tr>
+            }
+        </tbody>
+    </table>
+</div>

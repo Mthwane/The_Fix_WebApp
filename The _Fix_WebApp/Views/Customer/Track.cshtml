@@ -1,0 +1,197 @@
+@model Order
+@{
+    ViewData["Title"] = $"Track Order #{Model.OrderNumber}";
+    Layout = "_StorefrontLayout";
+    var shipment = ViewBag.Shipment as CourierShipment;
+    var fallbackImage = "https://placehold.co/80x80/E4DEC9/24211B?text=No+Image";
+
+    (string bg, string fg) BadgeColors(OrderStatus s) => s switch
+    {
+        OrderStatus.Completed or OrderStatus.Delivered => ("var(--ffs-forest)", "#fff"),
+        OrderStatus.Cancelled or OrderStatus.Returned => ("var(--ffs-clay)", "#fff"),
+        OrderStatus.Shipped or OrderStatus.Processing => ("var(--ffs-sage)", "var(--ffs-sage-text)"),
+        _ => ("var(--ffs-cream-alt)", "var(--ffs-ink-muted)")
+    };
+    var (badgeBg, badgeFg) = BadgeColors(Model.Status);
+
+    // The four stages a customer actually cares about - mirrors CourierShipment.Stage.
+    var stages = new[] { "Awaiting Collection", "Collected", "In Transit", "Delivered" };
+    var currentStageIndex = shipment is null ? -1 : Array.IndexOf(stages, shipment.Stage);
+    var isCancelledShipment = shipment is not null && shipment.Stage == "Closed";
+}
+
+<section class="ffs-section" style="padding-top:32px;">
+    <div class="ffs-container" style="max-width:760px;">
+        <div style="margin-bottom:18px;">
+            <a asp-controller="Customer" asp-action="Orders" style="color:var(--ffs-ink-muted);font-size:0.85rem;text-decoration:none;">&larr; Back to My Orders</a>
+        </div>
+
+        <div class="ffs-section-head">
+            <div>
+                <span class="ffs-eyebrow">Track Order</span>
+                <h1 style="font-family:'Fraunces',serif;font-size:1.9rem;">Order #@Model.OrderNumber</h1>
+                <p style="color:var(--ffs-ink-muted);">Placed @Model.DateCreated.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</p>
+            </div>
+            <span style="background:@badgeBg;color:@badgeFg;font-size:0.78rem;font-weight:600;padding:6px 14px;border-radius:999px;white-space:nowrap;">@Model.Status</span>
+        </div>
+
+        @if (shipment is null)
+        {
+            <div style="border:1px solid var(--ffs-border);border-radius:var(--ffs-radius);padding:20px;margin-bottom:24px;background:var(--ffs-cream-alt);">
+                @if (Model.Status == OrderStatus.Cancelled)
+                {
+                    <p style="margin:0;font-size:0.92rem;">This order was cancelled, so no delivery was booked.</p>
+                }
+                else
+                {
+                    <p style="margin:0;font-size:0.92rem;">Your order hasn't shipped yet - we'll book a courier and start tracking automatically once it's ready to go out. Check back soon.</p>
+                }
+            </div>
+        }
+        else
+        {
+            <div style="border:1px solid var(--ffs-border);border-radius:var(--ffs-radius);padding:24px;margin-bottom:24px;background:var(--ffs-card);">
+
+                @if (isCancelledShipment)
+                {
+                    <p style="margin:0 0 16px;font-size:0.92rem;color:var(--ffs-clay);font-weight:600;">
+                        This shipment is @shipment.Status.Replace("-", " ").
+                    </p>
+                }
+                else
+                {
+                    <!-- Stage timeline -->
+                    <div style="display:flex;align-items:center;margin-bottom:22px;">
+                        @for (var i = 0; i < stages.Length; i++)
+                        {
+                            var reached = i <= currentStageIndex;
+                            <div style="flex:1;display:flex;flex-direction:column;align-items:center;text-align:center;position:relative;">
+                                <div style="width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.72rem;font-weight:700;
+                                            background:@(reached ? "var(--ffs-forest)" : "var(--ffs-cream-alt)");
+                                            color:@(reached ? "#fff" : "var(--ffs-ink-muted)");
+                                            border:1px solid @(reached ? "var(--ffs-forest)" : "var(--ffs-border)");">
+                                    @(i + 1)
+                                </div>
+                                <span style="font-size:0.72rem;margin-top:6px;color:@(reached ? "var(--ffs-ink)" : "var(--ffs-ink-muted)");font-weight:@(reached ? "600" : "400");">
+                                    @stages[i]
+                                </span>
+                            </div>
+                            @if (i < stages.Length - 1)
+                            {
+                                <div style="flex:1;height:2px;background:@(i < currentStageIndex ? "var(--ffs-forest)" : "var(--ffs-border)");margin-bottom:20px;"></div>
+                            }
+                        }
+                    </div>
+                }
+
+                <div style="display:flex;flex-wrap:wrap;gap:20px;border-top:1px solid var(--ffs-border);padding-top:16px;font-size:0.85rem;">
+                    <div>
+                        <div style="color:var(--ffs-ink-muted);font-size:0.75rem;">Tracking Reference</div>
+                        <div style="font-weight:600;">@shipment.TrackingReference</div>
+                    </div>
+                    @if (shipment.ServiceLevelName is not null)
+                    {
+                        <div>
+                            <div style="color:var(--ffs-ink-muted);font-size:0.75rem;">Service</div>
+                            <div style="font-weight:600;">@shipment.ServiceLevelName</div>
+                        </div>
+                    }
+                    @if (shipment.EstimatedDeliveryFrom.HasValue)
+                    {
+                        <div>
+                            <div style="color:var(--ffs-ink-muted);font-size:0.75rem;">Estimated Delivery</div>
+                            <div style="font-weight:600;">
+                                @shipment.EstimatedDeliveryFrom.Value.ToLocalTime().ToString("dd MMM")
+                                @if (shipment.EstimatedDeliveryTo.HasValue && shipment.EstimatedDeliveryTo.Value.Date != shipment.EstimatedDeliveryFrom.Value.Date)
+                                {
+                                    <text> - @shipment.EstimatedDeliveryTo.Value.ToLocalTime().ToString("dd MMM")</text>
+                                }
+                            </div>
+                        </div>
+                    }
+                    @if (shipment.DeliveredDate.HasValue)
+                    {
+                        <div>
+                            <div style="color:var(--ffs-ink-muted);font-size:0.75rem;">Delivered</div>
+                            <div style="font-weight:600;">@shipment.DeliveredDate.Value.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</div>
+                        </div>
+                    }
+                    @if (shipment.LastSyncedAt.HasValue)
+                    {
+                        <div>
+                            <div style="color:var(--ffs-ink-muted);font-size:0.75rem;">Last Updated</div>
+                            <div style="font-weight:600;">@shipment.LastSyncedAt.Value.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</div>
+                        </div>
+                    }
+                </div>
+
+                @if (shipment.TrackingEvents.Any())
+                {
+                    <div style="border-top:1px solid var(--ffs-border);margin-top:18px;padding-top:16px;">
+                        <div style="font-size:0.78rem;font-weight:600;color:var(--ffs-ink-muted);text-transform:uppercase;letter-spacing:0.03em;margin-bottom:10px;">Tracking History</div>
+                        <div style="display:flex;flex-direction:column;gap:12px;">
+                            @foreach (var ev in shipment.TrackingEvents.OrderByDescending(e => e.EventDate))
+                            {
+                                <div style="display:flex;gap:12px;font-size:0.85rem;">
+                                    <div style="color:var(--ffs-ink-muted);white-space:nowrap;min-width:120px;">@ev.EventDate.ToLocalTime().ToString("dd MMM, HH:mm")</div>
+                                    <div>
+                                        <div style="font-weight:500;">@(ev.Message ?? ev.Status.Replace("-", " "))</div>
+                                        @if (!string.IsNullOrWhiteSpace(ev.Location))
+                                        {
+                                            <div style="color:var(--ffs-ink-muted);font-size:0.8rem;">@ev.Location</div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(Model.DeliveryAddressLine1))
+        {
+            <div style="border:1px solid var(--ffs-border);border-radius:var(--ffs-radius);padding:18px 20px;margin-bottom:24px;">
+                <div style="font-size:0.78rem;font-weight:600;color:var(--ffs-ink-muted);text-transform:uppercase;letter-spacing:0.03em;margin-bottom:8px;">Delivering To</div>
+                <div style="font-size:0.9rem;line-height:1.5;">
+                    <strong>@Model.DeliveryRecipientName</strong><br />
+                    @Model.DeliveryAddressLine1<br />
+                    @if (!string.IsNullOrWhiteSpace(Model.DeliveryAddressLine2))
+                    {
+                        @Model.DeliveryAddressLine2<br />
+                    }
+                    @Model.DeliveryCity, @Model.DeliveryProvince @Model.DeliveryPostalCode<br />
+                    @Model.DeliveryPhoneNumber
+                </div>
+            </div>
+        }
+
+        <div style="border:1px solid var(--ffs-border);border-radius:var(--ffs-radius);overflow:hidden;margin-bottom:24px;">
+            <div style="background:var(--ffs-cream-alt);padding:12px 18px;font-size:0.78rem;font-weight:600;color:var(--ffs-ink-muted);text-transform:uppercase;letter-spacing:0.03em;">
+                Items in this Order
+            </div>
+            <div style="padding:16px 18px;display:flex;flex-direction:column;gap:10px;">
+                @foreach (var item in Model.OrderItems)
+                {
+                    <div style="display:flex;gap:12px;align-items:center;">
+                        <img src="@(string.IsNullOrWhiteSpace(item.Product?.ImageUrl) ? fallbackImage : item.Product.ImageUrl)"
+                             alt="@item.Product?.Name" style="width:52px;height:52px;object-fit:cover;border-radius:8px;flex-shrink:0;" />
+                        <div style="flex:1;font-size:0.88rem;">
+                            @item.Product?.Name
+                            @if (item.ProductVariant != null)
+                            {
+                                <span style="color:var(--ffs-ink-muted);">(@item.ProductVariant.Size/@item.ProductVariant.Color)</span>
+                            }
+                            <span style="color:var(--ffs-ink-muted);">&times;@item.Quantity</span>
+                        </div>
+                        <div style="font-weight:500;">@item.LineTotal.ToString("C")</div>
+                    </div>
+                }
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--ffs-border);padding:14px 18px;">
+                <span style="color:var(--ffs-ink-muted);font-size:0.85rem;">@Model.PaymentMethod</span>
+                <strong style="font-family:'Fraunces',serif;">Total: @Model.GrandTotal.ToString("C")</strong>
+            </div>
+        </div>
+    </div>
+</section>
