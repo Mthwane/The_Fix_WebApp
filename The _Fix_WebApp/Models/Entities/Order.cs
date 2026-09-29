@@ -24,7 +24,12 @@ public enum PaymentMethod
 {
     Cash,
     CreditCard,
-    DebitCard
+    DebitCard,
+    /// <summary>Paid in full from the customer's FixCash wallet balance - no Paystack call at
+    /// all for this order, same "instant, no redirect" shape as a saved-card charge. Splitting
+    /// a wallet balance with another payment method for the remainder isn't supported yet -
+    /// this only applies when the balance covers the whole order.</summary>
+    FixCash
 }
 
 public class Order

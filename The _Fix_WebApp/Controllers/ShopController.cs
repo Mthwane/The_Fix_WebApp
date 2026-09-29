@@ -222,13 +222,14 @@ public class ShopController : Controller
     // GET: /Shop/Checkout
     [HttpGet]
     [Authorize(Roles = "Customer")]
-    public async Task<IActionResult> Checkout()
+    public async Task<IActionResult> Checkout([FromServices] IWalletService wallet)
     {
         var cart = SessionCart.Get(HttpContext.Session);
         if (cart.Lines.Count == 0) return RedirectToAction(nameof(Index));
 
         var userId = _userManager.GetUserId(User);
         var model = await BuildCheckoutViewModelAsync(userId!, cart);
+        ViewBag.WalletBalance = await wallet.GetBalanceAsync(userId!);
         return View(model);
     }
 
@@ -265,13 +266,14 @@ public class ShopController : Controller
     [HttpPost]
     [ValidateAntiForgeryToken]
     [Authorize(Roles = "Customer")]
-    public async Task<IActionResult> Checkout(CheckoutViewModel model, [FromServices] IPaymentService payments, [FromServices] IOrderFulfillmentService orderFulfillment)
+    public async Task<IActionResult> Checkout(CheckoutViewModel model, [FromServices] IPaymentService payments, [FromServices] IOrderFulfillmentService orderFulfillment, [FromServices] IWalletService wallet)
     {
         var cart = SessionCart.Get(HttpContext.Session);
         if (cart.Lines.Count == 0) return RedirectToAction(nameof(Index));
 
         model.Cart = cart;
         var userId = _userManager.GetUserId(User)!;
+        ViewBag.WalletBalance = await wallet.GetBalanceAsync(userId);
 
         if (!ModelState.IsValid)
         {
@@ -332,6 +334,31 @@ public class ShopController : Controller
         var vat = TaxSettings.CalculateVat(cart.SubTotal);
         var grandTotal = cart.SubTotal + vat;
         var reference = $"WEB-{DateTime.UtcNow:yyyyMMddHHmmssfff}";
+
+        // --- Path 0: paying with the FixCash wallet balance - only offered (see Checkout.cshtml)
+        // when the balance covers the WHOLE order; splitting a wallet balance with another
+        // payment method for a remainder isn't supported yet. Debit BEFORE creating the order
+        // (same principle as the saved-card path charging before the order exists) - a failed
+        // debit must never leave a stock-decremented, unpaid order behind.
+        if (model.PaymentMethod == PaymentMethod.FixCash)
+        {
+            var debitResult = await wallet.DebitForOrderAsync(userId, grandTotal, reference);
+            if (!debitResult.Success)
+            {
+                this.ToastError($"Could not pay with FixCash: {debitResult.ErrorMessage}");
+                var rebuilt = await BuildCheckoutViewModelAsync(userId, cart);
+                model.Addresses = rebuilt.Addresses;
+                model.SavedCards = rebuilt.SavedCards;
+                return View(model);
+            }
+
+            var order = await orderFulfillment.CreateOnlineOrderAsync(user, cart, PaymentMethod.FixCash, reference, deliveryAddress);
+            await wallet.LinkOrderAsync(reference, order.OrderId);
+
+            SessionCart.Clear(HttpContext.Session);
+            this.ToastSuccess($"Paid with FixCash - order {order.OrderNumber} placed for {order.GrandTotal:C}.");
+            return RedirectToAction(nameof(Confirmation), new { id = order.OrderId });
+        }
 
         // --- Path 1: paying with a card already on file - charge it directly, no redirect,
         // no re-entering card details at all. ---

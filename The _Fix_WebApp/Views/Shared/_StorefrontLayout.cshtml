@@ -33,6 +33,7 @@
                 <a asp-controller="Support" asp-action="Faq">Help</a>
                 @if (User.Identity?.IsAuthenticated == true)
                 {
+                    <a asp-controller="Wallet" asp-action="Index">FixCash Wallet</a>
                     <a asp-controller="Customer" asp-action="Orders">My Account</a>
                     <form asp-controller="Account" asp-action="Logout" method="post" style="display:inline">
                         @Html.AntiForgeryToken()

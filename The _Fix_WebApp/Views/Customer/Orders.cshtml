@@ -31,6 +31,8 @@
             </div>
             <div style="display:flex;gap:10px;">
                 <a asp-controller="Customer" asp-action="Profile" class="ffs-btn ffs-btn-outline">My Profile</a>
+                <a asp-controller="Wallet" asp-action="Index" class="ffs-btn ffs-btn-outline">FixCash Wallet</a>
+                <a asp-controller="Support" asp-action="Tickets" class="ffs-btn ffs-btn-outline">Support Tickets</a>
                 <a asp-controller="Shop" asp-action="Index" class="ffs-btn ffs-btn-forest">Shop Now</a>
             </div>
         </div>
@@ -120,6 +122,9 @@
                                         Track Order
                                     </a>
                                 }
+                                <a asp-controller="Support" asp-action="NewTicket" asp-route-orderId="@order.OrderId" class="ffs-btn ffs-btn-outline" style="padding:6px 14px;font-size:0.78rem;">
+                                    Ask About This Order
+                                </a>
                                 @if (cancellableStatuses.Contains(order.Status))
                                 {
                                     <form asp-controller="Customer" asp-action="CancelOrder" asp-route-id="@order.OrderId" method="post">

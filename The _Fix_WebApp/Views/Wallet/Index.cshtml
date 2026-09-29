@@ -1,0 +1,66 @@
+@model List<WalletTransaction>
+@{
+    ViewData["Title"] = "FixCash Wallet";
+    Layout = "_StorefrontLayout";
+    var balance = ViewBag.Balance as decimal? ?? 0m;
+
+    (string label, string color) DescribeType(WalletTransactionType t) => t switch
+    {
+        WalletTransactionType.Deposit => ("Deposit", "var(--ffs-forest)"),
+        WalletTransactionType.Spend => ("Spent on order", "var(--ffs-clay)"),
+        WalletTransactionType.RefundCredit => ("Refund credit", "var(--ffs-forest)"),
+        _ => ("Adjustment", "var(--ffs-ink-muted)")
+    };
+    bool IsCredit(WalletTransactionType t) => t is WalletTransactionType.Deposit or WalletTransactionType.RefundCredit or WalletTransactionType.AdminAdjustment;
+}
+
+<section class="ffs-section" style="padding-top:32px;">
+    <div class="ffs-container" style="max-width:720px;">
+        <span class="ffs-eyebrow">Wallet</span>
+        <h1 style="font-family:'Fraunces',serif;font-size:1.9rem;margin-bottom:20px;">FixCash</h1>
+
+        <div style="border:1px solid var(--ffs-border);border-radius:var(--ffs-radius);padding:28px;background:var(--ffs-forest);color:#fff;margin-bottom:24px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;">
+            <div>
+                <div style="font-size:0.8rem;opacity:0.8;margin-bottom:4px;">Available Balance</div>
+                <div style="font-family:'Fraunces',serif;font-size:2.4rem;">R@(balance.ToString("N2"))</div>
+            </div>
+            <a asp-action="Deposit" class="ffs-btn" style="background:#fff;color:var(--ffs-forest);">+ Add Funds</a>
+        </div>
+
+        <h2 style="font-family:'Fraunces',serif;font-size:1.2rem;margin-bottom:12px;">Transaction History</h2>
+
+        @if (!Model.Any())
+        {
+            <p style="color:var(--ffs-ink-muted);">No transactions yet - add funds to get started.</p>
+        }
+        else
+        {
+            <div style="display:flex;flex-direction:column;gap:8px;">
+                @foreach (var t in Model)
+                {
+                    var (label, color) = DescribeType(t.Type);
+                    var isCredit = IsCredit(t.Type);
+                    <div style="display:flex;justify-content:space-between;align-items:center;border:1px solid var(--ffs-border);border-radius:var(--ffs-radius);padding:12px 16px;">
+                        <div>
+                            <div style="font-weight:600;font-size:0.9rem;color:@color;">@label</div>
+                            <div style="color:var(--ffs-ink-muted);font-size:0.78rem;margin-top:2px;">
+                                @t.DateCreated.ToLocalTime().ToString("dd MMM yyyy, HH:mm")
+                                @if (t.Order is not null)
+                                {
+                                    <text> &bull; Order #@t.Order.OrderNumber</text>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(t.Note))
+                                {
+                                    <text> &bull; @t.Note</text>
+                                }
+                            </div>
+                        </div>
+                        <div style="font-weight:600;font-family:'Fraunces',serif;color:@(isCredit ? "var(--ffs-forest)" : "var(--ffs-clay)");">
+                            @(isCredit ? "+" : "-")R@(t.Amount.ToString("N2"))
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</section>

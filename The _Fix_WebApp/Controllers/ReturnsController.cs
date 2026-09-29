@@ -19,12 +19,14 @@ public class ReturnsController : Controller
     private readonly ApplicationDbContext _context;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IInventoryService _inventoryService;
+    private readonly IWalletService _walletService;
 
-    public ReturnsController(ApplicationDbContext context, UserManager<ApplicationUser> userManager, IInventoryService inventoryService)
+    public ReturnsController(ApplicationDbContext context, UserManager<ApplicationUser> userManager, IInventoryService inventoryService, IWalletService walletService)
     {
         _context = context;
         _userManager = userManager;
         _inventoryService = inventoryService;
+        _walletService = walletService;
     }
 
     // GET: /Returns - recent returns, newest first.
@@ -107,6 +109,12 @@ public class ReturnsController : Controller
 
         var refundAmount = item.UnitPrice * quantity;
 
+        if (refundMethod == RefundMethod.StoreCredit && string.IsNullOrEmpty(item.Order.CustomerId))
+        {
+            this.ToastError("This order has no customer account attached, so there's no FixCash wallet to credit - use Original Payment instead.");
+            return RedirectToAction(nameof(Lookup), new { orderNumber = item.Order.OrderNumber });
+        }
+
         _context.ReturnTransactions.Add(new ReturnTransaction
         {
             OrderId = item.OrderId,
@@ -140,6 +148,22 @@ public class ReturnsController : Controller
         });
 
         await _context.SaveChangesAsync();
+
+        if (refundMethod == RefundMethod.StoreCredit)
+        {
+            var creditResult = await _walletService.CreditRefundAsync(
+                item.Order.CustomerId!, refundAmount, item.OrderId, $"Refund for return on order {item.Order.OrderNumber}.");
+
+            if (!creditResult.Success)
+            {
+                // The ReturnTransaction record and stock adjustment above are already
+                // committed - the return itself genuinely happened. Only the wallet credit
+                // failed, so say so precisely rather than implying the whole return needs
+                // redoing.
+                this.ToastError($"Return processed and stock adjusted, but crediting the customer's FixCash wallet failed: {creditResult.ErrorMessage}. Credit it manually.");
+                return RedirectToAction(nameof(Lookup), new { orderNumber = item.Order.OrderNumber });
+            }
+        }
 
         this.ToastSuccess($"Return processed - {refundAmount:C} refunded via {refundMethod}.");
         return RedirectToAction(nameof(Lookup), new { orderNumber = item.Order.OrderNumber });

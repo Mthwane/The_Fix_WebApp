@@ -72,9 +72,24 @@
             <hr style="border-color:var(--ffs-border);margin:24px 0;" />
 
             <h5 style="font-family:'Fraunces',serif;font-size:1.1rem;margin-bottom:12px;">Payment</h5>
+            @{
+                var walletBalance = ViewBag.WalletBalance as decimal? ?? 0m;
+                var checkoutTotal = Model.Cart.SubTotal + TaxSettings.CalculateVat(Model.Cart.SubTotal);
+                var canPayWithWallet = walletBalance >= checkoutTotal;
+            }
+            @if (canPayWithWallet)
+            {
+                <div style="background:var(--ffs-cream-alt);border-radius:8px;padding:10px 14px;font-size:0.85rem;margin-bottom:12px;">
+                    Your FixCash balance is <strong>R@(walletBalance.ToString("N2"))</strong> - enough to cover this order.
+                </div>
+            }
             <div style="margin-bottom:16px;">
                 <label asp-for="PaymentMethod" class="form-label" style="font-size:0.85rem;"></label>
                 <select asp-for="PaymentMethod" class="form-select" style="border:1px solid var(--ffs-border);border-radius:8px;padding:8px 12px;">
+                    @if (canPayWithWallet)
+                    {
+                        <option value="FixCash">Pay with FixCash (R@(walletBalance.ToString("N2")) available)</option>
+                    }
                     <option value="Cash">Cash on delivery</option>
                     <option value="CreditCard">Credit Card</option>
                     <option value="DebitCard">Debit Card</option>

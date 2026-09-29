@@ -45,6 +45,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Faq> Faqs => Set<Faq>();
     public DbSet<SupportTicket> SupportTickets => Set<SupportTicket>();
     public DbSet<TicketMessage> TicketMessages => Set<TicketMessage>();
+    public DbSet<WalletAccount> WalletAccounts => Set<WalletAccount>();
+    public DbSet<WalletTransaction> WalletTransactions => Set<WalletTransaction>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -304,6 +306,30 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             .HasOne(m => m.Sender)
             .WithMany()
             .HasForeignKey(m => m.SenderId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // WalletAccount is 1:1 with a customer - unique index enforces that at the DB level too,
+        // not just "we always look it up by CustomerId" convention in WalletService.
+        builder.Entity<WalletAccount>()
+            .HasIndex(w => w.CustomerId)
+            .IsUnique();
+
+        builder.Entity<WalletAccount>()
+            .HasOne(w => w.Customer)
+            .WithMany()
+            .HasForeignKey(w => w.CustomerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<WalletTransaction>()
+            .HasOne(t => t.WalletAccount)
+            .WithMany(w => w.Transactions)
+            .HasForeignKey(t => t.WalletAccountId)
+            .OnDelete(DeleteBehavior.Cascade); // deleting a wallet deletes its own ledger
+
+        builder.Entity<WalletTransaction>()
+            .HasOne(t => t.Order)
+            .WithMany()
+            .HasForeignKey(t => t.OrderId)
             .OnDelete(DeleteBehavior.Restrict);
 
 

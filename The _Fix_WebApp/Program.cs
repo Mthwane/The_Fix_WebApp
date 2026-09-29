@@ -88,6 +88,7 @@ builder.Services.AddAuthorization(options =>
 
 // --- Application services ---
 builder.Services.AddScoped<IInventoryService, InventoryService>();
+builder.Services.AddScoped<IWalletService, WalletService>();
 builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection("Email"));
 builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
 builder.Services.Configure<PaystackOptions>(builder.Configuration.GetSection("Paystack"));
