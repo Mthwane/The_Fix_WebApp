@@ -1,0 +1,116 @@
+﻿@model RewardsSettingsViewModel
+@using System.Globalization
+@{
+    ViewData["Title"] = "Rewards";
+    Layout = "_StaffLayout";
+    string Inv(decimal d) => d.ToString(CultureInfo.InvariantCulture);
+    var inputStyle = "width:140px;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:9px 14px;font-size:0.9rem;";
+    var muted = "font-size:0.8rem;color:var(--stf-on-surface-variant);";
+    var eyebrow = "font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--stf-outline);margin-bottom:10px;";
+}
+<div class="stf-content" style="max-width:800px;">
+    <span class="stf-eyebrow">Customers</span>
+    <h1 style="margin-bottom:6px;">Rewards</h1>
+    <p style="@muted margin-bottom:20px;">
+        Customers earn points on purchases and redeem them as a discount at checkout. Earning is calculated on the order value before VAT, after any discount.
+    </p>
+
+    <div class="stf-card" style="margin-bottom:24px;display:flex;gap:32px;flex-wrap:wrap;">
+        <div><div style="@eyebrow">Members with points</div><div style="font-size:1.4rem;font-weight:600;">@Model.Overview.MembersWithPoints</div></div>
+        <div><div style="@eyebrow">Outstanding points</div><div style="font-size:1.4rem;font-weight:600;">@Model.Overview.OutstandingPoints.ToString("N0")</div></div>
+        <div><div style="@eyebrow">Outstanding liability</div><div style="font-size:1.4rem;font-weight:600;">@Model.Overview.OutstandingLiability.ToString("C")</div></div>
+        <div><div style="@eyebrow">Earned / redeemed (30 days)</div><div style="font-size:1.4rem;font-weight:600;">@Model.Overview.EarnedLast30Days.ToString("N0") / @Model.Overview.RedeemedLast30Days.ToString("N0")</div></div>
+    </div>
+
+    <form asp-action="Index" method="post">
+        @Html.AntiForgeryToken()
+        <div asp-validation-summary="All" style="color:#b3261e;margin-bottom:12px;"></div>
+
+        <div class="stf-card" style="margin-bottom:24px;">
+            <div style="@eyebrow">Programme</div>
+            <label style="display:flex;gap:8px;align-items:center;cursor:pointer;">
+                <input asp-for="IsEnabled" type="checkbox" />
+                <span>Rewards programme is active</span>
+            </label>
+            <div style="@muted margin-top:6px;">When off, nobody earns or redeems. Existing balances are kept.</div>
+        </div>
+
+        <div class="stf-card" style="margin-bottom:24px;">
+            <div style="@eyebrow">How customers earn</div>
+            <select name="EarnMode" id="earnMode" style="@inputStyle width:280px;">
+                <option value="0" selected="@(Model.EarnMode == RewardEarnMode.FlatPointsPerPurchase)">Points per purchase (flat)</option>
+                <option value="1" selected="@(Model.EarnMode == RewardEarnMode.PointsPerRandSpent)">Points per Rand spent</option>
+                <option value="2" selected="@(Model.EarnMode == RewardEarnMode.CashBackPercentage)">Cash-back percentage</option>
+            </select>
+
+            <div data-mode="0" style="margin-top:14px;">
+                <input type="number" name="FlatPointsPerPurchase" value="@Model.FlatPointsPerPurchase" min="0" max="100000" step="1" style="@inputStyle" />
+                <span style="font-size:0.9rem;">points on every qualifying purchase</span>
+            </div>
+            <div data-mode="1" style="margin-top:14px;">
+                <input type="number" name="PointsPerRand" value="@Inv(Model.PointsPerRand)" min="0" max="1000" step="0.01" style="@inputStyle" />
+                <span style="font-size:0.9rem;">points per R1 spent</span>
+                <div style="@muted">e.g. 0.1 = 1 point for every R10 spent</div>
+            </div>
+            <div data-mode="2" style="margin-top:14px;">
+                <input type="number" name="CashBackPercentage" value="@Inv(Model.CashBackPercentage)" min="0" max="100" step="0.1" style="@inputStyle" />
+                <span style="font-size:0.9rem;">% of the order value back, as points</span>
+                <div style="@muted">Converted to points using the point value below.</div>
+            </div>
+
+            <div style="margin-top:16px;">
+                <span style="font-size:0.9rem;">Minimum order to earn: R</span>
+                <input type="number" name="MinimumOrderAmount" value="@Inv(Model.MinimumOrderAmount)" min="0" step="0.01" style="@inputStyle" />
+                <div style="@muted">Measured before VAT. 0 = every order earns.</div>
+            </div>
+        </div>
+
+        <div class="stf-card" style="margin-bottom:24px;">
+            <div style="@eyebrow">Redeeming</div>
+            <div style="margin-bottom:12px;">
+                <span style="font-size:0.9rem;">1 point is worth R</span>
+                <input type="number" name="PointValueRands" value="@Inv(Model.PointValueRands)" min="0.01" max="1000" step="0.01" style="@inputStyle" />
+                <div style="@muted">Changing this re-prices every existing balance, not just new points.</div>
+            </div>
+            <div style="margin-bottom:12px;">
+                <span style="font-size:0.9rem;">Minimum points before a customer can redeem:</span>
+                <input type="number" name="MinimumPointsToRedeem" value="@Model.MinimumPointsToRedeem" min="0" step="1" style="@inputStyle" />
+            </div>
+            <div>
+                <span style="font-size:0.9rem;">Points can cover up to</span>
+                <input type="number" name="MaxRedeemPercentOfOrder" value="@Inv(Model.MaxRedeemPercentOfOrder)" min="0" max="90" step="1" style="width:100px;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:9px 14px;font-size:0.9rem;" />
+                <span style="font-size:0.9rem;">% of an order (max 90%)</span>
+            </div>
+        </div>
+
+        <button type="submit" class="stf-btn stf-btn-primary">Save Settings</button>
+    </form>
+
+    <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:28px 0 12px;">What the saved settings do today</h5>
+    <table class="stf-table">
+        <thead><tr><th>Purchase (before VAT)</th><th>Points earned</th><th>Redemption value</th></tr></thead>
+        <tbody>
+            @foreach (var row in Model.Preview)
+            {
+                <tr>
+                    <td>@row.PurchaseAmount.ToString("C")</td>
+                    <td>@row.Points</td>
+                    <td>@row.Value.ToString("C")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+<script>
+    (function () {
+        var select = document.getElementById('earnMode');
+        function sync() {
+            document.querySelectorAll('[data-mode]').forEach(function (el) {
+                el.style.display = el.getAttribute('data-mode') === select.value ? '' : 'none';
+            });
+        }
+        select.addEventListener('change', sync);
+        sync();
+    })();
+</script>

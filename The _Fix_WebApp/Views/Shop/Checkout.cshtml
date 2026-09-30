@@ -1,10 +1,34 @@
 @model CheckoutViewModel
+
+@using FashionFix.Web.Models.Entities
+@using FashionFix.Web.Models.ViewModels
+
 @{
     ViewData["Title"] = "Checkout";
     Layout = "_StorefrontLayout";
+
     var fallbackImage = "https://placehold.co/100x100/E4DEC9/24211B?text=No+Image";
-    var vat = FashionFix.Web.Security.TaxSettings.CalculateVat(Model.Cart.SubTotal);
-    var total = Model.Cart.SubTotal + vat;
+
+    var rewardsSettings = ViewBag.RewardsSettings as RewardsSettings;
+    var rewardsQuote = ViewBag.RewardsQuote as RedemptionQuote;
+
+    var pointsDiscount = 0m;
+
+    if (Model.UsePoints && rewardsQuote is { CanRedeem: true })
+    {
+        pointsDiscount = Math.Min(
+            rewardsQuote.MaxDiscount,
+            Model.Cart.SubTotal);
+    }
+
+    var vat = TaxSettings.CalculateVat(
+        Model.Cart.SubTotal,
+        pointsDiscount);
+
+    var total =
+        Model.Cart.SubTotal -
+        pointsDiscount +
+        vat;
 }
 
 <section class="ffs-section" style="padding-top:32px;">
@@ -74,9 +98,32 @@
             <h5 style="font-family:'Fraunces',serif;font-size:1.1rem;margin-bottom:12px;">Payment</h5>
             @{
                 var walletBalance = ViewBag.WalletBalance as decimal? ?? 0m;
-                var checkoutTotal = Model.Cart.SubTotal + TaxSettings.CalculateVat(Model.Cart.SubTotal);
+            var checkoutTotal = total;
                 var canPayWithWallet = walletBalance >= checkoutTotal;
             }
+        @{
+            var rewardsSettings = ViewBag.RewardsSettings as RewardsSettings;
+            var rewardsQuote = ViewBag.RewardsQuote as RedemptionQuote;
+        }
+        @if (rewardsQuote is { CanRedeem: true })
+        {
+            var pointsOff = Math.Min(rewardsQuote.MaxDiscount, Model.Cart.SubTotal);
+            var vatAfterPoints = TaxSettings.CalculateVat(Model.Cart.SubTotal, pointsOff);
+            var totalAfterPoints = Model.Cart.SubTotal - pointsOff + vatAfterPoints;
+            <h5 style="font-family:'Fraunces',serif;font-size:1.1rem;margin-bottom:12px;">FixRewards</h5>
+            <label style="display:flex;gap:10px;align-items:flex-start;border:1px solid var(--ffs-border);border-radius:var(--ffs-radius);padding:12px 14px;cursor:pointer;margin-bottom:20px;">
+                <input type="checkbox" asp-for="UsePoints" style="margin-top:3px;" />
+                <span>
+                    Use <strong>@rewardsQuote.MaxPoints.ToString("N0")</strong> points for <strong>@pointsOff.ToString("C")</strong> off
+                    <div style="font-size:0.78rem;color:var(--ffs-ink-muted);">You have @rewardsQuote.Balance.ToString("N0") points. Your total becomes @totalAfterPoints.ToString("C").</div>
+                </span>
+            </label>
+            <hr style="border-color:var(--ffs-border);margin:24px 0;" />
+        }
+        else if (rewardsSettings is { IsEnabled: true } && rewardsQuote is { Balance: > 0 } && rewardsQuote.Reason is not null)
+        {
+            <p style="font-size:0.82rem;color:var(--ffs-ink-muted);margin-bottom:16px;">@rewardsQuote.Reason</p>
+        }
             @if (canPayWithWallet)
             {
                 <div style="background:var(--ffs-cream-alt);border-radius:8px;padding:10px 14px;font-size:0.85rem;margin-bottom:12px;">

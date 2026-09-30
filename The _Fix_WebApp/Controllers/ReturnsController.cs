@@ -20,13 +20,20 @@ public class ReturnsController : Controller
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IInventoryService _inventoryService;
     private readonly IWalletService _walletService;
+    private readonly IRewardsService _rewardsService;
 
-    public ReturnsController(ApplicationDbContext context, UserManager<ApplicationUser> userManager, IInventoryService inventoryService, IWalletService walletService)
+    public ReturnsController(
+        ApplicationDbContext context,
+        UserManager<ApplicationUser> userManager,
+        IInventoryService inventoryService,
+        IWalletService walletService,
+        IRewardsService rewardsService)
     {
         _context = context;
         _userManager = userManager;
         _inventoryService = inventoryService;
         _walletService = walletService;
+        _rewardsService = rewardsService;
     }
 
     // GET: /Returns - recent returns, newest first.
@@ -50,7 +57,8 @@ public class ReturnsController : Controller
     [HttpGet]
     public async Task<IActionResult> Lookup(string? orderNumber)
     {
-        if (string.IsNullOrWhiteSpace(orderNumber)) return View(null);
+        if (string.IsNullOrWhiteSpace(orderNumber))
+            return View(null);
 
         var order = await _context.Orders
             .AsNoTracking()
@@ -70,7 +78,11 @@ public class ReturnsController : Controller
         ViewBag.AlreadyReturned = await _context.ReturnTransactions
             .Where(r => r.OrderId == order.OrderId)
             .GroupBy(r => r.OrderItemId)
-            .Select(g => new { OrderItemId = g.Key, Quantity = g.Sum(x => x.QuantityReturned) })
+            .Select(g => new
+            {
+                OrderItemId = g.Key,
+                Quantity = g.Sum(x => x.QuantityReturned)
+            })
             .ToDictionaryAsync(x => x.OrderItemId, x => x.Quantity);
 
         ViewBag.OrderNumber = orderNumber;
@@ -80,7 +92,12 @@ public class ReturnsController : Controller
     // POST: /Returns/Process
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Process(int orderItemId, int quantity, bool isResalable, RefundMethod refundMethod, string? reason)
+    public async Task<IActionResult> Process(
+        int orderItemId,
+        int quantity,
+        bool isResalable,
+        RefundMethod refundMethod,
+        string? reason)
     {
         var item = await _context.OrderItems
             .Include(i => i.Order)
@@ -88,12 +105,15 @@ public class ReturnsController : Controller
             .Include(i => i.ProductVariant)
             .FirstOrDefaultAsync(i => i.OrderItemId == orderItemId);
 
-        if (item is null) return NotFound();
+        if (item is null)
+            return NotFound();
 
         if (quantity <= 0)
         {
             this.ToastError("Enter a quantity greater than zero.");
-            return RedirectToAction(nameof(Lookup), new { orderNumber = item.Order.OrderNumber });
+            return RedirectToAction(
+                nameof(Lookup),
+                new { orderNumber = item.Order.OrderNumber });
         }
 
         var alreadyReturned = await _context.ReturnTransactions
@@ -101,21 +121,42 @@ public class ReturnsController : Controller
             .SumAsync(r => (int?)r.QuantityReturned) ?? 0;
 
         var returnable = item.Quantity - alreadyReturned;
+
         if (quantity > returnable)
         {
-            this.ToastError($"Only {returnable} unit(s) left to return on that line ({alreadyReturned} already returned).");
-            return RedirectToAction(nameof(Lookup), new { orderNumber = item.Order.OrderNumber });
+            this.ToastError(
+                $"Only {returnable} unit(s) left to return on that line ({alreadyReturned} already returned).");
+
+            return RedirectToAction(
+                nameof(Lookup),
+                new { orderNumber = item.Order.OrderNumber });
         }
 
-        var refundAmount = item.UnitPrice * quantity;
+        // Refund what was actually paid for this line.
+        // Orders carrying a discount (points redeemed or a POS discount) must not be
+        // refunded at sticker price, or the discount would effectively become a cash payout.
+        var discountShare = item.Order.SubTotal > 0
+            ? item.Order.DiscountTotal / item.Order.SubTotal
+            : 0m;
 
-        if (refundMethod == RefundMethod.StoreCredit && string.IsNullOrEmpty(item.Order.CustomerId))
+        var refundAmount = Math.Round(
+            item.UnitPrice * quantity * (1m - discountShare),
+            2,
+            MidpointRounding.AwayFromZero);
+
+        if (refundMethod == RefundMethod.StoreCredit &&
+            string.IsNullOrEmpty(item.Order.CustomerId))
         {
-            this.ToastError("This order has no customer account attached, so there's no FixCash wallet to credit - use Original Payment instead.");
-            return RedirectToAction(nameof(Lookup), new { orderNumber = item.Order.OrderNumber });
+            this.ToastError(
+                "This order has no customer account attached, so there's no FixCash wallet to credit - use Original Payment instead.");
+
+            return RedirectToAction(
+                nameof(Lookup),
+                new { orderNumber = item.Order.OrderNumber });
         }
 
-        _context.ReturnTransactions.Add(new ReturnTransaction
+        // Create the return transaction first so it receives its ReturnId.
+        var returnTxn = new ReturnTransaction
         {
             OrderId = item.OrderId,
             OrderItemId = item.OrderItemId,
@@ -126,33 +167,68 @@ public class ReturnsController : Controller
             RefundMethod = refundMethod,
             RefundAmount = refundAmount,
             Reason = reason
-        });
+        };
+
+        _context.ReturnTransactions.Add(returnTxn);
 
         // Only resalable stock goes back on the shelf. Damaged goods are still refunded but
         // written off - incrementing stock for them would silently inflate inventory.
         if (isResalable && item.ProductVariantId.HasValue)
         {
-            await _inventoryService.IncrementStockAsync(item.ProductVariantId.Value, quantity, InventoryChangeReason.Return);
+            await _inventoryService.IncrementStockAsync(
+                item.ProductVariantId.Value,
+                quantity,
+                InventoryChangeReason.Return);
         }
         else if (isResalable)
         {
             // Pre-variant historical line: refund stands, but there's no variant to restock into.
-            this.ToastWarning("Refund processed, but this is a legacy order line with no size/colour recorded - restock it manually.");
+            this.ToastWarning(
+                "Refund processed, but this is a legacy order line with no size/colour recorded - restock it manually.");
         }
 
         _context.AuditLogs.Add(new AuditLog
         {
             UserId = _userManager.GetUserId(User),
             Action = "ReturnProcessed",
-            Details = $"Returned {quantity}x {item.Product?.Name} on {item.Order.OrderNumber}. Refund {refundAmount:C} via {refundMethod}. Resalable: {isResalable}."
+            Details =
+                $"Returned {quantity}x {item.Product?.Name} on {item.Order.OrderNumber}. " +
+                $"Refund {refundAmount:C} via {refundMethod}. Resalable: {isResalable}."
         });
 
+        // Save the return so ReturnId is available for the rewards reversal reference.
         await _context.SaveChangesAsync();
+
+        // Reverse the reward points that were earned from the original order.
+        var rewardsNote = "";
+
+        if (!string.IsNullOrEmpty(item.Order.CustomerId))
+        {
+            try
+            {
+                var reversal = await _rewardsService.ReverseEarnedForReturnAsync(
+                    item.OrderId,
+                    $"RETURN-{returnTxn.ReturnId}");
+
+                if (reversal.Points > 0)
+                {
+                    rewardsNote = $" {reversal.Points} reward point(s) reversed.";
+                }
+            }
+            catch
+            {
+                rewardsNote =
+                    " Reward points could not be reversed automatically - adjust manually.";
+            }
+        }
 
         if (refundMethod == RefundMethod.StoreCredit)
         {
             var creditResult = await _walletService.CreditRefundAsync(
-                item.Order.CustomerId!, refundAmount, item.OrderId, $"Refund for return on order {item.Order.OrderNumber}.");
+                item.Order.CustomerId!,
+                refundAmount,
+                item.OrderId,
+                $"Refund for return on order {item.Order.OrderNumber}.");
 
             if (!creditResult.Success)
             {
@@ -160,12 +236,21 @@ public class ReturnsController : Controller
                 // committed - the return itself genuinely happened. Only the wallet credit
                 // failed, so say so precisely rather than implying the whole return needs
                 // redoing.
-                this.ToastError($"Return processed and stock adjusted, but crediting the customer's FixCash wallet failed: {creditResult.ErrorMessage}. Credit it manually.");
-                return RedirectToAction(nameof(Lookup), new { orderNumber = item.Order.OrderNumber });
+                this.ToastError(
+                    $"Return processed and stock adjusted, but crediting the customer's FixCash wallet failed: " +
+                    $"{creditResult.ErrorMessage}. Credit it manually.");
+
+                return RedirectToAction(
+                    nameof(Lookup),
+                    new { orderNumber = item.Order.OrderNumber });
             }
         }
 
-        this.ToastSuccess($"Return processed - {refundAmount:C} refunded via {refundMethod}.");
-        return RedirectToAction(nameof(Lookup), new { orderNumber = item.Order.OrderNumber });
+        this.ToastSuccess(
+            $"Return processed - {refundAmount:C} refunded via {refundMethod}.{rewardsNote}");
+
+        return RedirectToAction(
+            nameof(Lookup),
+            new { orderNumber = item.Order.OrderNumber });
     }
 }

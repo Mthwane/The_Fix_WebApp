@@ -39,6 +39,7 @@ public static class Permissions
 
     // Support
     public const string SupportTicketsManage = "supporttickets.manage";
+    public const string RewardsManage = "rewards.manage";
 
     /// <summary>Every permission in the system, with a human-readable label for the Roles UI.</summary>
     public static readonly IReadOnlyDictionary<string, string> All = new Dictionary<string, string>
@@ -52,6 +53,7 @@ public static class Permissions
         [SuppliersManage] = "Manage Suppliers (contacts, lead times, collection addresses)",
         [PurchaseOrdersManage] = "Manage Purchase Orders (raise restock requests & receive stock)",
         [PurchaseOrdersApprove] = "Approve Purchase Orders (authorise spend before an order is placed)",
+        [RewardsManage] = "Manage Rewards (points earn rate, cash-back %, redemption rules)",
         [ReturnsProcess] = "Process Returns & Refunds",
         [DashboardView] = "View Business Dashboard",
         [ReportsView] = "View Reports & Analytics",

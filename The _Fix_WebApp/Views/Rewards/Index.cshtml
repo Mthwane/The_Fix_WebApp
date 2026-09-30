@@ -1,0 +1,63 @@
+﻿@model RewardsCustomerViewModel
+@{
+    ViewData["Title"] = "FixRewards";
+    Layout = "_StorefrontLayout";
+
+    (string label, bool isCredit) Describe(RewardsTransactionType t) => t switch
+    {
+        RewardsTransactionType.Earned => ("Points earned", true),
+        RewardsTransactionType.RedemptionRestored => ("Points returned", true),
+        RewardsTransactionType.Redeemed => ("Redeemed at checkout", false),
+        _ => ("Points reversed", false)
+    };
+}
+
+<section class="ffs-section" style="padding-top:32px;">
+    <div class="ffs-container" style="max-width:720px;">
+        <span class="ffs-eyebrow">Rewards</span>
+        <h1 style="font-family:'Fraunces',serif;font-size:1.9rem;margin-bottom:20px;">FixRewards</h1>
+
+        <div style="border:1px solid var(--ffs-border);border-radius:var(--ffs-radius);padding:28px;background:var(--ffs-forest);color:#fff;margin-bottom:12px;">
+            <div style="font-size:0.8rem;opacity:0.8;margin-bottom:4px;">Your points</div>
+            <div style="font-family:'Fraunces',serif;font-size:2.4rem;">@Model.Balance.ToString("N0")</div>
+            <div style="font-size:0.85rem;opacity:0.85;">Worth @Model.BalanceValue.ToString("C") at checkout</div>
+        </div>
+        <p style="color:var(--ffs-ink-muted);font-size:0.88rem;margin-bottom:24px;">
+            @Model.EarnRule
+            @if (Model.Settings.IsEnabled)
+            {
+                <text> Redeem at checkout once you have @Model.Settings.MinimumPointsToRedeem points.</text>
+            }
+        </p>
+
+        <h2 style="font-family:'Fraunces',serif;font-size:1.2rem;margin-bottom:12px;">Points History</h2>
+        @if (!Model.History.Any())
+        {
+            <p style="color:var(--ffs-ink-muted);">No points yet - they'll show up here after your next order.</p>
+        }
+        else
+        {
+            <div style="display:flex;flex-direction:column;gap:8px;">
+                @foreach (var t in Model.History)
+                {
+                    var (label, isCredit) = Describe(t.Type);
+                    <div style="display:flex;justify-content:space-between;align-items:center;border:1px solid var(--ffs-border);border-radius:var(--ffs-radius);padding:12px 16px;">
+                        <div>
+                            <div style="font-weight:600;font-size:0.9rem;">@label</div>
+                            <div style="color:var(--ffs-ink-muted);font-size:0.78rem;margin-top:2px;">
+                                @t.DateCreated.ToLocalTime().ToString("dd MMM yyyy, HH:mm")
+                                @if (t.Order is not null)
+                                {
+                                    <text> &bull; Order #@t.Order.OrderNumber</text>
+                                }
+                            </div>
+                        </div>
+                        <div style="font-weight:600;font-family:'Fraunces',serif;color:@(isCredit ? "var(--ffs-forest)" : "var(--ffs-clay)");">
+                            @(isCredit ? "+" : "-")@t.Points.ToString("N0")
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</section>

@@ -50,4 +50,8 @@ public class CheckoutViewModel
     public CartViewModel Cart { get; set; } = new();
     public List<CustomerAddress> Addresses { get; set; } = new();
     public List<CustomerPaymentMethod> SavedCards { get; set; } = new();
+    /// <summary>Apply the maximum redeemable reward points to this order. The server recomputes the
+    /// amount from the customer's real balance and the admin rules - nothing numeric is trusted from the client.</summary>
+    [Display(Name = "Use my reward points")]
+    public bool UsePoints { get; set; }
 }

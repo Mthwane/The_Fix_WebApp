@@ -30,6 +30,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<CategoryPricingRule> CategoryPricingRules => Set<CategoryPricingRule>();
     public DbSet<EmailSubscriber> EmailSubscribers => Set<EmailSubscriber>();
     public DbSet<ShiftSession> ShiftSessions => Set<ShiftSession>();
+   
 
     // --- Supply chain (returning from V1, now variant-based) ---
     public DbSet<Supplier> Suppliers => Set<Supplier>();
@@ -47,6 +48,10 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<TicketMessage> TicketMessages => Set<TicketMessage>();
     public DbSet<WalletAccount> WalletAccounts => Set<WalletAccount>();
     public DbSet<WalletTransaction> WalletTransactions => Set<WalletTransaction>();
+    
+    public DbSet<RewardsSettings> RewardsSettings => Set<RewardsSettings>();
+    public DbSet<RewardsAccount> RewardsAccounts => Set<RewardsAccount>();
+    public DbSet<RewardsTransaction> RewardsTransactions => Set<RewardsTransaction>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -331,6 +336,30 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             .WithMany()
             .HasForeignKey(t => t.OrderId)
             .OnDelete(DeleteBehavior.Restrict);
+        builder.Entity<RewardsSettings>().Property(s => s.Id).ValueGeneratedNever();
+        builder.Entity<RewardsSettings>().Property(s => s.PointsPerRand).HasPrecision(9, 4);
+        builder.Entity<RewardsSettings>().Property(s => s.CashBackPercentage).HasPrecision(5, 2);
+        builder.Entity<RewardsSettings>().Property(s => s.PointValueRands).HasPrecision(9, 4);
+        builder.Entity<RewardsSettings>().Property(s => s.MinimumOrderAmount).HasPrecision(18, 2);
+        builder.Entity<RewardsSettings>().Property(s => s.MaxRedeemPercentOfOrder).HasPrecision(5, 2);
+
+        builder.Entity<RewardsAccount>().HasIndex(a => a.CustomerId).IsUnique();
+        builder.Entity<RewardsAccount>()
+            .HasOne(a => a.Customer).WithMany().HasForeignKey(a => a.CustomerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<RewardsTransaction>()
+            .HasOne(t => t.RewardsAccount).WithMany(a => a.Transactions).HasForeignKey(t => t.RewardsAccountId)
+            .OnDelete(DeleteBehavior.Cascade);
+        builder.Entity<RewardsTransaction>()
+            .HasOne(t => t.Order).WithMany().HasForeignKey(t => t.OrderId)
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.Entity<RewardsTransaction>().HasIndex(t => t.Reference);
+        // DB-level guarantee: an order can only ever earn once (Earned = 0).
+        builder.Entity<RewardsTransaction>()
+            .HasIndex(t => new { t.OrderId, t.Type })
+            .HasFilter("[OrderId] IS NOT NULL AND [Type] = 0")
+            .IsUnique();
 
 
         // --- Courier ---
@@ -440,5 +469,6 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         builder.Entity<Product>().Property(p => p.CostPrice).HasPrecision(18, 2);
         builder.Entity<Product>().Property(p => p.SellingPrice).HasPrecision(18, 2);
         builder.Entity<Product>().Property(p => p.CompareAtPrice).HasPrecision(18, 2);
+       
     }
 }

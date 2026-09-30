@@ -11,17 +11,20 @@ public class OrderFulfillmentService : IOrderFulfillmentService
     private readonly ApplicationDbContext _context;
     private readonly IInventoryService _inventoryService;
     private readonly IEmailSender _emailSender;
+    private readonly IRewardsService _rewards;
     private readonly ILogger<OrderFulfillmentService> _logger;
 
     public OrderFulfillmentService(
         ApplicationDbContext context,
         IInventoryService inventoryService,
         IEmailSender emailSender,
+        IRewardsService rewards,
         ILogger<OrderFulfillmentService> logger)
     {
         _context = context;
         _inventoryService = inventoryService;
         _emailSender = emailSender;
+        _rewards = rewards;
         _logger = logger;
     }
 
@@ -30,9 +33,11 @@ public class OrderFulfillmentService : IOrderFulfillmentService
         CartViewModel cart,
         PaymentMethod paymentMethod,
         string reference,
-        CustomerAddress? deliveryAddress)
+        CustomerAddress? deliveryAddress,
+        decimal pointsDiscount = 0m)
     {
-        var vat = TaxSettings.CalculateVat(cart.SubTotal);
+        var discount = Math.Min(Math.Max(pointsDiscount, 0m), cart.SubTotal);
+        var vat = TaxSettings.CalculateVat(cart.SubTotal, discount);
 
         var order = new Order
         {
@@ -42,9 +47,9 @@ public class OrderFulfillmentService : IOrderFulfillmentService
             PaymentMethod = paymentMethod,
             CustomerId = customer.Id,
             SubTotal = cart.SubTotal,
-            DiscountTotal = 0,
+            DiscountTotal = discount,
             TaxTotal = vat,
-            GrandTotal = cart.SubTotal + vat,
+            GrandTotal = cart.SubTotal - discount + vat,
 
             // Snapshot the address at the moment of purchase - if the customer edits or
             // deletes this saved address later, this order still shows where it actually went.
@@ -89,9 +94,25 @@ public class OrderFulfillmentService : IOrderFulfillmentService
         {
             UserId = customer.Id,
             Action = "OnlineOrderPlaced",
-            Details = $"Placed order {order.OrderNumber} for {order.GrandTotal:C} ({cart.Lines.Count} line item(s))."
+            Details = $"Placed order {order.OrderNumber} for {order.GrandTotal:C} ({cart.Lines.Count} line item(s))." +
+                      (discount > 0 ? $" Points discount {discount:C}." : "")
         });
         await _context.SaveChangesAsync();
+
+        // Rewards run AFTER the order is committed and must never break it - the money has
+        // already moved, so a rewards failure is logged for manual follow-up, not thrown.
+        var pointsEarned = 0;
+        try
+        {
+            if (discount > 0)
+                await _rewards.LinkOrderAsync(reference, order.OrderId);
+
+            pointsEarned = (await _rewards.EarnForOrderAsync(order)).Points;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Order {OrderNumber} was placed but awarding/linking reward points failed.", order.OrderNumber);
+        }
 
         if (!string.IsNullOrWhiteSpace(customer.Email))
         {
@@ -104,6 +125,9 @@ public class OrderFulfillmentService : IOrderFulfillmentService
                     {(string.IsNullOrWhiteSpace(order.DeliveryAddressLine2) ? "" : "<br/>" + order.DeliveryAddressLine2)}<br/>
                     {order.DeliveryCity}, {order.DeliveryProvince} {order.DeliveryPostalCode}</p>";
 
+            var discountLine = order.DiscountTotal > 0 ? $"Points discount: -{order.DiscountTotal:C}<br/>" : "";
+            var pointsLine = pointsEarned > 0 ? $"<p>You earned <strong>{pointsEarned}</strong> FixRewards points on this order.</p>" : "";
+
             var body = $@"
                 <h2>Thanks for your order, {customer.FullName}!</h2>
                 <p>Order <strong>{order.OrderNumber}</strong> has been received and is being processed.</p>
@@ -111,8 +135,9 @@ public class OrderFulfillmentService : IOrderFulfillmentService
                     <thead><tr><th>Item</th><th>Qty</th><th>Unit Price</th><th>Line Total</th></tr></thead>
                     <tbody>{itemsHtml}</tbody>
                 </table>
-                <p>Subtotal: {order.SubTotal:C}<br/>VAT (15%): {order.TaxTotal:C}<br/>
+                <p>Subtotal: {order.SubTotal:C}<br/>{discountLine}VAT (15%): {order.TaxTotal:C}<br/>
                 <strong>Total: {order.GrandTotal:C}</strong></p>
+                {pointsLine}
                 {addressHtml}
                 <p>You can track this order any time under My Orders.</p>";
 

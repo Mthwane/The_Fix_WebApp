@@ -7,8 +7,9 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using The__Fix_WebApp.Services;
+using System.Globalization;
 using System.Net;
+using The__Fix_WebApp.Services;
 
 namespace FashionFix.Web.Controllers;
 
@@ -22,13 +23,16 @@ namespace FashionFix.Web.Controllers;
 [Authorize(Roles = "Customer")]
 public class PaymentsController : Controller
 {
+    private readonly IRewardsService _rewards;
     private readonly ApplicationDbContext _context;
     private readonly IOrderFulfillmentService _orderFulfillment;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly ILogger<PaymentsController> _logger;
 
+
     public PaymentsController(
         ApplicationDbContext context,
+        IRewardsService rewards,
         IOrderFulfillmentService orderFulfillment,
         UserManager<ApplicationUser> userManager,
         ILogger<PaymentsController> logger)
@@ -37,6 +41,7 @@ public class PaymentsController : Controller
         _orderFulfillment = orderFulfillment;
         _userManager = userManager;
         _logger = logger;
+        _rewards = rewards;
     }
 
     // GET: /Payments/Callback?reference=WEB-xxxx&trxref=WEB-xxxx
@@ -82,8 +87,13 @@ public class PaymentsController : Controller
         // page" window, but this check is the belt-and-braces backstop: it catches anything
         // that could still cause a mismatch (a clock/rounding edge case, a gateway anomaly)
         // rather than ever silently creating an order for a different amount than was paid.
-        var expectedVat = TaxSettings.CalculateVat(cart.SubTotal);
-        var expectedTotal = cart.SubTotal + expectedVat;
+        var pendingPoints = HttpContext.Session.GetInt32("PendingPointsRedeemed") ?? 0;
+        var pendingPointsDiscount = 0m;
+        if (pendingPoints > 0)
+            decimal.TryParse(HttpContext.Session.GetString("PendingPointsDiscount"), NumberStyles.Number, CultureInfo.InvariantCulture, out pendingPointsDiscount);
+
+        var expectedVat = TaxSettings.CalculateVat(cart.SubTotal, pendingPointsDiscount);
+        var expectedTotal = cart.SubTotal - pendingPointsDiscount + expectedVat;
         if (Math.Abs(expectedTotal - verifyResult.AmountRands) > 0.01m)
         {
             _logger.LogError(
@@ -125,7 +135,19 @@ public class PaymentsController : Controller
             ? await _context.CustomerAddresses.FirstOrDefaultAsync(a => a.CustomerAddressId == pendingAddressId && a.CustomerId == user.Id)
             : null;
 
-        var order = await _orderFulfillment.CreateOnlineOrderAsync(user, cart, paymentMethod, actualReference, deliveryAddress);
+        if (pendingPoints > 0)
+        {
+            var redeemResult = await _rewards.RedeemAsync(user.Id, pendingPoints, actualReference);
+            if (!redeemResult.Success)
+            {
+                _logger.LogError("Payment {Reference} verified but redeeming {Points} points failed: {Error}",
+                    actualReference, pendingPoints, redeemResult.ErrorMessage);
+                this.ToastError($"Your payment succeeded but we couldn't apply your reward points ({redeemResult.ErrorMessage}). Please contact support with reference {actualReference}.");
+                return RedirectToAction("Index", "Shop");
+            }
+        }
+
+        var order = await _orderFulfillment.CreateOnlineOrderAsync(user, cart, paymentMethod, actualReference, deliveryAddress, pendingPointsDiscount);
 
         // If the customer ticked "save this card" and the bank allows the card to be
         // charged again later, remember it for next time - dedup by AuthorizationCode so
@@ -159,6 +181,8 @@ public class PaymentsController : Controller
         HttpContext.Session.Remove("PendingPaymentMethod");
         HttpContext.Session.Remove("PendingAddressId");
         HttpContext.Session.Remove("PendingSaveCard");
+        HttpContext.Session.Remove("PendingPointsRedeemed");
+        HttpContext.Session.Remove("PendingPointsDiscount");
 
         this.ToastSuccess($"Payment confirmed - order {order.OrderNumber} placed for {order.GrandTotal:C}.");
 

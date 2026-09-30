@@ -67,6 +67,10 @@
             {
                 <a class="@NavClass("SupportTickets")" asp-controller="SupportTickets" asp-action="Index">Support Tickets</a>
             }
+            @if (Can(Permissions.RewardsManage))
+            {
+                <a class="@NavClass("RewardsAdmin")" asp-controller="RewardsAdmin" asp-action="Index">Rewards</a>
+            }
 
 @if (Can(Permissions.SuppliersManage) || Can(Permissions.PurchaseOrdersManage) || Can(Permissions.ReturnsProcess))
 {

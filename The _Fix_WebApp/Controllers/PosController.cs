@@ -19,19 +19,22 @@ public class PosController : Controller
     private readonly IEmailSender _emailSender;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly ILogger<PosController> _logger;
+    private readonly IRewardsService _rewardsService;
 
     public PosController(
-        ApplicationDbContext context,
-        IInventoryService inventoryService,
-        IEmailSender emailSender,
-        UserManager<ApplicationUser> userManager,
-        ILogger<PosController> logger)
+    ApplicationDbContext context,
+    IInventoryService inventoryService,
+    IEmailSender emailSender,
+    UserManager<ApplicationUser> userManager,
+    ILogger<PosController> logger,
+    IRewardsService rewardsService)
     {
         _context = context;
         _inventoryService = inventoryService;
         _emailSender = emailSender;
         _userManager = userManager;
         _logger = logger;
+        _rewardsService = rewardsService;
     }
 
     // GET: /Pos - the till interface for staff.
@@ -270,6 +273,12 @@ public class PosController : Controller
                 Details = $"Processed sale {order.OrderNumber} for {order.GrandTotal:C} ({model.CartItems.Count} line item(s))."
             });
             await _context.SaveChangesAsync();
+            var pointsEarned = 0;
+            if (!string.IsNullOrWhiteSpace(order.CustomerId))
+            {
+                try { pointsEarned = (await _rewardsService.EarnForOrderAsync(order)).Points; }
+                catch (Exception ex) { _logger.LogError(ex, "Sale {OrderNumber} completed but awarding reward points failed.", order.OrderNumber); }
+            }
 
             // Digital receipt (US-07): an explicit ReceiptEmail typed at the till takes
             // priority (covers walk-in customers with no account); otherwise fall back to
@@ -305,8 +314,14 @@ public class PosController : Controller
                 await _emailSender.SendAsync(recipientEmail, $"Receipt - {order.OrderNumber}", body);
             }
 
-            this.ToastSuccess($"Sale {order.OrderNumber} completed - {order.GrandTotal:C} ({model.CartItems.Count} item(s))." +
-                (string.IsNullOrWhiteSpace(recipientEmail) ? "" : $" Receipt emailed to {recipientEmail}."));
+            this.ToastSuccess(
+    $"Sale {order.OrderNumber} completed - {order.GrandTotal:C} ({model.CartItems.Count} item(s))." +
+    (string.IsNullOrWhiteSpace(recipientEmail)
+        ? ""
+        : $" Receipt emailed to {recipientEmail}.") +
+    (pointsEarned > 0
+        ? $" Customer earned {pointsEarned} points."
+        : ""));
 
             if (newlyLowStock.Count > 0)
                 this.ToastWarning($"Now low on stock: {string.Join(", ", newlyLowStock)}.");

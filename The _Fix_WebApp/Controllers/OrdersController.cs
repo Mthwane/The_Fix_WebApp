@@ -15,37 +15,49 @@ namespace FashionFix.Web.Controllers;
 /// Where a placed order actually gets moved forward (US-08: "manage customer orders and
 /// track deliveries"). A customer checkout only ever creates an order in Processing status -
 /// nothing advances it automatically. Staff with the Manage Orders permission move it through
-/// Processing -&gt; Shipped -&gt; Delivered here, or cancel it if it can't be fulfilled.
+/// Processing -> Shipped -> Delivered here, or cancel it if it can't be fulfilled.
 /// </summary>
 [Authorize(Policy = Permissions.OrdersManage)]
 public class OrdersController : Controller
 {
     /// <summary>Statuses an order can still be cancelled from - once Delivered/Completed.</summary>
-    private static readonly OrderStatus[] CancellableStatuses = { OrderStatus.Pending, OrderStatus.Processing, OrderStatus.Shipped };
+    private static readonly OrderStatus[] CancellableStatuses =
+    {
+        OrderStatus.Pending,
+        OrderStatus.Processing,
+        OrderStatus.Shipped
+    };
 
     private readonly ApplicationDbContext _context;
     private readonly IInventoryService _inventoryService;
     private readonly IEmailSender _emailSender;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly ILogger<OrdersController> _logger;
+    private readonly IRewardsService _rewards;
 
     public OrdersController(
         ApplicationDbContext context,
         IInventoryService inventoryService,
         IEmailSender emailSender,
         UserManager<ApplicationUser> userManager,
-        ILogger<OrdersController> logger)
+        ILogger<OrdersController> logger,
+        IRewardsService rewardsService)
     {
         _context = context;
         _inventoryService = inventoryService;
         _emailSender = emailSender;
         _userManager = userManager;
         _logger = logger;
+        _rewards = rewardsService;
     }
 
     // GET: /Orders?category=&status=&type=&search=
     [HttpGet]
-    public async Task<IActionResult> Index(OrderCategory? category, OrderStatus? status, OrderType? type, string? search)
+    public async Task<IActionResult> Index(
+        OrderCategory? category,
+        OrderStatus? status,
+        OrderType? type,
+        string? search)
     {
         var query = _context.Orders
             .AsNoTracking()
@@ -65,15 +77,19 @@ public class OrdersController : Controller
             query = query.Where(o => o.Status == status);
         }
 
-        if (type.HasValue) query = query.Where(o => o.OrderType == type);
+        if (type.HasValue)
+            query = query.Where(o => o.OrderType == type);
 
         if (!string.IsNullOrWhiteSpace(search))
         {
             var term = search.Trim();
+
             query = query.Where(o =>
                 o.OrderNumber.Contains(term) ||
                 (o.Customer != null && o.Customer.FullName.Contains(term)) ||
-                (o.Customer != null && o.Customer.Email != null && o.Customer.Email.Contains(term)));
+                (o.Customer != null &&
+                 o.Customer.Email != null &&
+                 o.Customer.Email.Contains(term)));
         }
 
         ViewBag.SelectedCategory = category;
@@ -83,25 +99,44 @@ public class OrdersController : Controller
 
         // Counts for the tab badges - computed from the same base filters (type/search)
         // so the numbers stay accurate no matter what else the user has selected.
-        var baseQuery = _context.Orders.AsNoTracking().AsQueryable();
-        if (type.HasValue) baseQuery = baseQuery.Where(o => o.OrderType == type);
+        var baseQuery = _context.Orders
+            .AsNoTracking()
+            .AsQueryable();
+
+        if (type.HasValue)
+            baseQuery = baseQuery.Where(o => o.OrderType == type);
+
         if (!string.IsNullOrWhiteSpace(search))
         {
             var term = search.Trim();
+
             baseQuery = baseQuery.Where(o =>
                 o.OrderNumber.Contains(term) ||
                 (o.Customer != null && o.Customer.FullName.Contains(term)) ||
-                (o.Customer != null && o.Customer.Email != null && o.Customer.Email.Contains(term)));
+                (o.Customer != null &&
+                 o.Customer.Email != null &&
+                 o.Customer.Email.Contains(term)));
         }
+
         ViewBag.CategoryCounts = new Dictionary<OrderCategory, int>
         {
-            [OrderCategory.Pending] = await baseQuery.CountAsync(o => OrderCategorizer.StatusesFor[OrderCategory.Pending].Contains(o.Status)),
-            [OrderCategory.Completed] = await baseQuery.CountAsync(o => OrderCategorizer.StatusesFor[OrderCategory.Completed].Contains(o.Status)),
-            [OrderCategory.Past] = await baseQuery.CountAsync(o => OrderCategorizer.StatusesFor[OrderCategory.Past].Contains(o.Status)),
+            [OrderCategory.Pending] = await baseQuery.CountAsync(
+                o => OrderCategorizer.StatusesFor[OrderCategory.Pending].Contains(o.Status)),
+
+            [OrderCategory.Completed] = await baseQuery.CountAsync(
+                o => OrderCategorizer.StatusesFor[OrderCategory.Completed].Contains(o.Status)),
+
+            [OrderCategory.Past] = await baseQuery.CountAsync(
+                o => OrderCategorizer.StatusesFor[OrderCategory.Past].Contains(o.Status))
         };
+
         ViewBag.AllCount = await baseQuery.CountAsync();
 
-        var orders = await query.OrderByDescending(o => o.DateCreated).Take(200).ToListAsync();
+        var orders = await query
+            .OrderByDescending(o => o.DateCreated)
+            .Take(200)
+            .ToListAsync();
+
         return View(orders);
     }
 
@@ -112,11 +147,15 @@ public class OrdersController : Controller
         var order = await _context.Orders
             .Include(o => o.Customer)
             .Include(o => o.ProcessedByUser)
-            .Include(o => o.OrderItems).ThenInclude(oi => oi.Product)
-            .Include(o => o.OrderItems).ThenInclude(oi => oi.ProductVariant)
+            .Include(o => o.OrderItems)
+                .ThenInclude(oi => oi.Product)
+            .Include(o => o.OrderItems)
+                .ThenInclude(oi => oi.ProductVariant)
             .FirstOrDefaultAsync(o => o.OrderId == id);
 
-        if (order is null) return NotFound();
+        if (order is null)
+            return NotFound();
+
         return View(order);
     }
 
@@ -126,8 +165,12 @@ public class OrdersController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> AdvanceStatus(int id)
     {
-        var order = await _context.Orders.Include(o => o.Customer).FirstOrDefaultAsync(o => o.OrderId == id);
-        if (order is null) return NotFound();
+        var order = await _context.Orders
+            .Include(o => o.Customer)
+            .FirstOrDefaultAsync(o => o.OrderId == id);
+
+        if (order is null)
+            return NotFound();
 
         var next = order.Status switch
         {
@@ -139,13 +182,18 @@ public class OrdersController : Controller
 
         if (next is null)
         {
-            this.ToastError($"Order {order.OrderNumber} is already {order.Status} - nothing further to advance.");
+            this.ToastError(
+                $"Order {order.OrderNumber} is already {order.Status} - nothing further to advance.");
+
             return RedirectToAction(nameof(Index));
         }
 
         var previousStatus = order.Status;
+
         order.Status = next.Value;
-        if (next == OrderStatus.Delivered) order.DateFulfilled = DateTime.UtcNow;
+
+        if (next == OrderStatus.Delivered)
+            order.DateFulfilled = DateTime.UtcNow;
 
         _context.AuditLogs.Add(new AuditLog
         {
@@ -153,18 +201,22 @@ public class OrdersController : Controller
             Action = "OrderStatusChanged",
             Details = $"Order {order.OrderNumber}: {previousStatus} -> {order.Status}."
         });
+
         await _context.SaveChangesAsync();
 
-        this.ToastSuccess($"Order {order.OrderNumber} is now {order.Status}.");
-
+        this.ToastSuccess(
+            $"Order {order.OrderNumber} is now {order.Status}.");
 
         // Best-effort customer notification on each status change.
-        if (order.Customer is not null && !string.IsNullOrWhiteSpace(order.Customer.Email))
+        if (order.Customer is not null &&
+            !string.IsNullOrWhiteSpace(order.Customer.Email))
         {
             await _emailSender.SendAsync(
                 order.Customer.Email,
                 $"Order {order.OrderNumber} update: {order.Status}",
-                $"<p>Hi {order.Customer.FullName},</p><p>Your order <strong>{order.OrderNumber}</strong> is now <strong>{order.Status}</strong>.</p>");
+                $"<p>Hi {order.Customer.FullName},</p>" +
+                $"<p>Your order <strong>{order.OrderNumber}</strong> is now " +
+                $"<strong>{order.Status}</strong>.</p>");
         }
 
         return RedirectToAction(nameof(Index));
@@ -181,11 +233,14 @@ public class OrdersController : Controller
             .Include(o => o.OrderItems)
             .FirstOrDefaultAsync(o => o.OrderId == id);
 
-        if (order is null) return NotFound();
+        if (order is null)
+            return NotFound();
 
         if (!CancellableStatuses.Contains(order.Status))
         {
-            this.ToastError($"Order {order.OrderNumber} is {order.Status} and can no longer be cancelled.");
+            this.ToastError(
+                $"Order {order.OrderNumber} is {order.Status} and can no longer be cancelled.");
+
             return RedirectToAction(nameof(Index));
         }
 
@@ -197,38 +252,84 @@ public class OrdersController : Controller
             // from before the variant rework may have a null ProductVariantId - those can't
             // be restocked automatically (we no longer know which size/colour to credit)
             // and are skipped with a log entry rather than throwing.
-            var restockLines = order.OrderItems.Where(i => i.ProductVariantId.HasValue)
-                .Select(i => (i.ProductVariantId!.Value, i.Quantity)).ToList();
-            var unrestockable = order.OrderItems.Where(i => !i.ProductVariantId.HasValue).ToList();
+            var restockLines = order.OrderItems
+                .Where(i => i.ProductVariantId.HasValue)
+                .Select(i => (i.ProductVariantId!.Value, i.Quantity))
+                .ToList();
+
+            var unrestockable = order.OrderItems
+                .Where(i => !i.ProductVariantId.HasValue)
+                .ToList();
+
             if (unrestockable.Count > 0)
-                _logger.LogWarning("Order {OrderNumber} cancelled with {Count} pre-variant line item(s) that could not be auto-restocked.", order.OrderNumber, unrestockable.Count);
+            {
+                _logger.LogWarning(
+                    "Order {OrderNumber} cancelled with {Count} pre-variant line item(s) that could not be auto-restocked.",
+                    order.OrderNumber,
+                    unrestockable.Count);
+            }
 
             if (restockLines.Count > 0)
-                await _inventoryService.IncrementStockBatchAsync(restockLines, InventoryChangeReason.OrderCancelled);
+            {
+                await _inventoryService.IncrementStockBatchAsync(
+                    restockLines,
+                    InventoryChangeReason.OrderCancelled);
+            }
 
             _context.AuditLogs.Add(new AuditLog
             {
                 UserId = _userManager.GetUserId(User),
                 Action = "OrderCancelled",
-                Details = $"Cancelled order {order.OrderNumber}.{(string.IsNullOrWhiteSpace(reason) ? "" : $" Reason: {reason}")}"
+                Details =
+                    $"Cancelled order {order.OrderNumber}." +
+                    (string.IsNullOrWhiteSpace(reason)
+                        ? ""
+                        : $" Reason: {reason}")
             });
+
             await _context.SaveChangesAsync();
 
-            this.ToastSuccess($"Order {order.OrderNumber} was cancelled and stock restored.");
+            // Best-effort reversal of reward points earned from this order.
+            // The cancellation itself has already been committed, so a rewards failure
+            // should be logged rather than causing the cancellation to appear unsuccessful.
+            try
+            {
+                await _rewards.ReverseForCancelledOrderAsync(order.OrderId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Order {OrderNumber} cancelled but reversing its reward points failed.",
+                    order.OrderNumber);
+            }
 
-            if (order.Customer is not null && !string.IsNullOrWhiteSpace(order.Customer.Email))
+            this.ToastSuccess(
+                $"Order {order.OrderNumber} was cancelled and stock restored.");
+
+            if (order.Customer is not null &&
+                !string.IsNullOrWhiteSpace(order.Customer.Email))
             {
                 await _emailSender.SendAsync(
                     order.Customer.Email,
                     $"Order {order.OrderNumber} cancelled",
-                    $"<p>Hi {order.Customer.FullName},</p><p>Your order <strong>{order.OrderNumber}</strong> has been cancelled." +
-                    (string.IsNullOrWhiteSpace(reason) ? "" : $" Reason: {reason}") + "</p>");
+                    $"<p>Hi {order.Customer.FullName},</p>" +
+                    $"<p>Your order <strong>{order.OrderNumber}</strong> has been cancelled." +
+                    (string.IsNullOrWhiteSpace(reason)
+                        ? ""
+                        : $" Reason: {reason}") +
+                    "</p>");
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to cancel order {OrderId}.", id);
-            this.ToastError("Something went wrong cancelling this order - please try again.");
+            _logger.LogError(
+                ex,
+                "Failed to cancel order {OrderId}.",
+                id);
+
+            this.ToastError(
+                "Something went wrong cancelling this order - please try again.");
         }
 
         return RedirectToAction(nameof(Index));
@@ -239,15 +340,19 @@ public class OrdersController : Controller
     // POST: /Orders/BookDelivery/5 - creates the waybill at The Courier Guy for an online order.
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> BookDelivery(int id, [FromServices] ICourierService courier)
+    public async Task<IActionResult> BookDelivery(
+        int id,
+        [FromServices] ICourierService courier)
     {
         var order = await _context.Orders
             .Include(o => o.Customer)
             .FirstOrDefaultAsync(o => o.OrderId == id);
 
-        if (order is null) return NotFound();
+        if (order is null)
+            return NotFound();
 
         var result = await courier.CreateOrderShipmentAsync(order);
+
         if (!result.Success)
         {
             this.ToastError(result.ErrorMessage!);
@@ -261,18 +366,25 @@ public class OrdersController : Controller
 
         await _context.SaveChangesAsync();
 
-        this.ToastSuccess($"Waybill {result.Data!.TrackingReference} created for {order.OrderNumber}.");
+        this.ToastSuccess(
+            $"Waybill {result.Data!.TrackingReference} created for {order.OrderNumber}.");
+
         return RedirectToAction(nameof(Index));
     }
 
     // POST: /Orders/RefreshTracking/5 - pull fresh tracking for one shipment on demand.
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> RefreshTracking(int id, [FromServices] ICourierService courier)
+    public async Task<IActionResult> RefreshTracking(
+        int id,
+        [FromServices] ICourierService courier)
     {
         var result = await courier.RefreshTrackingAsync(id, force: true);
-        if (!result.Success) this.ToastError(result.ErrorMessage!);
-        else this.ToastSuccess($"Tracking updated - {result.Data!.Stage}.");
+
+        if (!result.Success)
+            this.ToastError(result.ErrorMessage!);
+        else
+            this.ToastSuccess($"Tracking updated - {result.Data!.Stage}.");
 
         return RedirectToAction(nameof(Index));
     }
@@ -281,15 +393,22 @@ public class OrdersController : Controller
     // cached status for every live shipment and only hits the courier for ones past the cache
     // window, so a page polling every 30s doesn't turn into 30s-interval API hammering.
     [HttpGet]
-    public async Task<IActionResult> TrackingStatus([FromServices] ICourierService courier)
+    public async Task<IActionResult> TrackingStatus(
+        [FromServices] ICourierService courier)
     {
         var shipments = await _context.CourierShipments
             .Include(s => s.Order)
-            .Where(s => s.OrderId != null && s.Status != "delivered" && s.Status != "cancelled")
+            .Where(s =>
+                s.OrderId != null &&
+                s.Status != "delivered" &&
+                s.Status != "cancelled")
             .ToListAsync();
 
         foreach (var shipment in shipments)
-            await courier.RefreshTrackingAsync(shipment.CourierShipmentId); // respects cache window
+        {
+            await courier.RefreshTrackingAsync(
+                shipment.CourierShipmentId);
+        }
 
         return Json(shipments.Select(s => new
         {
@@ -304,9 +423,12 @@ public class OrdersController : Controller
 
     // GET: /Orders/Waybill/5 - redirects to the courier's signed PDF (expires after 24h).
     [HttpGet]
-    public async Task<IActionResult> Waybill(int id, [FromServices] ICourierService courier)
+    public async Task<IActionResult> Waybill(
+        int id,
+        [FromServices] ICourierService courier)
     {
         var result = await courier.GetLabelUrlAsync(id);
+
         if (!result.Success)
         {
             this.ToastError(result.ErrorMessage!);
@@ -316,4 +438,3 @@ public class OrdersController : Controller
         return Redirect(result.Data!);
     }
 }
-
