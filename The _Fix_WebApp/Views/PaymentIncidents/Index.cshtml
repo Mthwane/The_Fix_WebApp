@@ -1,0 +1,66 @@
+@model List<PaymentIncident>
+@{
+    ViewData["Title"] = "Payment Incidents";
+    Layout = "_StaffLayout";
+    var showAll = ViewBag.ShowAll as bool? ?? false;
+}
+<div class="stf-content">
+    <span class="stf-eyebrow">Orders</span>
+    <h1 style="margin-bottom:6px;">Payment Incidents</h1>
+    <p style="font-size:0.85rem;color:var(--stf-on-surface-variant);margin-bottom:16px;">
+        Checkouts where money was taken but no order could be created. Most are returned to the customer automatically;
+        the ones below still need a person.
+    </p>
+
+    <div style="margin-bottom:14px;font-size:0.85rem;">
+        @if (showAll) { <a asp-action="Index" asp-route-showAll="false">Show only open incidents</a> }
+        else { <a asp-action="Index" asp-route-showAll="true">Show all incidents</a> }
+    </div>
+
+    <table class="stf-table">
+        <thead>
+            <tr>
+                <th>Date</th><th>Reference</th><th>Customer</th>
+                <th style="text-align:right;">Card</th><th style="text-align:right;">FixCash</th><th style="text-align:right;">Points</th>
+                <th>Status</th><th>Detail</th><th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var i in Model)
+            {
+                <tr>
+                    <td>@i.DateCreated.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</td>
+                    <td>@i.Reference</td>
+                    <td>@(i.Customer?.FullName ?? "-")<div style="font-size:0.75rem;color:var(--stf-on-surface-variant);">@i.Customer?.Email</div></td>
+                    <td style="text-align:right;">@i.CardAmount.ToString("C")<div style="font-size:0.72rem;">@(i.CardAmount <= 0 ? "" : i.CardRefunded ? "refunded" : "NOT refunded")</div></td>
+                    <td style="text-align:right;">@i.WalletAmount.ToString("C")<div style="font-size:0.72rem;">@(i.WalletAmount <= 0 ? "" : i.WalletRestored ? "restored" : "NOT restored")</div></td>
+                    <td style="text-align:right;">@i.PointsRedeemed<div style="font-size:0.72rem;">@(i.PointsRedeemed <= 0 ? "" : i.PointsRestored ? "restored" : "NOT restored")</div></td>
+                    <td>@i.Status</td>
+                    <td style="max-width:280px;font-size:0.8rem;">
+                        @i.Reason
+                        @if (!string.IsNullOrWhiteSpace(i.ResolutionNote)) { <div style="color:var(--stf-on-surface-variant);">Resolved: @i.ResolutionNote</div> }
+                    </td>
+                    <td style="min-width:220px;">
+                        @if (i.Status == PaymentIncidentStatus.NeedsAttention)
+                        {
+                            <form asp-action="Retry" asp-route-id="@i.PaymentIncidentId" method="post" style="margin-bottom:6px;">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="stf-btn stf-btn-outline">Retry returns</button>
+                            </form>
+                            <form asp-action="Resolve" asp-route-id="@i.PaymentIncidentId" method="post" style="display:flex;gap:6px;">
+                                @Html.AntiForgeryToken()
+                                <input type="text" name="note" placeholder="How was it resolved?" required minlength="5" maxlength="500"
+                                       style="flex:1;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:6px 10px;font-size:0.8rem;" />
+                                <button type="submit" class="stf-btn stf-btn-primary" onclick="return confirm('Mark this incident as resolved?');">Done</button>
+                            </form>
+                        }
+                    </td>
+                </tr>
+            }
+            @if (!Model.Any())
+            {
+                <tr><td colspan="9" style="color:var(--stf-on-surface-variant);">Nothing needs attention.</td></tr>
+            }
+        </tbody>
+    </table>
+</div>

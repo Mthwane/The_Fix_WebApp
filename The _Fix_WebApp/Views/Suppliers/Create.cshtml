@@ -1,4 +1,4 @@
-﻿@model Supplier
+@model Supplier
 @{
     ViewData["Title"] = "Add Supplier";
     Layout = "_StaffLayout";
@@ -40,6 +40,10 @@
         <h5 style="font-family:'Newsreader',serif;font-size:1.05rem;margin:8px 0 12px;">Collection Address</h5>
         <p style="font-size:0.8rem;color:var(--stf-on-surface-variant);margin-top:-8px;margin-bottom:14px;">Used as the pickup point when The Courier Guy is booked to collect a restock delivery. Leave blank if you'll always arrange collection yourself.</p>
 
+        <partial name="_AddressSearch" model='new FashionFix.Web.Models.ViewModels.AddressSearchOptions {
+            StreetId = "StreetAddress", SuburbId = "LocalArea", CityId = "City",
+            ProvinceId = "Province", PostalCodeId = "PostalCode", Label = "Search for the collection address" }' />
+
         <label asp-for="StreetAddress" style="@L"></label>
         <input asp-for="StreetAddress" style="@F" />
 
@@ -67,4 +71,4 @@
             <a asp-action="Index" style="font-size:0.85rem;color:var(--stf-on-surface-variant);align-self:center;">Cancel</a>
         </div>
     </form>
-</div>
+</div>

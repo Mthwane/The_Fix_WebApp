@@ -10,6 +10,17 @@ namespace FashionFix.Web.Services;
 /// PO receipt, return, manual adjustment) goes through the same auditing logic. Stock lives
 /// on ProductVariant (one row per size/colour) rather than on Product itself, so every
 /// method here takes a variantId, not a productId.
+///
+/// CONCURRENCY: stock is never changed by "read the number, add/subtract in memory, write the new
+/// number back" - that lets two simultaneous sales each read 1 and both succeed. Every change is ONE
+/// atomic UPDATE (StockQuantity = StockQuantity -/+ n), and a decrement is conditional
+/// (WHERE StockQuantity >= n), so the database itself refuses to oversell however many requests land
+/// at the same moment.
+///
+/// TRANSACTIONS: a multi-line change runs in one transaction so a basket is applied fully or not at
+/// all. If the caller already opened a transaction (POS checkout and online order creation do, so the
+/// order row and its stock movement commit or roll back together) this joins it and leaves
+/// commit/rollback to the caller.
 /// </summary>
 public class InventoryService : IInventoryService
 {
@@ -31,56 +42,10 @@ public class InventoryService : IInventoryService
     }
 
     public async Task DecrementStockAsync(int variantId, int quantity, InventoryChangeReason reason = InventoryChangeReason.Sale)
-    {
-        var variant = await _context.ProductVariants.Include(v => v.Product).FirstOrDefaultAsync(v => v.ProductVariantId == variantId)
-            ?? throw new InvalidOperationException($"Product variant {variantId} not found.");
-        if (quantity <= 0)
-            throw new ArgumentOutOfRangeException(nameof(quantity), "Decrement quantity must be positive.");
-        if (variant.StockQuantity < quantity)
-            throw new InvalidOperationException($"Cannot decrement stock for '{variant.Product.Name} ({variant.Size}/{variant.Color})' below zero (have {variant.StockQuantity}, need {quantity}).");
-
-        var wasLowStock = variant.IsLowStock;
-
-        variant.StockQuantity -= quantity;
-        variant.DateUpdated = DateTime.UtcNow;
-
-        _context.InventoryTransactions.Add(new InventoryTransaction
-        {
-            ProductId = variant.ProductId,
-            ProductVariantId = variantId,
-            QuantityChange = -quantity,
-            Reason = reason
-        });
-
-        await _context.SaveChangesAsync();
-
-        // Only notify the moment stock CROSSES INTO low-stock territory, not on every
-        // sale after it's already low - otherwise managers get spammed with one email
-        // per sale of an already-known-low item.
-        if (variant.IsLowStock && !wasLowStock)
-            await NotifyManagersOfLowStockAsync(new List<ProductVariant> { variant });
-    }
+        => await DecrementStockBatchAsync(new[] { (variantId, quantity) }, reason);
 
     public async Task IncrementStockAsync(int variantId, int quantity, InventoryChangeReason reason = InventoryChangeReason.PurchaseOrderReceived)
-    {
-        var variant = await _context.ProductVariants.FindAsync(variantId)
-            ?? throw new InvalidOperationException($"Product variant {variantId} not found.");
-
-        if (quantity <= 0)
-            throw new ArgumentOutOfRangeException(nameof(quantity), "Increment quantity must be positive.");
-        variant.StockQuantity += quantity;
-        variant.DateUpdated = DateTime.UtcNow;
-
-        _context.InventoryTransactions.Add(new InventoryTransaction
-        {
-            ProductId = variant.ProductId,
-            ProductVariantId = variantId,
-            QuantityChange = quantity,
-            Reason = reason
-        });
-
-        await _context.SaveChangesAsync();
-    }
+        => await IncrementStockBatchAsync(new[] { (variantId, quantity) }, reason);
 
     public async Task<List<ProductVariant>> GetLowStockVariantsAsync()
     {
@@ -93,89 +58,166 @@ public class InventoryService : IInventoryService
 
     public async Task<bool> IsLowStockAsync(int variantId)
     {
-        var variant = await _context.ProductVariants.Include(v => v.Product).FirstOrDefaultAsync(v => v.ProductVariantId == variantId);
+        var variant = await _context.ProductVariants.AsNoTracking().Include(v => v.Product)
+            .FirstOrDefaultAsync(v => v.ProductVariantId == variantId);
         return variant is not null && variant.IsLowStock;
     }
 
     public async Task<List<ProductVariant>> DecrementStockBatchAsync(IEnumerable<(int VariantId, int Quantity)> lines, InventoryChangeReason reason = InventoryChangeReason.Sale)
     {
-        var linesList = lines.ToList();
-        if (linesList.Count == 0) return new List<ProductVariant>();
+        var grouped = Aggregate(lines);
+        if (grouped.Count == 0) return new List<ProductVariant>();
 
-        // One query for every variant in the cart instead of one query per line.
-        var variantIds = linesList.Select(l => l.VariantId).Distinct().ToList();
-        var variants = await _context.ProductVariants
-            .Include(v => v.Product)
-            .Where(v => variantIds.Contains(v.ProductVariantId))
-            .ToDictionaryAsync(v => v.ProductVariantId);
+        var ids = grouped.Keys.ToList();
+        var before = await LoadFreshAsync(ids);
+        var wasLowStockIds = before.Where(v => v.IsLowStock).Select(v => v.ProductVariantId).ToHashSet();
+        var productIds = before.ToDictionary(v => v.ProductVariantId, v => v.ProductId);
 
-        // Snapshot "already low" BEFORE mutating, so we can tell who just crossed the line.
-        var wasLowStockIds = variants.Values.Where(v => v.IsLowStock).Select(v => v.ProductVariantId).ToHashSet();
-
-        foreach (var (variantId, quantity) in linesList)
+        await InTransactionAsync(async () =>
         {
-            if (!variants.TryGetValue(variantId, out var variant))
-                throw new InvalidOperationException($"Product variant {variantId} not found.");
-            if (quantity <= 0)
-                throw new ArgumentOutOfRangeException(nameof(quantity), "Decrement quantity must be positive.");
-            if (variant.StockQuantity < quantity)
-                throw new InvalidOperationException($"Cannot decrement stock for '{variant.Product.Name} ({variant.Size}/{variant.Color})' below zero (have {variant.StockQuantity}, need {quantity}).");
+            var now = DateTime.UtcNow;
 
-            variant.StockQuantity -= quantity;
-            variant.DateUpdated = DateTime.UtcNow;
-
-            _context.InventoryTransactions.Add(new InventoryTransaction
+            // Ordered by id so two baskets touching the same variants always take their locks in the same order.
+            foreach (var (variantId, quantity) in grouped.OrderBy(g => g.Key))
             {
-                ProductId = variant.ProductId,
-                ProductVariantId = variantId,
-                QuantityChange = -quantity,
-                Reason = reason
-            });
-        }
+                if (!productIds.TryGetValue(variantId, out var productId))
+                    throw new InvalidOperationException($"Product variant {variantId} not found.");
 
-        // One commit for the whole basket instead of one commit per line.
-        await _context.SaveChangesAsync();
+                var affected = await _context.ProductVariants
+                    .Where(v => v.ProductVariantId == variantId && v.StockQuantity >= quantity)
+                    .ExecuteUpdateAsync(s => s
+                        .SetProperty(v => v.StockQuantity, v => v.StockQuantity - quantity)
+                        .SetProperty(v => v.DateUpdated, v => (DateTime?)now));
 
-        var newlyLowStock = variants.Values.Where(v => v.IsLowStock && !wasLowStockIds.Contains(v.ProductVariantId)).ToList();
+                if (affected == 0)
+                    throw await DescribeFailureAsync(variantId, quantity);
+
+                _context.InventoryTransactions.Add(new InventoryTransaction
+                {
+                    ProductId = productId,
+                    ProductVariantId = variantId,
+                    QuantityChange = -quantity,
+                    Reason = reason
+                });
+            }
+
+            await _context.SaveChangesAsync();
+        });
+
+        var after = await LoadFreshAsync(ids);
+
+        // Only notify the moment stock CROSSES INTO low-stock territory, not on every sale after
+        // it's already low - otherwise managers get one email per sale of an already-known-low item.
+        var newlyLowStock = after.Where(v => v.IsLowStock && !wasLowStockIds.Contains(v.ProductVariantId)).ToList();
         if (newlyLowStock.Count > 0)
             await NotifyManagersOfLowStockAsync(newlyLowStock);
 
-        return variants.Values.ToList();
+        return after;
     }
 
     public async Task<List<ProductVariant>> IncrementStockBatchAsync(IEnumerable<(int VariantId, int Quantity)> lines, InventoryChangeReason reason = InventoryChangeReason.PurchaseOrderReceived)
     {
-        var linesList = lines.ToList();
-        if (linesList.Count == 0) return new List<ProductVariant>();
+        var grouped = Aggregate(lines);
+        if (grouped.Count == 0) return new List<ProductVariant>();
 
-        var variantIds = linesList.Select(l => l.VariantId).Distinct().ToList();
-        var variants = await _context.ProductVariants
-            .Include(v => v.Product)
-            .Where(v => variantIds.Contains(v.ProductVariantId))
-            .ToDictionaryAsync(v => v.ProductVariantId);
+        var ids = grouped.Keys.ToList();
+        var existing = await LoadFreshAsync(ids);
+        var productIds = existing.ToDictionary(v => v.ProductVariantId, v => v.ProductId);
 
-        foreach (var (variantId, quantity) in linesList)
+        await InTransactionAsync(async () =>
         {
-            if (!variants.TryGetValue(variantId, out var variant))
-                throw new InvalidOperationException($"Product variant {variantId} not found.");
-            if (quantity <= 0)
-                throw new ArgumentOutOfRangeException(nameof(quantity), "Increment quantity must be positive.");
+            var now = DateTime.UtcNow;
 
-            variant.StockQuantity += quantity;
-            variant.DateUpdated = DateTime.UtcNow;
-
-            _context.InventoryTransactions.Add(new InventoryTransaction
+            foreach (var (variantId, quantity) in grouped.OrderBy(g => g.Key))
             {
-                ProductId = variant.ProductId,
-                ProductVariantId = variantId,
-                QuantityChange = quantity,
-                Reason = reason
-            });
+                if (!productIds.TryGetValue(variantId, out var productId))
+                    throw new InvalidOperationException($"Product variant {variantId} not found.");
+
+                var affected = await _context.ProductVariants
+                    .Where(v => v.ProductVariantId == variantId)
+                    .ExecuteUpdateAsync(s => s
+                        .SetProperty(v => v.StockQuantity, v => v.StockQuantity + quantity)
+                        .SetProperty(v => v.DateUpdated, v => (DateTime?)now));
+
+                if (affected == 0)
+                    throw new InvalidOperationException($"Product variant {variantId} not found.");
+
+                _context.InventoryTransactions.Add(new InventoryTransaction
+                {
+                    ProductId = productId,
+                    ProductVariantId = variantId,
+                    QuantityChange = quantity,
+                    Reason = reason
+                });
+            }
+
+            await _context.SaveChangesAsync();
+        });
+
+        return await LoadFreshAsync(ids);
+    }
+
+    // ---------- Helpers ----------
+
+    /// <summary>Merges duplicate variant lines (the same size/colour scanned twice) and validates quantities.</summary>
+    private static Dictionary<int, int> Aggregate(IEnumerable<(int VariantId, int Quantity)> lines)
+    {
+        var result = new Dictionary<int, int>();
+        foreach (var (variantId, quantity) in lines)
+        {
+            if (quantity <= 0)
+                throw new ArgumentOutOfRangeException(nameof(lines), "Stock change quantity must be positive.");
+            result[variantId] = result.TryGetValue(variantId, out var current) ? current + quantity : quantity;
+        }
+        return result;
+    }
+
+    /// <summary>Always reads current values from the database - the change tracker can hold stale copies
+    /// because the atomic UPDATEs above deliberately bypass it.</summary>
+    private async Task<List<ProductVariant>> LoadFreshAsync(List<int> ids) =>
+        await _context.ProductVariants
+            .AsNoTracking()
+            .Include(v => v.Product)
+            .Where(v => ids.Contains(v.ProductVariantId))
+            .ToListAsync();
+
+    private async Task<Exception> DescribeFailureAsync(int variantId, int requested)
+    {
+        var variant = await _context.ProductVariants
+            .AsNoTracking()
+            .Include(v => v.Product)
+            .FirstOrDefaultAsync(v => v.ProductVariantId == variantId);
+
+        if (variant is null)
+            return new InvalidOperationException($"Product variant {variantId} not found.");
+
+        return new InsufficientStockException(
+            variantId, $"{variant.Product.Name} ({variant.Size}/{variant.Color})", requested, variant.StockQuantity);
+    }
+
+    /// <summary>Runs the work in its own transaction unless the caller already has one, in which case the
+    /// caller owns commit and rollback.</summary>
+    private async Task InTransactionAsync(Func<Task> work)
+    {
+        if (_context.Database.CurrentTransaction is not null)
+        {
+            await work();
+            return;
         }
 
-        await _context.SaveChangesAsync();
-
-        return variants.Values.ToList();
+        await using var tx = await _context.Database.BeginTransactionAsync();
+        try
+        {
+            await work();
+            await tx.CommitAsync();
+        }
+        catch
+        {
+            await tx.RollbackAsync();
+            foreach (var entry in _context.ChangeTracker.Entries().Where(e => e.Entity is InventoryTransaction).ToList())
+                entry.State = EntityState.Detached; // those rows were rolled back
+            throw;
+        }
     }
 
     /// <summary>

@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Options;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -130,6 +130,44 @@ public class PaystackPaymentService : IPaymentService
         };
     }
 
+    public async Task<PaymentRefundResult> RefundTransactionAsync(string reference, decimal amountRands)
+    {
+        // NOTE: written against Paystack's documented POST /refund endpoint but not exercised against a
+        // live account - test it once with a small real transaction before relying on it.
+        var payload = new
+        {
+            transaction = reference,
+            amount = (long)Math.Round(amountRands * 100m, MidpointRounding.AwayFromZero)
+        };
+
+        var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+        var response = await _http.PostAsync("refund", content);
+        var body = await response.Content.ReadAsStringAsync();
+
+        using var doc = JsonDocument.Parse(body);
+        var root = doc.RootElement;
+
+        var accepted = response.IsSuccessStatusCode
+            && root.TryGetProperty("status", out var statusProp)
+            && statusProp.ValueKind == JsonValueKind.True;
+
+        if (!accepted)
+        {
+            return new PaymentRefundResult
+            {
+                Success = false,
+                ErrorMessage = root.TryGetProperty("message", out var msg) ? msg.GetString() : "Refund request failed."
+            };
+        }
+
+        string? gatewayStatus = null;
+        if (root.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Object
+            && data.TryGetProperty("status", out var s) && s.ValueKind == JsonValueKind.String)
+            gatewayStatus = s.GetString();
+
+        return new PaymentRefundResult { Success = true, GatewayStatus = gatewayStatus };
+    }
+
     /// <summary>
     /// Pulls Paystack's "authorization" object out of a verify/charge response. Only ever
     /// used to populate PaystackAuthorization for display + the reusable token - raw card
@@ -155,4 +193,4 @@ public class PaystackPaymentService : IPaymentService
             Reusable = auth.TryGetProperty("reusable", out var reusable) && reusable.GetBoolean()
         };
     }
-}
+}

@@ -54,6 +54,7 @@
             @if (Can(Permissions.OrdersManage))
             {
                 <a class="@NavClass("Orders")" asp-controller="Orders" asp-action="Index">Orders &amp; Dispatches</a>
+                <a class="@NavClass("PaymentIncidents")" asp-controller="PaymentIncidents" asp-action="Index">Payment Incidents</a>
             }
             @if (Can(Permissions.StorefrontManage))
             {

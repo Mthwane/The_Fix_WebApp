@@ -1,4 +1,5 @@
-﻿using FashionFix.Web.Data;
+using System.Globalization;
+using FashionFix.Web.Data;
 using FashionFix.Web.Models.Entities;
 using FashionFix.Web.Models.ViewModels;
 using FashionFix.Web.Security;
@@ -7,48 +8,55 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.Globalization;
-using System.Net;
 using The__Fix_WebApp.Services;
 
 namespace FashionFix.Web.Controllers;
 
 /// <summary>
 /// Handles the Paystack redirect back into the app. This is where an Order actually
-/// gets created - never in ShopController.Checkout - so nothing is marked paid,
+/// gets created for a new-card payment - never in ShopController.Checkout - so nothing is marked paid,
 /// and no stock is decremented, until the gateway has confirmed the money moved.
-/// (The other place an Order can be created is ShopController.Checkout itself, but only
-/// for the "charge a saved card instantly" path, which never leaves this app at all.)
+/// (The other place an Order can be created is ShopController.Checkout itself, for the
+/// "charge a saved card instantly" and "pay from FixCash" paths, which never leave this app.)
+///
+/// Whenever the card has been charged but the order can't be completed - session expired, stock sold out
+/// while paying, amount mismatch, a database fault - the case goes to IPaymentRecoveryService, which
+/// refunds/restores automatically where it safely can and records a PaymentIncident for staff otherwise.
 /// </summary>
 [Authorize(Roles = "Customer")]
 public class PaymentsController : Controller
 {
-    private readonly IRewardsService _rewards;
     private readonly ApplicationDbContext _context;
     private readonly IOrderFulfillmentService _orderFulfillment;
+    private readonly IWalletService _wallet;
+    private readonly IRewardsService _rewards;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly ILogger<PaymentsController> _logger;
 
-
     public PaymentsController(
         ApplicationDbContext context,
-        IRewardsService rewards,
         IOrderFulfillmentService orderFulfillment,
+        IWalletService wallet,
+        IRewardsService rewards,
         UserManager<ApplicationUser> userManager,
         ILogger<PaymentsController> logger)
     {
         _context = context;
         _orderFulfillment = orderFulfillment;
+        _wallet = wallet;
+        _rewards = rewards;
         _userManager = userManager;
         _logger = logger;
-        _rewards = rewards;
     }
 
     // GET: /Payments/Callback?reference=WEB-xxxx&trxref=WEB-xxxx
     // Paystack sends both "reference" and "trxref" with the same value - either is fine.
     [HttpGet]
     public async Task<IActionResult> Callback(
-        string? reference, string? trxref, [FromServices] IPaymentService payments)
+        string? reference,
+        string? trxref,
+        [FromServices] IPaymentService payments,
+        [FromServices] IPaymentRecoveryService recovery)
     {
         var actualReference = reference ?? trxref;
         var pendingReference = HttpContext.Session.GetString("PendingPaymentReference");
@@ -58,53 +66,92 @@ public class PaymentsController : Controller
 
         if (string.IsNullOrEmpty(actualReference) || actualReference != pendingReference)
         {
+            // A refresh/double-click after success lands here with the session already cleared - if the order
+            // exists, just show it instead of an error.
+            if (!string.IsNullOrEmpty(actualReference))
+            {
+                var userIdForLookup = _userManager.GetUserId(User);
+                var done = await _context.Orders.AsNoTracking()
+                    .FirstOrDefaultAsync(o => o.OrderNumber == actualReference && o.CustomerId == userIdForLookup);
+                if (done is not null) return RedirectToAction("Confirmation", "Shop", new { id = done.OrderId });
+            }
+
             this.ToastError("This payment session doesn't match your cart - please try checking out again.");
             return RedirectToAction("Cart", "Shop");
         }
 
-        var verifyResult = await payments.VerifyTransactionAsync(actualReference);
+        var user = await _userManager.GetUserAsync(User);
+        if (user is null) return NotFound();
 
+        // Double-click on the callback: the first request already created the order.
+        var alreadyPlaced = await _context.Orders.AsNoTracking().FirstOrDefaultAsync(o => o.OrderNumber == actualReference);
+        if (alreadyPlaced is not null)
+            return RedirectToAction("Confirmation", "Shop", new { id = alreadyPlaced.OrderId });
+
+        var verifyResult = await payments.VerifyTransactionAsync(actualReference);
         if (!verifyResult.Success)
         {
             this.ToastError($"Payment was not completed: {verifyResult.ErrorMessage}");
             return RedirectToAction("Cart", "Shop");
         }
 
-        var cart = SessionCart.GetSnapshot(HttpContext.Session, actualReference);
-        if (cart is null || cart.Lines.Count == 0)
+        var cardCharged = verifyResult.AmountRands;
+
+        // Hands everything back and tells the customer. Pending values are cleared so the same session
+        // can't try to reuse this reference.
+        async Task<IActionResult> FailAsync(string reason, decimal walletDebited, int pointsRedeemed, bool autoRefundCard = true)
         {
-            // Verified payment but no snapshot left in session - shouldn't normally happen,
-            // but don't silently lose a paid transaction: log it loudly for manual follow-up.
-            _logger.LogError(
-                "Payment {Reference} verified for {Amount:C} but no cart snapshot was found in session.",
-                actualReference, verifyResult.AmountRands);
-            this.ToastError("Your payment succeeded but your cart session expired. Please contact support with reference " + actualReference);
+            var outcome = await recovery.HandleFailedOrderAsync(new PaymentFailureContext
+            {
+                Reference = actualReference,
+                CustomerId = user.Id,
+                CustomerEmail = user.Email,
+                CustomerName = user.FullName,
+                Source = PaymentIncidentSource.PaystackCheckout,
+                CardCharged = cardCharged,
+                WalletDebited = walletDebited,
+                PointsRedeemed = pointsRedeemed,
+                AutoRefundCard = autoRefundCard,
+                Reason = reason
+            });
+
+            ClearPending(actualReference);
+            this.ToastError(outcome.CustomerMessage);
             return RedirectToAction("Index", "Shop");
         }
 
-        // Reconcile what was actually charged against what this snapshot says the order
-        // should cost. The snapshot closes the "edit your cart while sitting on Paystack's
-        // page" window, but this check is the belt-and-braces backstop: it catches anything
-        // that could still cause a mismatch (a clock/rounding edge case, a gateway anomaly)
-        // rather than ever silently creating an order for a different amount than was paid.
+        var cart = SessionCart.GetSnapshot(HttpContext.Session, actualReference);
+        if (cart is null || cart.Lines.Count == 0)
+        {
+            // Verified payment but the session was lost. Nothing else was taken yet (wallet and points are only
+            // taken further down), so this is a pure card refund.
+            return await FailAsync("Payment verified but the cart session had expired.", 0m, 0);
+        }
+
+        // Reconcile what was actually charged against what this snapshot says the card should have paid.
+        // The snapshot closes the "edit your cart while sitting on Paystack's page" window; this check is the
+        // belt-and-braces backstop against any mismatch (rounding edge case, gateway anomaly).
         var pendingPoints = HttpContext.Session.GetInt32("PendingPointsRedeemed") ?? 0;
         var pendingPointsDiscount = 0m;
         if (pendingPoints > 0)
             decimal.TryParse(HttpContext.Session.GetString("PendingPointsDiscount"), NumberStyles.Number, CultureInfo.InvariantCulture, out pendingPointsDiscount);
+        decimal.TryParse(HttpContext.Session.GetString("PendingWalletAmount"), NumberStyles.Number, CultureInfo.InvariantCulture, out var pendingWallet);
 
         var expectedVat = TaxSettings.CalculateVat(cart.SubTotal, pendingPointsDiscount);
-        var expectedTotal = cart.SubTotal - pendingPointsDiscount + expectedVat;
-        if (Math.Abs(expectedTotal - verifyResult.AmountRands) > 0.01m)
+        var expectedOrderTotal = cart.SubTotal - pendingPointsDiscount + expectedVat;
+        var expectedCardTotal = expectedOrderTotal - pendingWallet; // what Paystack should have charged: the CARD portion only
+
+        if (Math.Abs(expectedCardTotal - cardCharged) > 0.01m)
         {
             _logger.LogError(
-                "Payment {Reference} verified for {Paid:C} but the reconciled cart total is {Expected:C} - refusing to create an order automatically.",
-                actualReference, verifyResult.AmountRands, expectedTotal);
-            this.ToastError($"Your payment succeeded but the amount doesn't match your order - nothing has been charged incorrectly, but we need to check this manually. Please contact support with reference {actualReference}.");
-            return RedirectToAction("Index", "Shop");
+                "Payment {Reference} verified for {Paid:C} but the reconciled card total is {Expected:C} - not creating an order automatically.",
+                actualReference, cardCharged, expectedCardTotal);
+
+            // Suspicious: don't refund automatically - leave it for a person to look at.
+            return await FailAsync($"Amount mismatch: paid {cardCharged:0.00}, expected {expectedCardTotal:0.00}.", 0m, 0, autoRefundCard: false);
         }
 
         // Final stock re-check - time has passed while the customer was on Paystack's page.
-        // One IN-clause query for the whole cart instead of one FindAsync per line.
         var checkoutVariantIds = cart.Lines.Select(l => l.VariantId).Distinct().ToList();
         var checkoutVariants = await _context.ProductVariants
             .AsNoTracking()
@@ -115,17 +162,8 @@ public class PaymentsController : Controller
         foreach (var line in cart.Lines)
         {
             if (!checkoutVariants.TryGetValue(line.VariantId, out var variant) || !variant.IsActive || !variant.Product.IsActive || variant.StockQuantity < line.Quantity)
-            {
-                _logger.LogError(
-                    "Payment {Reference} verified for {Amount:C} but stock check failed for variant {VariantId}.",
-                    actualReference, verifyResult.AmountRands, line.VariantId);
-                this.ToastError($"Your payment succeeded but '{line.Name}' is no longer available. Please contact support with reference {actualReference} for a refund.");
-                return RedirectToAction("Index", "Shop");
-            }
+                return await FailAsync($"'{line.Name}' sold out or was withdrawn while the customer was paying.", 0m, 0);
         }
-
-        var user = await _userManager.GetUserAsync(User);
-        if (user is null) return NotFound();
 
         var paymentMethod = Enum.TryParse<PaymentMethod>(pendingMethodRaw, out var pm)
             ? pm
@@ -135,23 +173,43 @@ public class PaymentsController : Controller
             ? await _context.CustomerAddresses.FirstOrDefaultAsync(a => a.CustomerAddressId == pendingAddressId && a.CustomerId == user.Id)
             : null;
 
+        // --- Take the reward points and the FixCash portion now that the card payment is confirmed ---
+        var pointsRedeemed = 0;
         if (pendingPoints > 0)
         {
             var redeemResult = await _rewards.RedeemAsync(user.Id, pendingPoints, actualReference);
             if (!redeemResult.Success)
-            {
-                _logger.LogError("Payment {Reference} verified but redeeming {Points} points failed: {Error}",
-                    actualReference, pendingPoints, redeemResult.ErrorMessage);
-                this.ToastError($"Your payment succeeded but we couldn't apply your reward points ({redeemResult.ErrorMessage}). Please contact support with reference {actualReference}.");
-                return RedirectToAction("Index", "Shop");
-            }
+                return await FailAsync($"Could not redeem {pendingPoints} points: {redeemResult.ErrorMessage}", 0m, 0);
+            pointsRedeemed = pendingPoints;
         }
 
-        var order = await _orderFulfillment.CreateOnlineOrderAsync(user, cart, paymentMethod, actualReference, deliveryAddress, pendingPointsDiscount);
+        var walletDebited = 0m;
+        if (pendingWallet > 0)
+        {
+            var debit = await _wallet.DebitForOrderAsync(user.Id, pendingWallet, actualReference);
+            if (!debit.Success)
+                return await FailAsync($"Could not debit FixCash {pendingWallet:0.00}: {debit.ErrorMessage}", 0m, pointsRedeemed);
+            walletDebited = pendingWallet;
+        }
 
-        // If the customer ticked "save this card" and the bank allows the card to be
-        // charged again later, remember it for next time - dedup by AuthorizationCode so
-        // paying with the same card twice doesn't create two entries.
+        Order order;
+        try
+        {
+            order = await _orderFulfillment.CreateOnlineOrderAsync(
+                user, cart, paymentMethod, actualReference, deliveryAddress, pendingPointsDiscount, pendingWallet);
+        }
+        catch (Exception ex)
+        {
+            return await FailAsync(
+                ex is InsufficientStockException ? $"Sold out while paying: {ex.Message}" : $"Order creation failed: {ex.Message}",
+                walletDebited, pointsRedeemed);
+        }
+
+        if (walletDebited > 0) await _wallet.LinkOrderAsync(actualReference, order.OrderId);
+
+        // If the customer ticked "save this card" and the bank allows the card to be charged again later,
+        // remember it for next time - dedup by AuthorizationCode so paying with the same card twice doesn't
+        // create two entries.
         if (pendingSaveCard && verifyResult.Authorization is { Reusable: true } auth)
         {
             var alreadySaved = await _context.CustomerPaymentMethods
@@ -176,16 +234,21 @@ public class PaymentsController : Controller
         }
 
         SessionCart.Clear(HttpContext.Session);
-        SessionCart.ClearSnapshot(HttpContext.Session, actualReference);
-        HttpContext.Session.Remove("PendingPaymentReference");
-        HttpContext.Session.Remove("PendingPaymentMethod");
-        HttpContext.Session.Remove("PendingAddressId");
-        HttpContext.Session.Remove("PendingSaveCard");
-        HttpContext.Session.Remove("PendingPointsRedeemed");
-        HttpContext.Session.Remove("PendingPointsDiscount");
+        ClearPending(actualReference);
 
         this.ToastSuccess($"Payment confirmed - order {order.OrderNumber} placed for {order.GrandTotal:C}.");
 
         return RedirectToAction("Confirmation", "Shop", new { id = order.OrderId });
+    }
+
+    private void ClearPending(string reference)
+    {
+        SessionCart.ClearSnapshot(HttpContext.Session, reference);
+        foreach (var key in new[]
+                 {
+                     "PendingPaymentReference", "PendingPaymentMethod", "PendingAddressId", "PendingSaveCard",
+                     "PendingPointsRedeemed", "PendingPointsDiscount", "PendingWalletAmount"
+                 })
+            HttpContext.Session.Remove(key);
     }
 }

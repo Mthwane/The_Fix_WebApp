@@ -1,3 +1,4 @@
+using System.Globalization;
 using FashionFix.Web.Data;
 using FashionFix.Web.Models.Entities;
 using FashionFix.Web.Models.ViewModels;
@@ -7,7 +8,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.Globalization;
 using The__Fix_WebApp.Services;
 
 namespace FashionFix.Web.Controllers;
@@ -43,59 +43,33 @@ public class ShopController : Controller
     // Kids/...), matching the Figma department-page designs. Reuses the same catalogue query
     // as Index, just pre-filtered to this department.
     [HttpGet]
-    public async Task<IActionResult> Department(
-        string slug,
-        string? sub,
-        string? size,
-        string? color)
+    public async Task<IActionResult> Department(string slug, string? sub, string? size, string? color)
     {
         var department = await _context.Departments
             .AsNoTracking()
             .Include(d => d.SubCategories.OrderBy(s => s.DisplayOrder))
             .FirstOrDefaultAsync(d => d.Slug == slug && d.IsActive);
 
-        if (department is null)
-            return NotFound();
+        if (department is null) return NotFound();
 
         var query = _context.Products
             .AsNoTracking()
             .Include(p => p.Variants)
-            .Where(p =>
-                p.IsActive &&
-                p.DepartmentId == department.DepartmentId &&
-                p.Variants.Any(v =>
-                    v.IsActive &&
-                    v.StockQuantity > 0));
+            .Where(p => p.IsActive && p.DepartmentId == department.DepartmentId
+                && p.Variants.Any(v => v.IsActive && v.StockQuantity > 0));
 
         if (!string.IsNullOrWhiteSpace(sub))
         {
-            var subCategoryName = department.SubCategories
-                .FirstOrDefault(s => s.Slug == sub)
-                ?.Name;
-
+            var subCategoryName = department.SubCategories.FirstOrDefault(s => s.Slug == sub)?.Name;
             if (subCategoryName is not null)
                 query = query.Where(p => p.SubCategory == subCategoryName);
         }
-
         if (!string.IsNullOrWhiteSpace(size))
-        {
-            query = query.Where(p =>
-                p.Variants.Any(v =>
-                    v.IsActive &&
-                    v.Size == size));
-        }
-
+            query = query.Where(p => p.Variants.Any(v => v.IsActive && v.Size == size));
         if (!string.IsNullOrWhiteSpace(color))
-        {
-            query = query.Where(p =>
-                p.Variants.Any(v =>
-                    v.IsActive &&
-                    v.Color == color));
-        }
+            query = query.Where(p => p.Variants.Any(v => v.IsActive && v.Color == color));
 
-        var products = await query
-            .OrderByDescending(p => p.DateAdded)
-            .ToListAsync();
+        var products = await query.OrderByDescending(p => p.DateAdded).ToListAsync();
 
         return View(new DepartmentPageViewModel
         {
@@ -111,26 +85,15 @@ public class ShopController : Controller
     // has stock; each card shows its available sizes/colours so a customer picks one
     // before adding to cart (see AddToCart, keyed to a specific variantId).
     [HttpGet]
-    public async Task<IActionResult> Index(
-        string? search,
-        string? category)
+    public async Task<IActionResult> Index(string? search, string? category)
     {
         var query = _context.Products
             .AsNoTracking()
             .Include(p => p.Variants)
-            .Where(p =>
-                p.IsActive &&
-                p.Variants.Any(v =>
-                    v.IsActive &&
-                    v.StockQuantity > 0));
+            .Where(p => p.IsActive && p.Variants.Any(v => v.IsActive && v.StockQuantity > 0));
 
         if (!string.IsNullOrWhiteSpace(search))
-        {
-            query = query.Where(p =>
-                p.Name.Contains(search) ||
-                p.SKU.Contains(search) ||
-                p.Variants.Any(v => v.SKU.Contains(search)));
-        }
+            query = query.Where(p => p.Name.Contains(search) || p.SKU.Contains(search) || p.Variants.Any(v => v.SKU.Contains(search)));
 
         if (!string.IsNullOrWhiteSpace(category))
             query = query.Where(p => p.Category == category);
@@ -145,13 +108,9 @@ public class ShopController : Controller
 
         ViewBag.SearchTerm = search;
         ViewBag.SelectedCategory = category;
-        ViewBag.CartItemCount =
-            SessionCart.Get(HttpContext.Session).ItemCount;
+        ViewBag.CartItemCount = SessionCart.Get(HttpContext.Session).ItemCount;
 
-        var products = await query
-            .OrderBy(p => p.Name)
-            .ToListAsync();
-
+        var products = await query.OrderBy(p => p.Name).ToListAsync();
         return View(products);
     }
 
@@ -159,52 +118,36 @@ public class ShopController : Controller
     // product card/detail page, not just the parent product.
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> AddToCart(
-        int variantId,
-        int quantity = 1,
-        string? returnUrl = null)
+    public async Task<IActionResult> AddToCart(int variantId, int quantity = 1, string? returnUrl = null)
     {
         IActionResult BackToSource() =>
-            !string.IsNullOrWhiteSpace(returnUrl) &&
-            Url.IsLocalUrl(returnUrl)
+            !string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl)
                 ? Redirect(returnUrl)
                 : RedirectToAction(nameof(Index));
 
         var variant = await _context.ProductVariants
             .AsNoTracking()
             .Include(v => v.Product)
-            .FirstOrDefaultAsync(v =>
-                v.ProductVariantId == variantId &&
-                v.IsActive &&
-                v.Product.IsActive);
+            .FirstOrDefaultAsync(v => v.ProductVariantId == variantId && v.IsActive && v.Product.IsActive);
 
         if (variant is null)
         {
-            this.ToastError(
-                "That size/colour is no longer available.");
-
+            this.ToastError("That size/colour is no longer available.");
             return BackToSource();
         }
 
         if (variant.StockQuantity <= 0)
         {
-            this.ToastError(
-                $"'{variant.Product.Name}' ({variant.Size}/{variant.Color}) is out of stock.");
-
+            this.ToastError($"'{variant.Product.Name}' ({variant.Size}/{variant.Color}) is out of stock.");
             return BackToSource();
         }
 
         var cart = SessionCart.Get(HttpContext.Session);
-        var line = cart.Lines
-            .FirstOrDefault(l => l.VariantId == variantId);
+        var line = cart.Lines.FirstOrDefault(l => l.VariantId == variantId);
 
-        var desiredQuantity =
-            (line?.Quantity ?? 0) + Math.Max(1, quantity);
-
+        var desiredQuantity = (line?.Quantity ?? 0) + Math.Max(1, quantity);
         var capped = desiredQuantity > variant.StockQuantity;
-
-        if (capped)
-            desiredQuantity = variant.StockQuantity;
+        if (capped) desiredQuantity = variant.StockQuantity; // never let the cart exceed what's actually in stock
 
         if (line is null)
         {
@@ -229,15 +172,9 @@ public class ShopController : Controller
         SessionCart.Save(HttpContext.Session, cart);
 
         if (capped)
-        {
-            this.ToastWarning(
-                $"Only {variant.StockQuantity} of '{variant.Product.Name}' available - added the max to your cart.");
-        }
+            this.ToastWarning($"Only {variant.StockQuantity} of '{variant.Product.Name}' available - added the max to your cart.");
         else
-        {
-            this.ToastSuccess(
-                $"Added {variant.Product.Name} ({variant.Size}/{variant.Color}) to your cart.");
-        }
+            this.ToastSuccess($"Added {variant.Product.Name} ({variant.Size}/{variant.Color}) to your cart.");
 
         return BackToSource();
     }
@@ -246,20 +183,16 @@ public class ShopController : Controller
     [HttpGet]
     public IActionResult Cart()
     {
-        return View(
-            SessionCart.Get(HttpContext.Session));
+        return View(SessionCart.Get(HttpContext.Session));
     }
 
     // POST: /Shop/UpdateCartLine
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public IActionResult UpdateCartLine(
-        int variantId,
-        int quantity)
+    public IActionResult UpdateCartLine(int variantId, int quantity)
     {
         var cart = SessionCart.Get(HttpContext.Session);
-        var line = cart.Lines
-            .FirstOrDefault(l => l.VariantId == variantId);
+        var line = cart.Lines.FirstOrDefault(l => l.VariantId == variantId);
 
         if (line is not null)
         {
@@ -270,9 +203,7 @@ public class ShopController : Controller
         }
 
         SessionCart.Save(HttpContext.Session, cart);
-
         this.ToastSuccess("Cart updated.");
-
         return RedirectToAction(nameof(Cart));
     }
 
@@ -282,25 +213,34 @@ public class ShopController : Controller
     public IActionResult RemoveFromCart(int variantId)
     {
         var cart = SessionCart.Get(HttpContext.Session);
-
-        cart.Lines.RemoveAll(
-            l => l.VariantId == variantId);
-
+        cart.Lines.RemoveAll(l => l.VariantId == variantId);
         SessionCart.Save(HttpContext.Session, cart);
-
-        this.ToastSuccess(
-            "Item removed from your cart.");
-
+        this.ToastSuccess("Item removed from your cart.");
         return RedirectToAction(nameof(Cart));
     }
 
-    /// <summary>
-    /// Loads the customer's saved addresses/cards and pre-selects their defaults -
-    /// shared by the GET and the POST-with-errors path so both show the same picker.
-    /// </summary>
-    private async Task<CheckoutViewModel> BuildCheckoutViewModelAsync(
-        string userId,
-        CartViewModel cart)
+
+    // Smallest card payment the gateway will take. Not verified against your Paystack account - set it to
+    // your real minimum. (Used when FixCash covers most of an order and only a sliver is left for the card.)
+    private const decimal MinCardChargeRands = 1.00m;
+
+    // GET: /Shop/Checkout
+    [HttpGet]
+    [Authorize(Roles = "Customer")]
+    public async Task<IActionResult> Checkout([FromServices] IWalletService wallet, [FromServices] IRewardsService rewards)
+    {
+        var cart = SessionCart.Get(HttpContext.Session);
+        if (cart.Lines.Count == 0) return RedirectToAction(nameof(Index));
+
+        var userId = _userManager.GetUserId(User);
+        var model = await BuildCheckoutViewModelAsync(userId!, cart);
+        ViewBag.WalletBalance = await wallet.GetBalanceAsync(userId!);
+        await LoadRewardsForViewAsync(rewards, userId!, cart);
+        return View(model);
+    }
+
+    /// <summary>Loads the customer's saved addresses/cards and pre-selects their defaults - shared by the GET and the POST-with-errors path so both show the same picker.</summary>
+    private async Task<CheckoutViewModel> BuildCheckoutViewModelAsync(string userId, CartViewModel cart)
     {
         var addresses = await _context.CustomerAddresses
             .AsNoTracking()
@@ -320,74 +260,37 @@ public class ShopController : Controller
             Cart = cart,
             Addresses = addresses,
             SavedCards = savedCards,
-
-            SelectedAddressId =
-                addresses.FirstOrDefault(a => a.IsDefault)
-                    ?.CustomerAddressId
-                ?? addresses.FirstOrDefault()
-                    ?.CustomerAddressId,
-
-            SelectedPaymentMethodId =
-                savedCards.FirstOrDefault(p => p.IsDefault)
-                    ?.CustomerPaymentMethodId
-                ?? savedCards.FirstOrDefault()
-                    ?.CustomerPaymentMethodId
+            SelectedAddressId = addresses.FirstOrDefault(a => a.IsDefault)?.CustomerAddressId ?? addresses.FirstOrDefault()?.CustomerAddressId,
+            SelectedPaymentMethodId = savedCards.FirstOrDefault(p => p.IsDefault)?.CustomerPaymentMethodId ?? savedCards.FirstOrDefault()?.CustomerPaymentMethodId
         };
     }
 
-    private async Task<(RewardsSettings Settings, RedemptionQuote Quote)>
-        LoadRewardsForViewAsync(
-            IRewardsService rewards,
-            string userId,
-            CartViewModel cart)
+    private async Task<(RewardsSettings Settings, RedemptionQuote Quote)> LoadRewardsForViewAsync(IRewardsService rewards, string userId, CartViewModel cart)
     {
         var settings = await rewards.GetSettingsAsync();
         var balance = await rewards.GetBalanceAsync(userId);
-
-        var quote = rewards.GetRedemptionQuote(
-            settings,
-            balance,
-            cart.SubTotal);
-
+        var quote = rewards.GetRedemptionQuote(settings, balance, cart.SubTotal);
         ViewBag.RewardsSettings = settings;
         ViewBag.RewardsQuote = quote;
-
         return (settings, quote);
     }
 
-    // GET: /Shop/Checkout
-    [HttpGet]
-    [Authorize(Roles = "Customer")]
-    public async Task<IActionResult> Checkout(
-        [FromServices] IWalletService wallet,
-        [FromServices] IRewardsService rewards)
+    private async Task<IActionResult> CheckoutViewWithErrorAsync(CheckoutViewModel model, string userId, CartViewModel cart, string error)
     {
-        var cart = SessionCart.Get(HttpContext.Session);
-
-        if (cart.Lines.Count == 0)
-            return RedirectToAction(nameof(Index));
-
-        var userId = _userManager.GetUserId(User);
-
-        var model = await BuildCheckoutViewModelAsync(
-            userId!,
-            cart);
-
-        ViewBag.WalletBalance =
-            await wallet.GetBalanceAsync(userId!);
-
-        await LoadRewardsForViewAsync(
-            rewards,
-            userId!,
-            cart);
-
+        this.ToastError(error);
+        var rebuilt = await BuildCheckoutViewModelAsync(userId, cart);
+        model.Addresses = rebuilt.Addresses;
+        model.SavedCards = rebuilt.SavedCards;
         return View(model);
     }
 
-    // POST: /Shop/Checkout - either charges a saved card instantly, or hands off to Paystack
-    // for a brand-new one. Either way, no Order is created here until the money has actually
-    // moved: the instant-charge path creates it right after Paystack confirms success; the
-    // redirect path creates it in PaymentsController.Callback once the customer comes back.
+    // POST: /Shop/Checkout - FixCash wallet, a saved card, or a brand-new card via Paystack (or the wallet
+    // for part and a card for the rest). No Order is created until the money has actually moved: the
+    // wallet and saved-card paths create it right after the money is taken; the redirect path creates it
+    // in PaymentsController.Callback once the customer comes back.
+    //
+    // If money has moved but the order STILL can't be created, IPaymentRecoveryService hands everything
+    // back (wallet, points, and the card via a gateway refund) and records a PaymentIncident.
     [HttpPost]
     [ValidateAntiForgeryToken]
     [Authorize(Roles = "Customer")]
@@ -396,49 +299,23 @@ public class ShopController : Controller
         [FromServices] IPaymentService payments,
         [FromServices] IOrderFulfillmentService orderFulfillment,
         [FromServices] IWalletService wallet,
-        [FromServices] IRewardsService rewards)
+        [FromServices] IRewardsService rewards,
+        [FromServices] IPaymentRecoveryService recovery)
     {
         var cart = SessionCart.Get(HttpContext.Session);
-
-        if (cart.Lines.Count == 0)
-            return RedirectToAction(nameof(Index));
+        if (cart.Lines.Count == 0) return RedirectToAction(nameof(Index));
 
         model.Cart = cart;
-
         var userId = _userManager.GetUserId(User)!;
-
-        ViewBag.WalletBalance =
-            await wallet.GetBalanceAsync(userId);
-
-        var (rewardsSettings, rewardsQuote) =
-            await LoadRewardsForViewAsync(
-                rewards,
-                userId,
-                cart);
+        var walletBalance = await wallet.GetBalanceAsync(userId);
+        ViewBag.WalletBalance = walletBalance;
+        var (rewardsSettings, rewardsQuote) = await LoadRewardsForViewAsync(rewards, userId, cart);
 
         if (!ModelState.IsValid)
-        {
-            var rebuilt =
-                await BuildCheckoutViewModelAsync(
-                    userId,
-                    cart);
+            return await CheckoutViewWithErrorAsync(model, userId, cart, "Please choose a delivery address and payment method to complete your order.");
 
-            model.Addresses = rebuilt.Addresses;
-            model.SavedCards = rebuilt.SavedCards;
-
-            this.ToastError(
-                "Please choose a delivery address and payment method to complete your order.");
-
-            return View(model);
-        }
-
-        // Re-check stock before we ever send the customer to pay - no point charging them
-        // for something that's gone. One query for the whole cart instead of one per line.
-        var checkoutVariantIds = cart.Lines
-            .Select(l => l.VariantId)
-            .Distinct()
-            .ToList();
-
+        // Re-check stock before we ever send the customer to pay.
+        var checkoutVariantIds = cart.Lines.Select(l => l.VariantId).Distinct().ToList();
         var checkoutVariants = await _context.ProductVariants
             .AsNoTracking()
             .Include(v => v.Product)
@@ -447,384 +324,187 @@ public class ShopController : Controller
 
         foreach (var line in cart.Lines)
         {
-            if (!checkoutVariants.TryGetValue(
-                    line.VariantId,
-                    out var variant) ||
-                !variant.IsActive ||
-                !variant.Product.IsActive)
-            {
-                ModelState.AddModelError(
-                    string.Empty,
-                    $"'{line.Name}' is no longer available. Please remove it from your cart.");
-            }
+            if (!checkoutVariants.TryGetValue(line.VariantId, out var variant) || !variant.IsActive || !variant.Product.IsActive)
+                ModelState.AddModelError(string.Empty, $"'{line.Name}' is no longer available. Please remove it from your cart.");
             else if (variant.StockQuantity < line.Quantity)
-            {
-                ModelState.AddModelError(
-                    string.Empty,
-                    $"Only {variant.StockQuantity} of '{line.Name}' ({variant.Size}/{variant.Color}) left in stock - please update the quantity.");
-            }
+                ModelState.AddModelError(string.Empty, $"Only {variant.StockQuantity} of '{line.Name}' ({variant.Size}/{variant.Color}) left in stock - please update the quantity.");
         }
 
         if (!ModelState.IsValid)
-        {
-            var rebuilt =
-                await BuildCheckoutViewModelAsync(
-                    userId,
-                    cart);
-
-            model.Addresses = rebuilt.Addresses;
-            model.SavedCards = rebuilt.SavedCards;
-
-            this.ToastError(
-                "Some items in your cart changed - please review and try again.");
-
-            return View(model);
-        }
+            return await CheckoutViewWithErrorAsync(model, userId, cart, "Some items in your cart changed - please review and try again.");
 
         var user = await _userManager.GetUserAsync(User);
+        if (user is null || string.IsNullOrWhiteSpace(user.Email))
+            return await CheckoutViewWithErrorAsync(model, userId, cart, "Your account needs a valid email address before you can pay online.");
 
-        if (user is null ||
-            string.IsNullOrWhiteSpace(user.Email))
-        {
-            this.ToastError(
-                "Your account needs a valid email address before you can pay online.");
-
-            var rebuilt =
-                await BuildCheckoutViewModelAsync(
-                    userId,
-                    cart);
-
-            model.Addresses = rebuilt.Addresses;
-            model.SavedCards = rebuilt.SavedCards;
-
-            return View(model);
-        }
-
-        var deliveryAddress =
-            await _context.CustomerAddresses
-                .FirstOrDefaultAsync(a =>
-                    a.CustomerAddressId == model.SelectedAddressId &&
-                    a.CustomerId == userId);
-
+        var deliveryAddress = await _context.CustomerAddresses
+            .FirstOrDefaultAsync(a => a.CustomerAddressId == model.SelectedAddressId && a.CustomerId == userId);
         if (deliveryAddress is null)
-        {
-            this.ToastError(
-                "Please choose (or add) a delivery address before checking out.");
+            return await CheckoutViewWithErrorAsync(model, userId, cart, "Please choose (or add) a delivery address before checking out.");
 
-            var rebuilt =
-                await BuildCheckoutViewModelAsync(
-                    userId,
-                    cart);
-
-            model.Addresses = rebuilt.Addresses;
-            model.SavedCards = rebuilt.SavedCards;
-
-            return View(model);
-        }
-
-        // -------------------------------------------------------------------------
-        // FixRewards: calculate the points discount from the REAL reward balance
-        // and current administrator-controlled reward rules.
-        // -------------------------------------------------------------------------
+        // --- Reward points: the discount comes off first ---
         var pointsToRedeem = 0;
         var pointsDiscount = 0m;
-
         if (model.UsePoints)
         {
             if (!rewardsQuote.CanRedeem)
-            {
-                this.ToastError(
-                    rewardsQuote.Reason ??
-                    "Your points can't be applied to this order.");
-
-                var rebuilt =
-                    await BuildCheckoutViewModelAsync(
-                        userId,
-                        cart);
-
-                model.Addresses = rebuilt.Addresses;
-                model.SavedCards = rebuilt.SavedCards;
-
-                return View(model);
-            }
+                return await CheckoutViewWithErrorAsync(model, userId, cart, rewardsQuote.Reason ?? "Your points can't be applied to this order.");
 
             pointsToRedeem = rewardsQuote.MaxPoints;
-
-            pointsDiscount =
-                rewards.PointsToRands(
-                    rewardsSettings,
-                    pointsToRedeem);
+            pointsDiscount = rewards.PointsToRands(rewardsSettings, pointsToRedeem);
         }
 
-        // VAT is calculated after the rewards discount.
-        var vat = TaxSettings.CalculateVat(
-            cart.SubTotal,
-            pointsDiscount);
+        var vat = TaxSettings.CalculateVat(cart.SubTotal, pointsDiscount);
+        var grandTotal = cart.SubTotal - pointsDiscount + vat;
+        var reference = $"WEB-{DateTime.UtcNow:yyyyMMddHHmmssfff}";
 
-        var grandTotal =
-            cart.SubTotal -
-            pointsDiscount +
-            vat;
-
-        var reference =
-            $"WEB-{DateTime.UtcNow:yyyyMMddHHmmssfff}";
-
-        // -------------------------------------------------------------------------
-        // Path 0: FixCash
-        // -------------------------------------------------------------------------
-        if (model.PaymentMethod == PaymentMethod.FixCash)
+        // --- FixCash wallet: covers as much of the total as the balance allows, the card pays the rest ---
+        var useWallet = model.UseWallet || model.PaymentMethod == PaymentMethod.FixCash;
+        var walletPortion = 0m;
+        if (useWallet)
         {
-            if (pointsToRedeem > 0)
+            walletPortion = Math.Round(Math.Min(walletBalance, grandTotal), 2, MidpointRounding.AwayFromZero);
+            if (walletPortion <= 0)
+                return await CheckoutViewWithErrorAsync(model, userId, cart, "Your FixCash balance is empty - add funds or pay by card.");
+        }
+
+        var cardPortion = grandTotal - walletPortion;
+        if (cardPortion > 0m && cardPortion < MinCardChargeRands)
+            return await CheckoutViewWithErrorAsync(model, userId, cart,
+                $"After FixCash, {cardPortion:C} would be left to pay by card, which is below the minimum card payment. Please add funds to your wallet first.");
+
+        var paysFullyFromWallet = useWallet && cardPortion <= 0m;
+        // "FixCash" is a funding source, not a card type - a part-paid order records the card method used.
+        var cardMethod = model.PaymentMethod == PaymentMethod.FixCash ? PaymentMethod.CreditCard : model.PaymentMethod;
+
+        async Task<string?> TryRedeemPointsAsync()
+        {
+            if (pointsToRedeem <= 0) return null;
+            var r = await rewards.RedeemAsync(userId, pointsToRedeem, reference);
+            return r.Success ? null : $"Could not apply your points: {r.ErrorMessage}";
+        }
+
+        // Used while NOTHING has been charged on the card yet (wallet/points can simply be put back).
+        async Task RollbackAsync(bool walletDebited)
+        {
+            if (walletDebited) await wallet.RestoreDebitAsync(userId, reference);
+            if (pointsToRedeem > 0) await rewards.RestoreRedemptionAsync(userId, reference);
+        }
+
+        // Money HAS moved but the order could not be created - give everything back and tell the customer.
+        async Task<IActionResult> OrderFailedAfterPaymentAsync(PaymentIncidentSource source, decimal cardCharged, decimal walletDebited, Exception ex)
+        {
+            var outcome = await recovery.HandleFailedOrderAsync(new PaymentFailureContext
             {
-                var redeemResult =
-                    await rewards.RedeemAsync(
-                        userId,
-                        pointsToRedeem,
-                        reference);
+                Reference = reference,
+                CustomerId = userId,
+                CustomerEmail = user.Email,
+                CustomerName = user.FullName,
+                Source = source,
+                CardCharged = cardCharged,
+                WalletDebited = walletDebited,
+                PointsRedeemed = pointsToRedeem,
+                Reason = ex is InsufficientStockException ? $"Sold out while paying: {ex.Message}" : $"Order creation failed: {ex.Message}"
+            });
 
-                if (!redeemResult.Success)
-                {
-                    this.ToastError(
-                        $"Could not apply your points: {redeemResult.ErrorMessage}");
+            this.ToastError(outcome.CustomerMessage);
+            return RedirectToAction(nameof(Cart));
+        }
 
-                    var rebuilt =
-                        await BuildCheckoutViewModelAsync(
-                            userId,
-                            cart);
+        // --- Path 0: the wallet pays for everything - no card, no redirect. Debit BEFORE creating the order. ---
+        if (paysFullyFromWallet)
+        {
+            var pointsError = await TryRedeemPointsAsync();
+            if (pointsError is not null) return await CheckoutViewWithErrorAsync(model, userId, cart, pointsError);
 
-                    model.Addresses = rebuilt.Addresses;
-                    model.SavedCards = rebuilt.SavedCards;
-
-                    return View(model);
-                }
-            }
-
-            var debitResult =
-                await wallet.DebitForOrderAsync(
-                    userId,
-                    grandTotal,
-                    reference);
-
+            var debitResult = await wallet.DebitForOrderAsync(userId, walletPortion, reference);
             if (!debitResult.Success)
             {
-                if (pointsToRedeem > 0)
-                {
-                    await rewards.RestoreRedemptionAsync(
-                        userId,
-                        reference);
-                }
-
-                this.ToastError(
-                    $"Could not pay with FixCash: {debitResult.ErrorMessage}");
-
-                var rebuilt =
-                    await BuildCheckoutViewModelAsync(
-                        userId,
-                        cart);
-
-                model.Addresses = rebuilt.Addresses;
-                model.SavedCards = rebuilt.SavedCards;
-
-                return View(model);
+                await RollbackAsync(false);
+                return await CheckoutViewWithErrorAsync(model, userId, cart, $"Could not pay with FixCash: {debitResult.ErrorMessage}");
             }
 
-            var order =
-                await orderFulfillment.CreateOnlineOrderAsync(
-                    user,
-                    cart,
-                    PaymentMethod.FixCash,
-                    reference,
-                    deliveryAddress,
-                    pointsDiscount);
+            Order order;
+            try
+            {
+                order = await orderFulfillment.CreateOnlineOrderAsync(user, cart, PaymentMethod.FixCash, reference, deliveryAddress, pointsDiscount, walletPortion);
+            }
+            catch (Exception ex)
+            {
+                return await OrderFailedAfterPaymentAsync(PaymentIncidentSource.WalletCheckout, 0m, walletPortion, ex);
+            }
+            await wallet.LinkOrderAsync(reference, order.OrderId);
 
-            await wallet.LinkOrderAsync(
-                reference,
-                order.OrderId);
-
-            SessionCart.Clear(
-                HttpContext.Session);
-
-            this.ToastSuccess(
-                $"Paid with FixCash - order {order.OrderNumber} placed for {order.GrandTotal:C}.");
-
-            return RedirectToAction(
-                nameof(Confirmation),
-                new { id = order.OrderId });
+            SessionCart.Clear(HttpContext.Session);
+            this.ToastSuccess($"Paid with FixCash - order {order.OrderNumber} placed for {order.GrandTotal:C}.");
+            return RedirectToAction(nameof(Confirmation), new { id = order.OrderId });
         }
 
-        // -------------------------------------------------------------------------
-        // Path 1: saved card
-        // -------------------------------------------------------------------------
+        // --- Path 1: saved card (optionally after a FixCash part-payment) ---
         if (model.SelectedPaymentMethodId.HasValue)
         {
-            var savedCard =
-                await _context.CustomerPaymentMethods
-                    .FirstOrDefaultAsync(p =>
-                        p.CustomerPaymentMethodId ==
-                            model.SelectedPaymentMethodId &&
-                        p.CustomerId == userId);
-
+            var savedCard = await _context.CustomerPaymentMethods
+                .FirstOrDefaultAsync(p => p.CustomerPaymentMethodId == model.SelectedPaymentMethodId && p.CustomerId == userId);
             if (savedCard is null)
+                return await CheckoutViewWithErrorAsync(model, userId, cart, "That saved card is no longer available - please choose another or add a new one.");
+
+            var pointsError = await TryRedeemPointsAsync();
+            if (pointsError is not null) return await CheckoutViewWithErrorAsync(model, userId, cart, pointsError);
+
+            var walletDebited = false;
+            if (walletPortion > 0m)
             {
-                this.ToastError(
-                    "That saved card is no longer available - please choose another or add a new one.");
-
-                var rebuilt =
-                    await BuildCheckoutViewModelAsync(
-                        userId,
-                        cart);
-
-                model.Addresses = rebuilt.Addresses;
-                model.SavedCards = rebuilt.SavedCards;
-
-                return View(model);
-            }
-
-            if (pointsToRedeem > 0)
-            {
-                var redeemResult =
-                    await rewards.RedeemAsync(
-                        userId,
-                        pointsToRedeem,
-                        reference);
-
-                if (!redeemResult.Success)
+                var debitResult = await wallet.DebitForOrderAsync(userId, walletPortion, reference);
+                if (!debitResult.Success)
                 {
-                    this.ToastError(
-                        $"Could not apply your points: {redeemResult.ErrorMessage}");
-
-                    var rebuilt =
-                        await BuildCheckoutViewModelAsync(
-                            userId,
-                            cart);
-
-                    model.Addresses = rebuilt.Addresses;
-                    model.SavedCards = rebuilt.SavedCards;
-
-                    return View(model);
+                    await RollbackAsync(false);
+                    return await CheckoutViewWithErrorAsync(model, userId, cart, $"Could not use your FixCash balance: {debitResult.ErrorMessage}");
                 }
+                walletDebited = true;
             }
 
-            var chargeResult =
-                await payments.ChargeAuthorizationAsync(
-                    user.Email,
-                    grandTotal,
-                    savedCard.AuthorizationCode,
-                    reference);
-
+            var chargeResult = await payments.ChargeAuthorizationAsync(user.Email, cardPortion, savedCard.AuthorizationCode, reference);
             if (!chargeResult.Success)
             {
-                if (pointsToRedeem > 0)
-                {
-                    await rewards.RestoreRedemptionAsync(
-                        userId,
-                        reference);
-                }
-
-                this.ToastError(
-                    $"Your saved card was declined: {chargeResult.ErrorMessage}. Please try another card.");
-
-                var rebuilt =
-                    await BuildCheckoutViewModelAsync(
-                        userId,
-                        cart);
-
-                model.Addresses = rebuilt.Addresses;
-                model.SavedCards = rebuilt.SavedCards;
-
-                return View(model);
+                await RollbackAsync(walletDebited); // the wallet and points go back if the card is declined
+                return await CheckoutViewWithErrorAsync(model, userId, cart, $"Your saved card was declined: {chargeResult.ErrorMessage}. Please try another card.");
             }
 
-            var order =
-                await orderFulfillment.CreateOnlineOrderAsync(
-                    user,
-                    cart,
-                    model.PaymentMethod,
-                    reference,
-                    deliveryAddress,
-                    pointsDiscount);
+            Order order;
+            try
+            {
+                order = await orderFulfillment.CreateOnlineOrderAsync(user, cart, cardMethod, reference, deliveryAddress, pointsDiscount, walletPortion);
+            }
+            catch (Exception ex)
+            {
+                // The card WAS charged - this is the case that used to lose the customer's money.
+                return await OrderFailedAfterPaymentAsync(PaymentIncidentSource.SavedCardCheckout, cardPortion, walletDebited ? walletPortion : 0m, ex);
+            }
 
-            SessionCart.Clear(
-                HttpContext.Session);
+            if (walletDebited) await wallet.LinkOrderAsync(reference, order.OrderId);
+            SessionCart.Clear(HttpContext.Session);
 
-            this.ToastSuccess(
-                $"Payment confirmed - order {order.OrderNumber} placed for {order.GrandTotal:C}.");
-
-            return RedirectToAction(
-                nameof(Confirmation),
-                new { id = order.OrderId });
+            this.ToastSuccess($"Payment confirmed - order {order.OrderNumber} placed for {order.GrandTotal:C}.");
+            return RedirectToAction(nameof(Confirmation), new { id = order.OrderId });
         }
 
-        // -------------------------------------------------------------------------
-        // Path 2: brand-new card via Paystack
-        // -------------------------------------------------------------------------
-        var callbackUrl =
-            Url.Action(
-                nameof(PaymentsController.Callback),
-                "Payments",
-                null,
-                Request.Scheme)!;
-
-        var initResult =
-            await payments.InitializeTransactionAsync(
-                user.Email,
-                grandTotal,
-                reference,
-                callbackUrl);
-
+        // --- Path 2: new card via Paystack. Only the CARD portion goes to Paystack; the wallet portion and
+        // points are taken in PaymentsController.Callback once the card payment is verified. ---
+        var callbackUrl = Url.Action(nameof(PaymentsController.Callback), "Payments", null, Request.Scheme)!;
+        var initResult = await payments.InitializeTransactionAsync(user.Email, cardPortion, reference, callbackUrl);
         if (!initResult.Success)
-        {
-            this.ToastError(
-                $"Could not start payment: {initResult.ErrorMessage}");
+            return await CheckoutViewWithErrorAsync(model, userId, cart, $"Could not start payment: {initResult.ErrorMessage}");
 
-            var rebuilt =
-                await BuildCheckoutViewModelAsync(
-                    userId,
-                    cart);
+        SessionCart.SaveSnapshot(HttpContext.Session, reference, cart);
+        HttpContext.Session.SetString("PendingPaymentReference", reference);
+        HttpContext.Session.SetString("PendingPaymentMethod", cardMethod.ToString());
+        HttpContext.Session.SetInt32("PendingAddressId", deliveryAddress.CustomerAddressId);
+        HttpContext.Session.SetString("PendingSaveCard", model.SaveCard ? "true" : "false");
+        HttpContext.Session.SetInt32("PendingPointsRedeemed", pointsToRedeem);
+        HttpContext.Session.SetString("PendingPointsDiscount", pointsDiscount.ToString("F2", CultureInfo.InvariantCulture));
+        HttpContext.Session.SetString("PendingWalletAmount", walletPortion.ToString("F2", CultureInfo.InvariantCulture));
 
-            model.Addresses = rebuilt.Addresses;
-            model.SavedCards = rebuilt.SavedCards;
-
-            return View(model);
-        }
-
-        // Stash what the callback will need to rebuild the order once payment is verified.
-        // The CART CONTENTS are snapshotted here rather than re-read from the live session
-        // cart at callback time.
-        SessionCart.SaveSnapshot(
-            HttpContext.Session,
-            reference,
-            cart);
-
-        HttpContext.Session.SetString(
-            "PendingPaymentReference",
-            reference);
-
-        HttpContext.Session.SetString(
-            "PendingPaymentMethod",
-            model.PaymentMethod.ToString());
-
-        HttpContext.Session.SetInt32(
-            "PendingAddressId",
-            deliveryAddress.CustomerAddressId);
-
-        HttpContext.Session.SetString(
-            "PendingSaveCard",
-            model.SaveCard ? "true" : "false");
-
-        // FixRewards values required by PaymentsController.Callback.
-        HttpContext.Session.SetInt32(
-            "PendingPointsRedeemed",
-            pointsToRedeem);
-
-        HttpContext.Session.SetString(
-            "PendingPointsDiscount",
-            pointsDiscount.ToString(
-                "F2",
-                CultureInfo.InvariantCulture));
-
-        return Redirect(
-            initResult.AuthorizationUrl!);
+        return Redirect(initResult.AuthorizationUrl!);
     }
 
     // GET: /Shop/Confirmation/5
@@ -835,17 +515,11 @@ public class ShopController : Controller
         var userId = _userManager.GetUserId(User);
 
         var order = await _context.Orders
-            .Include(o => o.OrderItems)
-                .ThenInclude(oi => oi.Product)
-            .Include(o => o.OrderItems)
-                .ThenInclude(oi => oi.ProductVariant)
-            .FirstOrDefaultAsync(o =>
-                o.OrderId == id &&
-                o.CustomerId == userId);
+            .Include(o => o.OrderItems).ThenInclude(oi => oi.Product)
+            .Include(o => o.OrderItems).ThenInclude(oi => oi.ProductVariant)
+            .FirstOrDefaultAsync(o => o.OrderId == id && o.CustomerId == userId);
 
-        if (order is null)
-            return NotFound();
-
+        if (order is null) return NotFound();
         return View(order);
     }
 
@@ -857,12 +531,9 @@ public class ShopController : Controller
             .AsNoTracking()
             .Include(p => p.Variants)
             .Include(p => p.Department)
-            .FirstOrDefaultAsync(p =>
-                p.ProductId == id &&
-                p.IsActive);
+            .FirstOrDefaultAsync(p => p.ProductId == id && p.IsActive);
 
-        if (product is null)
-            return NotFound();
+        if (product is null) return NotFound();
 
         var images = await _context.ProductImages
             .AsNoTracking()
@@ -879,21 +550,11 @@ public class ShopController : Controller
 
         var isWishlisted = false;
         var canReview = false;
-
-        if (User.Identity?.IsAuthenticated == true &&
-            User.IsInRole("Customer"))
+        if (User.Identity?.IsAuthenticated == true && User.IsInRole("Customer"))
         {
-            var userId =
-                _userManager.GetUserId(User);
-
-            isWishlisted =
-                await _context.WishlistItems.AnyAsync(
-                    w => w.CustomerId == userId &&
-                         w.ProductId == id);
-
-            canReview =
-                !reviews.Any(
-                    r => r.CustomerId == userId);
+            var userId = _userManager.GetUserId(User);
+            isWishlisted = await _context.WishlistItems.AnyAsync(w => w.CustomerId == userId && w.ProductId == id);
+            canReview = !reviews.Any(r => r.CustomerId == userId);
         }
 
         return View(new ProductDetailViewModel
@@ -903,102 +564,61 @@ public class ShopController : Controller
             Reviews = reviews,
             IsWishlisted = isWishlisted,
             CanReview = canReview,
-            ReturnUrl =
-                Url.Action(
-                    nameof(Product),
-                    new { id })
+            ReturnUrl = Url.Action(nameof(Product), new { id })
         });
     }
 
     // POST: /Shop/SubmitReview - one review per customer per product. Recalculates the
-    // product's denormalized AverageRating/ReviewCount inline.
+    // product's denormalized AverageRating/ReviewCount inline (no separate reviews service
+    // yet - see the TODO on ProductReview for the eventual IReviewService).
     [HttpPost]
     [ValidateAntiForgeryToken]
     [Authorize(Roles = "Customer")]
-    public async Task<IActionResult> SubmitReview(
-        int productId,
-        int rating,
-        string? comment)
+    public async Task<IActionResult> SubmitReview(int productId, int rating, string? comment)
     {
-        var userId =
-            _userManager.GetUserId(User)!;
+        var userId = _userManager.GetUserId(User)!;
 
         if (rating < 1 || rating > 5)
         {
-            this.ToastError(
-                "Please choose a rating between 1 and 5 stars.");
-
-            return RedirectToAction(
-                nameof(Product),
-                new { id = productId });
+            this.ToastError("Please choose a rating between 1 and 5 stars.");
+            return RedirectToAction(nameof(Product), new { id = productId });
         }
 
-        var alreadyReviewed =
-            await _context.ProductReviews.AnyAsync(
-                r => r.ProductId == productId &&
-                     r.CustomerId == userId);
-
+        var alreadyReviewed = await _context.ProductReviews.AnyAsync(r => r.ProductId == productId && r.CustomerId == userId);
         if (alreadyReviewed)
         {
-            this.ToastWarning(
-                "You've already reviewed this product.");
-
-            return RedirectToAction(
-                nameof(Product),
-                new { id = productId });
+            this.ToastWarning("You've already reviewed this product.");
+            return RedirectToAction(nameof(Product), new { id = productId });
         }
 
         // "Verified Purchase" = this customer has a Delivered order containing this product.
-        var isVerified =
-            await _context.OrderItems.AnyAsync(
-                oi => oi.ProductId == productId &&
-                      oi.Order.CustomerId == userId &&
-                      oi.Order.Status == OrderStatus.Delivered);
+        var isVerified = await _context.OrderItems
+            .AnyAsync(oi => oi.ProductId == productId
+                && oi.Order.CustomerId == userId
+                && oi.Order.Status == OrderStatus.Delivered);
 
-        _context.ProductReviews.Add(
-            new ProductReview
-            {
-                ProductId = productId,
-                CustomerId = userId,
-                Rating = rating,
-                Comment =
-                    string.IsNullOrWhiteSpace(comment)
-                        ? null
-                        : comment.Trim(),
-                IsVerifiedPurchase = isVerified
-            });
-
+        _context.ProductReviews.Add(new ProductReview
+        {
+            ProductId = productId,
+            CustomerId = userId,
+            Rating = rating,
+            Comment = string.IsNullOrWhiteSpace(comment) ? null : comment.Trim(),
+            IsVerifiedPurchase = isVerified
+        });
         await _context.SaveChangesAsync();
 
         // Recalculate the product's denormalized rating fields from the review table.
-        var product =
-            await _context.Products
-                .FirstAsync(p => p.ProductId == productId);
-
-        var stats =
-            await _context.ProductReviews
-                .Where(r => r.ProductId == productId)
-                .GroupBy(r => 1)
-                .Select(g => new
-                {
-                    Count = g.Count(),
-                    Average = g.Average(r => r.Rating)
-                })
-                .FirstAsync();
-
-        product.AverageRating =
-            Math.Round(stats.Average, 1);
-
-        product.ReviewCount =
-            stats.Count;
-
+        var product = await _context.Products.FirstAsync(p => p.ProductId == productId);
+        var stats = await _context.ProductReviews
+            .Where(r => r.ProductId == productId)
+            .GroupBy(r => 1)
+            .Select(g => new { Count = g.Count(), Average = g.Average(r => r.Rating) })
+            .FirstAsync();
+        product.AverageRating = Math.Round(stats.Average, 1);
+        product.ReviewCount = stats.Count;
         await _context.SaveChangesAsync();
 
-        this.ToastSuccess(
-            "Thanks - your review has been posted.");
-
-        return RedirectToAction(
-            nameof(Product),
-            new { id = productId });
+        this.ToastSuccess("Thanks - your review has been posted.");
+        return RedirectToAction(nameof(Product), new { id = productId });
     }
 }

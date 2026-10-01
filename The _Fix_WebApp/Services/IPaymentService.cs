@@ -1,4 +1,4 @@
-﻿namespace The__Fix_WebApp.Services
+namespace The__Fix_WebApp.Services
 {
     public class PaymentInitResult
     {
@@ -38,6 +38,15 @@
         public PaystackAuthorization? Authorization { get; set; }
     }
 
+    public class PaymentRefundResult
+    {
+        public bool Success { get; set; }
+        public string? ErrorMessage { get; set; }
+
+        /// <summary>Paystack's refund status (e.g. pending / processing / processed) - refunds settle asynchronously.</summary>
+        public string? GatewayStatus { get; set; }
+    }
+
     public interface IPaymentService
     {
         Task<PaymentInitResult> InitializeTransactionAsync(string email, decimal amountRands, string reference, string callbackUrl);
@@ -45,5 +54,9 @@
 
         /// <summary>Charges a previously-saved card directly - no redirect to Paystack's page, no re-entering card details.</summary>
         Task<PaymentVerifyResult> ChargeAuthorizationAsync(string email, decimal amountRands, string authorizationCode, string reference);
+
+        /// <summary>Refunds (part of) a successful transaction back to the card it was paid with. Used when money was
+        /// taken but the order could not be created. The refund is accepted immediately but reaches the customer later.</summary>
+        Task<PaymentRefundResult> RefundTransactionAsync(string reference, decimal amountRands);
     }
 }

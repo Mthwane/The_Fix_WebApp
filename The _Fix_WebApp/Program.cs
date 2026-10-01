@@ -50,6 +50,7 @@ builder.Services.Configure<SecurityStampValidatorOptions>(options =>
 {
     options.ValidationInterval = TimeSpan.FromMinutes(5);
 });
+builder.Services.Configure<FashionFix.Web.Services.GoogleMapsOptions>(builder.Configuration.GetSection("GoogleMaps"));
 
 builder.Services.ConfigureApplicationCookie(options =>
 {
@@ -62,6 +63,14 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
     options.Cookie.SameSite = SameSiteMode.Lax;
     options.Cookie.Name = "FashionFix.Auth";
+});
+builder.Services.Configure<FashionFix.Web.Services.AddressAutocompleteSettings>(
+    builder.Configuration.GetSection("AddressAutocomplete"));
+builder.Services.AddMemoryCache();
+builder.Services.AddHttpClient("geoapify", c =>
+{
+    c.BaseAddress = new Uri("https://api.geoapify.com/v1/");
+    c.Timeout = TimeSpan.FromSeconds(6);
 });
 
 // --- Authorization ---
@@ -138,6 +147,7 @@ else
 
 // --- Session ---
 builder.Services.AddDistributedMemoryCache();
+builder.Services.AddScoped<IPaymentRecoveryService, PaymentRecoveryService>();
 
 builder.Services.AddSession(options =>
 {

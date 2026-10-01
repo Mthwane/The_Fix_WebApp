@@ -150,24 +150,33 @@ public class DashboardService : IDashboardService
             .ToListAsync())
             .ToDictionary(x => x.Status, x => x.Count);
 
-        model.OrdersNeedingAction = model.OrdersByStatus.GetValueOrDefault(OrderStatus.Pending)
+        model.OrdersNeedingAction =
+            model.OrdersByStatus.GetValueOrDefault(OrderStatus.Pending)
             + model.OrdersByStatus.GetValueOrDefault(OrderStatus.Processing);
+
+        model.OpenPaymentIncidents = await _context.PaymentIncidents
+            .CountAsync(i => i.Status == PaymentIncidentStatus.NeedsAttention);
 
         var fulfilledRecently = await _context.Orders.AsNoTracking()
             .Where(o => o.DateFulfilled != null && o.DateCreated >= weekStart)
-            .Select(o => new { o.DateCreated, DateFulfilled = o.DateFulfilled!.Value })
+            .Select(o => new
+            {
+                o.DateCreated,
+                DateFulfilled = o.DateFulfilled!.Value
+            })
             .ToListAsync();
+
         model.AvgFulfillmentHours = fulfilledRecently.Count > 0
-            ? fulfilledRecently.Average(o => (o.DateFulfilled - o.DateCreated).TotalHours)
+            ? fulfilledRecently.Average(o =>
+                (o.DateFulfilled - o.DateCreated).TotalHours)
             : null;
 
         model.ShipmentsByStage = (await _context.CourierShipments.AsNoTracking()
             .Where(s => s.OrderId != null)
-            .ToListAsync()) // Stage is a computed property, not a column - group in memory
+            .ToListAsync())
             .GroupBy(s => s.Stage)
             .ToDictionary(g => g.Key, g => g.Count());
     }
-
     private async Task PopulateReturnsAsync(DashboardViewModel model, DateTime today, DateTime weekStart)
     {
         model.ReturnsToday = await _context.ReturnTransactions.AsNoTracking().CountAsync(r => r.DateProcessed >= today);
@@ -356,7 +365,26 @@ public class DashboardService : IDashboardService
             items.Add(new AttentionItem { Label = "Suppliers with an incomplete collection address", Count = model.SuppliersWithIncompleteAddress, Url = "/Suppliers", Severity = "warning" });
 
         if (sections.HasFlag(DashboardSections.Orders) && model.OrdersNeedingAction > 0)
-            items.Add(new AttentionItem { Label = "Orders needing action", Count = model.OrdersNeedingAction, Url = "/Orders", Severity = "info" });
+        {
+            items.Add(new AttentionItem
+            {
+                Label = "Orders needing action",
+                Count = model.OrdersNeedingAction,
+                Url = "/Orders",
+                Severity = "info"
+            });
+        }
+
+        if (sections.HasFlag(DashboardSections.Orders) && model.OpenPaymentIncidents > 0)
+        {
+            items.Add(new AttentionItem
+            {
+                Label = "Payments needing a refund or follow-up",
+                Count = model.OpenPaymentIncidents,
+                Url = "/PaymentIncidents",
+                Severity = "danger"
+            });
+        }
 
         if (sections.HasFlag(DashboardSections.Storefront) && model.RecentLowRatedReviews.Count > 0)
             items.Add(new AttentionItem { Label = "Low-rated reviews this week", Count = model.RecentLowRatedReviews.Count, Url = "/Storefront/Reviews", Severity = "warning" });

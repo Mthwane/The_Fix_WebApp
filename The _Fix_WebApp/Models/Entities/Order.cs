@@ -64,6 +64,11 @@ public class Order
     [Column(TypeName = "decimal(18,2)")]
     public decimal GrandTotal { get; set; }
 
+    /// <summary>How much of GrandTotal was paid from the customer's FixCash wallet (0 if none).
+    /// Equals GrandTotal for a full FixCash order; less than GrandTotal for a split payment.</summary>
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal WalletAmountApplied { get; set; }
+
     public DateTime DateCreated { get; set; } = DateTime.UtcNow;
     public DateTime? DateFulfilled { get; set; }
 

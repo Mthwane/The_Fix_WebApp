@@ -13,7 +13,10 @@ public enum WalletTransactionType
     RefundCredit,
     /// <summary>A manual correction by staff (e.g. goodwill credit, error fix) - not yet
     /// exposed in any UI, but the ledger is ready for it.</summary>
-    AdminAdjustment
+    AdminAdjustment,
+    /// <summary>A manual DEBIT by staff.</summary>
+    AdminDebit
+
 }
 
 /// <summary>One customer's FixCash balance. Deliberately thin - Balance is a running total kept
@@ -36,6 +39,7 @@ public class WalletAccount
     /// overwrite one another. See WalletService.RunWithRetryAsync for how this gets used.</summary>
     [Timestamp]
     public byte[]? RowVersion { get; set; }
+
 
     public DateTime DateCreated { get; set; } = DateTime.UtcNow;
 
@@ -78,6 +82,8 @@ public class WalletTransaction
 
     [MaxLength(250)]
     public string? Note { get; set; }
+    [MaxLength(450)]
+    public string? CreatedByUserId { get; set; }
 
     public DateTime DateCreated { get; set; } = DateTime.UtcNow;
 }

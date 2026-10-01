@@ -37,6 +37,10 @@
                 <span asp-validation-for="PhoneNumber" style="color:var(--ffs-clay);font-size:0.8rem;"></span>
             </div>
 
+            <partial name="_AddressSearch" model='new FashionFix.Web.Models.ViewModels.AddressSearchOptions {
+                StreetId = "AddressLine1", SuburbId = "AddressLine2", CityId = "City",
+                ProvinceId = "Province", PostalCodeId = "PostalCode" }' />
+
             <div style="margin-bottom:14px;">
                 <label asp-for="AddressLine1" style="@LabelStyle"></label>
                 <input asp-for="AddressLine1" style="@FieldStyle" />

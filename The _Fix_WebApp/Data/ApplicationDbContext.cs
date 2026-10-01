@@ -10,7 +10,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         : base(options)
     {
     }
-
+    public DbSet<PaymentIncident> PaymentIncidents => Set<PaymentIncident>();
     public DbSet<Product> Products => Set<Product>();
     public DbSet<ProductVariant> ProductVariants => Set<ProductVariant>();
     public DbSet<Order> Orders => Set<Order>();
@@ -65,6 +65,13 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         builder.Entity<Order>()
             .HasIndex(o => o.OrderNumber)
             .IsUnique();
+        // One incident per payment reference.
+        builder.Entity<PaymentIncident>().HasIndex(i => i.Reference).IsUnique();
+        builder.Entity<PaymentIncident>().Property(i => i.CardAmount).HasPrecision(18, 2);
+        builder.Entity<PaymentIncident>().Property(i => i.WalletAmount).HasPrecision(18, 2);
+        builder.Entity<PaymentIncident>()
+            .HasOne(i => i.Customer).WithMany().HasForeignKey(i => i.CustomerId)
+            .OnDelete(DeleteBehavior.SetNull);
 
         // --- Performance indexes: cover the columns that are actually filtered/sorted on ---
         // Products.Index / Shop.Index filter on IsActive + Category (and friends) and always
@@ -272,6 +279,11 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     .WithMany()
     .HasForeignKey(r => r.ProcessedByUserId)
     .OnDelete(DeleteBehavior.Restrict);
+        builder.Entity<WalletTransaction>().HasIndex(t => t.Reference);
+        builder.Entity<WalletTransaction>()
+            .HasIndex(t => new { t.Reference, t.Type })
+            .HasFilter("[Reference] IS NOT NULL AND [Type] IN (0, 2)")
+            .IsUnique();
 
         // SupportTicket has three separate FKs to ApplicationUser (Customer, AssignedEmployee,
         // EscalatedToManager) - all Restrict, same reasoning as ReturnTransaction.ProcessedByUser

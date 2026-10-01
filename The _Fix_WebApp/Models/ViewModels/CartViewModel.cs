@@ -47,11 +47,17 @@ public class CheckoutViewModel
     [Display(Name = "Save this card for next time")]
     public bool SaveCard { get; set; } = true;
 
-    public CartViewModel Cart { get; set; } = new();
-    public List<CustomerAddress> Addresses { get; set; } = new();
-    public List<CustomerPaymentMethod> SavedCards { get; set; } = new();
     /// <summary>Apply the maximum redeemable reward points to this order. The server recomputes the
     /// amount from the customer's real balance and the admin rules - nothing numeric is trusted from the client.</summary>
     [Display(Name = "Use my reward points")]
     public bool UsePoints { get; set; }
+
+    /// <summary>Spend the customer's FixCash balance on this order (up to the order total). If it doesn't
+    /// cover everything, the remainder is paid with the chosen card. The server recomputes the amount.</summary>
+    [Display(Name = "Use my FixCash balance")]
+    public bool UseWallet { get; set; }
+
+    public CartViewModel Cart { get; set; } = new();
+    public List<CustomerAddress> Addresses { get; set; } = new();
+    public List<CustomerPaymentMethod> SavedCards { get; set; } = new();
 }

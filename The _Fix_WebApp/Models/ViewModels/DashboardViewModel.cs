@@ -33,6 +33,10 @@ public class DashboardViewModel
     public List<Order> RecentOrders { get; set; } = new();
     public Dictionary<OrderStatus, int> OrdersByStatus { get; set; } = new();
     public int OrdersNeedingAction { get; set; }
+
+    // --- Payment Incidents ---
+    public int OpenPaymentIncidents { get; set; }
+
     public double? AvgFulfillmentHours { get; set; }
     public Dictionary<string, int> ShipmentsByStage { get; set; } = new();
 
@@ -91,7 +95,9 @@ public class DashboardViewModel
 public class RbacMatrixRow
 {
     public string PermissionLabel { get; set; } = string.Empty;
-    public Dictionary<string, bool> GrantedByRole { get; set; } = new(); // role name -> has claim
+
+    // role name -> has claim
+    public Dictionary<string, bool> GrantedByRole { get; set; } = new();
 }
 
 public class HourlyRevenuePoint
@@ -114,8 +120,11 @@ public class DepartmentRevenueItem
     public decimal Percentage { get; set; }
 }
 
-/// <summary>A rolled-up, cross-domain "needs your attention" callout - each one links straight
-/// to the screen that resolves it. Severity is a display hint only (info/warning/danger).</summary>
+/// <summary>
+/// A rolled-up, cross-domain "needs your attention" callout.
+/// Each item links directly to the screen that resolves it.
+/// Severity is a display hint only: info, warning, or danger.
+/// </summary>
 public class AttentionItem
 {
     public string Label { get; set; } = string.Empty;

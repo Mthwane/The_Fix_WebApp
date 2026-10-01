@@ -1,0 +1,47 @@
+@using Microsoft.Extensions.Options
+@using System.Text.Json
+@inject IOptions<FashionFix.Web.Services.AddressAutocompleteSettings> Settings
+@inject IOptions<FashionFix.Web.Services.GoogleMapsOptions> Maps
+@model FashionFix.Web.Models.ViewModels.AddressSearchOptions
+@*
+    Reusable address search box. Drop it above the address inputs of ANY form:
+
+        <partial name="_AddressSearch" model='new FashionFix.Web.Models.ViewModels.AddressSearchOptions {
+            StreetId = "AddressLine1", SuburbId = "AddressLine2", CityId = "City",
+            ProvinceId = "Province", PostalCodeId = "PostalCode" }' />
+
+    Which service answers (Geoapify or Google) is decided by the AddressAutocomplete settings - see
+    AddressAutocompleteSettings. It only fills inputs that are already on the page, so the form still
+    posts exactly what it did before and every field stays editable. With nothing configured this
+    renders nothing at all.
+*@
+@{
+    var provider = Settings.Value.ResolveProvider(Maps.Value.ApiKey);
+}
+@if (provider != "")
+{
+    <div style="margin-bottom:14px;">
+        <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;">@Model.Label</label>
+        <div data-address-autocomplete
+             data-provider="@provider"
+             data-suggest-url="@Url.Action("Suggest", "AddressSearch")"
+             data-country="@Model.Country"
+             data-street="@Model.StreetId"
+             data-suburb="@Model.SuburbId"
+             data-city="@Model.CityId"
+             data-province="@Model.ProvinceId"
+             data-postal="@Model.PostalCodeId"></div>
+        <div data-address-autocomplete-hint style="font-size:0.76rem;color:#6b6b6b;margin-top:4px;">
+            Start typing, pick your address, then check the fields below. You can edit any of them.
+        </div>
+    </div>
+
+    @* Load the script once per page, however many search boxes there are. Only the Google browser key is ever
+       sent to the page - the Geoapify key stays on the server. *@
+    @if (!Context.Items.ContainsKey("ff-address-search-script"))
+    {
+        Context.Items["ff-address-search-script"] = true;
+        <script>window.FF_ADDRESS_SEARCH = @Html.Raw(JsonSerializer.Serialize(new { provider, key = provider == "google" ? Maps.Value.ApiKey : null }));</script>
+        <script src="~/js/address-autocomplete.js" asp-append-version="true" defer></script>
+    }
+}

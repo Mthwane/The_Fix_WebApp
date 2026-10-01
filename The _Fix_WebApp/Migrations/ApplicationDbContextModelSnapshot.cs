@@ -681,6 +681,9 @@ namespace The__Fix_WebApp.Migrations
                     b.Property<decimal>("TaxTotal")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<decimal>("WalletAmountApplied")
+                        .HasColumnType("decimal(18,2)");
+
                     b.HasKey("OrderId");
 
                     b.HasIndex("CustomerId");
@@ -732,6 +735,76 @@ namespace The__Fix_WebApp.Migrations
                     b.HasIndex("ProductVariantId");
 
                     b.ToTable("OrderItems");
+                });
+
+            modelBuilder.Entity("FashionFix.Web.Models.Entities.PaymentIncident", b =>
+                {
+                    b.Property<int>("PaymentIncidentId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("PaymentIncidentId"));
+
+                    b.Property<decimal>("CardAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<bool>("CardRefunded")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("CustomerId")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateResolved")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("PointsRedeemed")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("PointsRestored")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Reference")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<string>("ResolutionNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("ResolvedByUserId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Source")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("WalletAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<bool>("WalletRestored")
+                        .HasColumnType("bit");
+
+                    b.HasKey("PaymentIncidentId");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("Reference")
+                        .IsUnique();
+
+                    b.ToTable("PaymentIncidents");
                 });
 
             modelBuilder.Entity("FashionFix.Web.Models.Entities.PricingSettings", b =>
@@ -1632,6 +1705,10 @@ namespace The__Fix_WebApp.Migrations
                     b.Property<decimal>("BalanceAfter")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<string>("CreatedByUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
                     b.Property<DateTime>("DateCreated")
                         .HasColumnType("datetime2");
 
@@ -1656,7 +1733,13 @@ namespace The__Fix_WebApp.Migrations
 
                     b.HasIndex("OrderId");
 
+                    b.HasIndex("Reference");
+
                     b.HasIndex("WalletAccountId");
+
+                    b.HasIndex("Reference", "Type")
+                        .IsUnique()
+                        .HasFilter("[Reference] IS NOT NULL AND [Type] IN (0, 2)");
 
                     b.ToTable("WalletTransactions");
                 });
@@ -1962,6 +2045,16 @@ namespace The__Fix_WebApp.Migrations
                     b.Navigation("Product");
 
                     b.Navigation("ProductVariant");
+                });
+
+            modelBuilder.Entity("FashionFix.Web.Models.Entities.PaymentIncident", b =>
+                {
+                    b.HasOne("FashionFix.Web.Models.Entities.ApplicationUser", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Customer");
                 });
 
             modelBuilder.Entity("FashionFix.Web.Models.Entities.Product", b =>

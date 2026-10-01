@@ -17,24 +17,24 @@ public class PosController : Controller
     private readonly ApplicationDbContext _context;
     private readonly IInventoryService _inventoryService;
     private readonly IEmailSender _emailSender;
+    private readonly IRewardsService _rewardsService;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly ILogger<PosController> _logger;
-    private readonly IRewardsService _rewardsService;
 
     public PosController(
-    ApplicationDbContext context,
-    IInventoryService inventoryService,
-    IEmailSender emailSender,
-    UserManager<ApplicationUser> userManager,
-    ILogger<PosController> logger,
-    IRewardsService rewardsService)
+        ApplicationDbContext context,
+        IInventoryService inventoryService,
+        IEmailSender emailSender,
+        IRewardsService rewardsService,
+        UserManager<ApplicationUser> userManager,
+        ILogger<PosController> logger)
     {
         _context = context;
         _inventoryService = inventoryService;
         _emailSender = emailSender;
+        _rewardsService = rewardsService;
         _userManager = userManager;
         _logger = logger;
-        _rewardsService = rewardsService;
     }
 
     // GET: /Pos - the till interface for staff.
@@ -169,15 +169,15 @@ public class PosController : Controller
     }
 
     // POST: /Pos/Checkout - scans/cart lines already built client-side (barcode JS), submitted here.
+    //
+    // NOTHING money-related is trusted from the browser. The cart lines are used only to learn WHICH
+    // variants and HOW MANY were scanned; every price, name and SKU is re-read from the database, VAT is
+    // recomputed here, and the discount is range-checked. The order row and its stock movement are
+    // committed in one transaction, so a failed sale leaves neither a phantom order nor missing stock.
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Checkout(POSCheckoutViewModel model)
     {
-        // VAT is always recomputed here from the fixed rate - never trusted from the client,
-        // and never a reason validation can fail (it used to be a free-typed field, which was
-        // the #1 cause of checkout silently failing with no explanation to the cashier).
-        model.TaxTotal = TaxSettings.CalculateVat(model.SubTotal, model.DiscountTotal);
-
         if (model.CartItems.Count == 0)
         {
             this.ToastError("The till is empty - scan at least one item before completing the sale.");
@@ -193,10 +193,14 @@ public class PosController : Controller
             return View(nameof(Index), model);
         }
 
-        // Stock can move between scanning and completing the sale (another till, a return,
-        // etc.) - re-check right before committing so we never oversell. One query for the
-        // whole basket (not one per line) via an IN-clause lookup, keyed to the exact
-        // variant (size/colour) scanned, not just the parent product.
+        // FixCash is an online-only wallet - it can't be spent at the till, whatever the form says.
+        if (model.PaymentMethod == PaymentMethod.FixCash)
+        {
+            this.ToastError("FixCash can only be used online, not at the till. Please choose another payment method.");
+            return View(nameof(Index), model);
+        }
+
+        // One query for the whole basket, keyed to the exact variant (size/colour) scanned.
         var cartVariantIds = model.CartItems.Select(l => l.VariantId).Distinct().ToList();
         var currentVariants = await _context.ProductVariants
             .AsNoTracking()
@@ -204,27 +208,85 @@ public class PosController : Controller
             .Where(v => cartVariantIds.Contains(v.ProductVariantId))
             .ToDictionaryAsync(v => v.ProductVariantId);
 
+        // --- Re-price every line from the database ---
+        var priceChanges = new List<string>();
         foreach (var line in model.CartItems)
         {
             if (!currentVariants.TryGetValue(line.VariantId, out var variant) || !variant.IsActive || !variant.Product.IsActive)
             {
-                this.ToastError($"'{line.ProductName}' is no longer available - it's been removed from the till.");
+                this.ToastError($"'{line.ProductName}' is no longer available - please remove it from the till.");
                 return View(nameof(Index), model);
             }
-            if (variant.StockQuantity < line.Quantity)
+
+            var serverPrice = Math.Round(variant.EffectivePrice, 2, MidpointRounding.AwayFromZero);
+            if (Math.Abs(line.UnitPrice - serverPrice) > 0.005m)
+                priceChanges.Add($"{variant.Product.Name} ({variant.Size}/{variant.Color}): {line.UnitPrice:C} -> {serverPrice:C}");
+
+            // Overwrite everything descriptive/financial with the database's version.
+            line.ProductId = variant.ProductId;
+            line.ProductName = variant.Product.Name;
+            line.SKU = variant.SKU;
+            line.Size = variant.Size;
+            line.Color = variant.Color;
+            line.UnitPrice = serverPrice;
+        }
+
+        if (priceChanges.Count > 0)
+        {
+            // The cashier and customer saw a different price on screen. Don't silently charge something else:
+            // show the corrected prices and let the cashier confirm again.
+            ModelState.Clear();
+            this.ToastWarning($"Prices changed since these items were scanned - the till now shows the current prices. Please check and complete the sale again. ({string.Join("; ", priceChanges)})");
+            return View(nameof(Index), model);
+        }
+
+        // --- Stock (per variant, summing duplicate lines) ---
+        foreach (var group in model.CartItems.GroupBy(l => l.VariantId))
+        {
+            var variant = currentVariants[group.Key];
+            var wanted = group.Sum(l => l.Quantity);
+            if (variant.StockQuantity < wanted)
             {
-                this.ToastError($"Only {variant.StockQuantity} of '{line.ProductName}' ({variant.Size}/{variant.Color}) left in stock - please adjust the quantity.");
+                this.ToastError($"Only {variant.StockQuantity} of '{variant.Product.Name}' ({variant.Size}/{variant.Color}) left in stock - please adjust the quantity.");
                 return View(nameof(Index), model);
             }
         }
 
+        // --- Discount: a real amount, never negative, never more than the sale ---
+        model.DiscountTotal = Math.Round(model.DiscountTotal, 2, MidpointRounding.AwayFromZero);
+        if (model.DiscountTotal < 0 || model.DiscountTotal > model.SubTotal)
+        {
+            this.ToastError($"The discount must be between R0.00 and the sale subtotal ({model.SubTotal:C}).");
+            return View(nameof(Index), model);
+        }
+
+        // --- Linked customer must be a real Customer account (it earns reward points) ---
+        if (!string.IsNullOrWhiteSpace(model.CustomerId))
+        {
+            var linked = await _userManager.FindByIdAsync(model.CustomerId);
+            if (linked is null || !await _userManager.IsInRoleAsync(linked, "Customer"))
+            {
+                this.ToastError("The linked customer account wasn't found. Clear the customer field or pick a valid customer.");
+                return View(nameof(Index), model);
+            }
+        }
+        else
+        {
+            model.CustomerId = null;
+        }
+
+        // VAT is always recomputed here from the fixed rate - never trusted from the client.
+        model.TaxTotal = TaxSettings.CalculateVat(model.SubTotal, model.DiscountTotal);
+
         var cashierId = _userManager.GetUserId(User);
+        var order = new Order();
+        List<ProductVariant> updatedVariants;
 
         try
         {
-            var order = new Order
+            order = new Order
             {
-                OrderNumber = $"POS-{DateTime.UtcNow:yyyyMMddHHmmss}",
+                OrderNumber = $"POS-{DateTime.UtcNow:yyyyMMddHHmmssfff}",
                 OrderType = OrderType.POS,
                 Status = OrderStatus.Completed,
                 PaymentMethod = model.PaymentMethod,
@@ -249,43 +311,72 @@ public class PosController : Controller
                 });
             }
 
-            _context.Orders.Add(order);
-            await _context.SaveChangesAsync();
-
-
-            // One round trip and one commit for the whole basket, instead of looping
-            // DecrementStockAsync + IsLowStockAsync per line (which was N queries + N
-            // separate commits for an N-item sale).
-            var updatedVariants = await _inventoryService.DecrementStockBatchAsync(
-                model.CartItems.Select(l => (l.VariantId, l.Quantity)));
-
-            var lowStockVariantIds = updatedVariants.Where(v => v.IsLowStock).Select(v => v.ProductVariantId).ToHashSet();
-            var newlyLowStock = model.CartItems
-                .Where(l => lowStockVariantIds.Contains(l.VariantId))
-                .Select(l => $"{l.ProductName} ({l.Size}/{l.Color})")
-                .ToList();
-
-
-            _context.AuditLogs.Add(new AuditLog
+            await using var tx = await _context.Database.BeginTransactionAsync();
+            try
             {
-                UserId = cashierId,
-                Action = "SaleProcessed",
-                Details = $"Processed sale {order.OrderNumber} for {order.GrandTotal:C} ({model.CartItems.Count} line item(s))."
-            });
-            await _context.SaveChangesAsync();
-            var pointsEarned = 0;
-            if (!string.IsNullOrWhiteSpace(order.CustomerId))
-            {
-                try { pointsEarned = (await _rewardsService.EarnForOrderAsync(order)).Points; }
-                catch (Exception ex) { _logger.LogError(ex, "Sale {OrderNumber} completed but awarding reward points failed.", order.OrderNumber); }
+                _context.Orders.Add(order);
+                await _context.SaveChangesAsync();
+
+                // Atomic, conditional stock UPDATEs - joins this transaction. If another till or an online
+                // order took the last unit a moment ago, this throws and the whole sale rolls back.
+                updatedVariants = await _inventoryService.DecrementStockBatchAsync(
+                    model.CartItems.Select(l => (l.VariantId, l.Quantity)));
+
+                _context.AuditLogs.Add(new AuditLog
+                {
+                    UserId = cashierId,
+                    Action = "SaleProcessed",
+                    Details = $"Processed sale {order.OrderNumber} for {order.GrandTotal:C} ({model.CartItems.Count} line item(s))." +
+                              (order.DiscountTotal > 0 ? $" Discount applied: {order.DiscountTotal:C}." : "")
+                });
+                await _context.SaveChangesAsync();
+
+                await tx.CommitAsync();
             }
+            catch
+            {
+                await tx.RollbackAsync();
+                foreach (var entry in _context.ChangeTracker.Entries()
+                             .Where(e => e.Entity is Order or OrderItem or InventoryTransaction or AuditLog)
+                             .ToList())
+                    entry.State = EntityState.Detached;
+                throw;
+            }
+        }
+        catch (InsufficientStockException ex)
+        {
+            this.ToastError($"Not enough stock - only {ex.Available} of '{ex.Label}' left (another sale just took some). Please adjust the quantity.");
+            return View(nameof(Index), model);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "POS checkout failed for cashier {CashierId} with {ItemCount} item(s).", cashierId, model.CartItems.Count);
+            this.ToastError("Something went wrong completing the sale. Nothing was charged - please try again.");
+            return View(nameof(Index), model);
+        }
 
-            // Digital receipt (US-07): an explicit ReceiptEmail typed at the till takes
-            // priority (covers walk-in customers with no account); otherwise fall back to
-            // the linked customer account's email, if any.
-            var recipientEmail = model.ReceiptEmail;
-            var recipientName = "there";
+        // The sale is committed. Everything below is best-effort and must never turn a completed sale into an error.
+        var lowStockVariantIds = updatedVariants.Where(v => v.IsLowStock).Select(v => v.ProductVariantId).ToHashSet();
+        var newlyLowStock = model.CartItems
+            .Where(l => lowStockVariantIds.Contains(l.VariantId))
+            .Select(l => $"{l.ProductName} ({l.Size}/{l.Color})")
+            .Distinct()
+            .ToList();
 
+        var pointsEarned = 0;
+        if (!string.IsNullOrWhiteSpace(order.CustomerId))
+        {
+            try { pointsEarned = (await _rewardsService.EarnForOrderAsync(order)).Points; }
+            catch (Exception ex) { _logger.LogError(ex, "Sale {OrderNumber} completed but awarding reward points failed.", order.OrderNumber); }
+        }
+
+        // Digital receipt (US-07): an explicit ReceiptEmail typed at the till takes priority (covers walk-in
+        // customers with no account); otherwise fall back to the linked customer account's email, if any.
+        var recipientEmail = model.ReceiptEmail;
+        var recipientName = "there";
+
+        try
+        {
             if (string.IsNullOrWhiteSpace(recipientEmail) && !string.IsNullOrWhiteSpace(model.CustomerId))
             {
                 var linkedCustomer = await _userManager.FindByIdAsync(model.CustomerId);
@@ -299,41 +390,36 @@ public class PosController : Controller
             if (!string.IsNullOrWhiteSpace(recipientEmail))
             {
                 var itemsHtml = string.Join("", model.CartItems.Select(l =>
-                    $"<tr><td>{l.ProductName}</td><td>{l.Quantity}</td><td>{l.UnitPrice:C}</td><td>{l.LineTotal:C}</td></tr>"));
+                    $"<tr><td>{WebUtility.HtmlEncode(l.ProductName)}</td><td>{l.Quantity}</td><td>{l.UnitPrice:C}</td><td>{l.LineTotal:C}</td></tr>"));
 
+                var discountLine = order.DiscountTotal > 0 ? $"Discount: -{order.DiscountTotal:C}<br/>" : "";
                 var body = $@"
-                    <h2>Thanks for shopping with us, {recipientName}!</h2>
+                    <h2>Thanks for shopping with us, {WebUtility.HtmlEncode(recipientName)}!</h2>
                     <p>Receipt for order <strong>{order.OrderNumber}</strong> ({order.DateCreated:dd MMM yyyy, HH:mm}).</p>
                     <table border='1' cellpadding='6' cellspacing='0' style='border-collapse:collapse;'>
                         <thead><tr><th>Item</th><th>Qty</th><th>Unit Price</th><th>Line Total</th></tr></thead>
                         <tbody>{itemsHtml}</tbody>
                     </table>
-                    <p>Subtotal: {order.SubTotal:C}<br/>VAT (15%): {order.TaxTotal:C}<br/>
+                    <p>Subtotal: {order.SubTotal:C}<br/>{discountLine}VAT (15%): {order.TaxTotal:C}<br/>
                     <strong>Total: {order.GrandTotal:C}</strong> (paid via {order.PaymentMethod})</p>";
 
                 await _emailSender.SendAsync(recipientEmail, $"Receipt - {order.OrderNumber}", body);
             }
-
-            this.ToastSuccess(
-    $"Sale {order.OrderNumber} completed - {order.GrandTotal:C} ({model.CartItems.Count} item(s))." +
-    (string.IsNullOrWhiteSpace(recipientEmail)
-        ? ""
-        : $" Receipt emailed to {recipientEmail}.") +
-    (pointsEarned > 0
-        ? $" Customer earned {pointsEarned} points."
-        : ""));
-
-            if (newlyLowStock.Count > 0)
-                this.ToastWarning($"Now low on stock: {string.Join(", ", newlyLowStock)}.");
-
-            return RedirectToAction(nameof(Receipt), new { id = order.OrderId });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "POS checkout failed for cashier {CashierId} with {ItemCount} item(s).", cashierId, model.CartItems.Count);
-            this.ToastError("Something went wrong completing the sale. Nothing was charged - please try again.");
-            return View(nameof(Index), model);
+            _logger.LogError(ex, "Sale {OrderNumber} completed but the receipt email failed.", order.OrderNumber);
+            recipientEmail = null;
         }
+
+        this.ToastSuccess($"Sale {order.OrderNumber} completed - {order.GrandTotal:C} ({model.CartItems.Count} item(s))." +
+            (string.IsNullOrWhiteSpace(recipientEmail) ? "" : $" Receipt emailed to {recipientEmail}.") +
+            (pointsEarned > 0 ? $" Customer earned {pointsEarned} points." : ""));
+
+        if (newlyLowStock.Count > 0)
+            this.ToastWarning($"Now low on stock: {string.Join(", ", newlyLowStock)}.");
+
+        return RedirectToAction(nameof(Receipt), new { id = order.OrderId });
     }
 
     // GET: /Pos/Receipt/5
