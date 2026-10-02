@@ -1,0 +1,83 @@
+@model WalletAdminIndexViewModel
+@{
+    ViewData["Title"] = "FixCash Wallets";
+    Layout = "_StaffLayout";
+    var muted = "font-size:0.8rem;color:var(--stf-on-surface-variant);";
+}
+<div class="stf-content">
+    <span class="stf-eyebrow">Customers</span>
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:6px;">
+        <h1 style="margin:0;">FixCash Wallets</h1>
+        <a asp-action="Liability" class="stf-btn stf-btn-outline">Liability report</a>
+    </div>
+    <p style="@muted margin-bottom:16px;">
+        Every customer wallet, largest balance first. Open one to see its full ledger or to make a manual credit or debit.
+    </p>
+
+    <form asp-action="Index" method="get" class="stf-card" style="display:flex;gap:10px;align-items:center;margin-bottom:16px;max-width:640px;">
+        <input type="text" name="search" value="@Model.Search" placeholder="Search by name or email"
+               style="flex:1;border:1px solid var(--stf-outline-variant);border-radius:999px;padding:10px 18px;font-size:0.9rem;" />
+        <button type="submit" class="stf-btn stf-btn-primary">Search</button>
+        @if (!string.IsNullOrWhiteSpace(Model.Search))
+        {
+            <a asp-action="Index" class="stf-btn stf-btn-outline">Clear</a>
+        }
+    </form>
+
+    <p style="@muted margin-bottom:10px;">
+        @Model.TotalCount wallet(s) &middot; combined balance <strong>@Model.TotalBalance.ToString("C")</strong>
+    </p>
+
+    <table class="stf-table">
+        <thead>
+            <tr>
+                <th>Customer</th>
+                <th>Email</th>
+                <th style="text-align:right;">Balance</th>
+                <th>Last activity</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var w in Model.Items)
+            {
+                <tr>
+                    <td style="font-weight:600;">@w.FullName</td>
+                    <td>@w.Email</td>
+                    <td style="text-align:right;">@w.Balance.ToString("C")</td>
+                    <td>@(w.LastActivity.HasValue ? w.LastActivity.Value.ToLocalTime().ToString("dd MMM yyyy, HH:mm") : "-")</td>
+                    <td style="text-align:right;">
+                        <a asp-action="Details" asp-route-id="@w.CustomerId" class="stf-btn stf-btn-outline" style="padding:6px 12px;font-size:0.75rem;">Open</a>
+                    </td>
+                </tr>
+            }
+            @if (!Model.Items.Any())
+            {
+                <tr><td colspan="5" style="color:var(--stf-on-surface-variant);">No wallets match.</td></tr>
+            }
+        </tbody>
+    </table>
+
+    @if (Model.TotalPages > 1)
+    {
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;font-size:0.85rem;">
+            @if (Model.Page > 1)
+            {
+                <a asp-action="Index" asp-route-search="@Model.Search" asp-route-page="@(Model.Page - 1)">&larr; Previous</a>
+            }
+            else
+            {
+                <span></span>
+            }
+            <span style="color:var(--stf-on-surface-variant);">Page @Model.Page of @Model.TotalPages</span>
+            @if (Model.Page < Model.TotalPages)
+            {
+                <a asp-action="Index" asp-route-search="@Model.Search" asp-route-page="@(Model.Page + 1)">Next &rarr;</a>
+            }
+            else
+            {
+                <span></span>
+            }
+        </div>
+    }
+</div>

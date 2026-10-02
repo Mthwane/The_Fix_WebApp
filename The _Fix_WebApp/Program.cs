@@ -73,6 +73,19 @@ builder.Services.AddHttpClient("geoapify", c =>
     c.Timeout = TimeSpan.FromSeconds(6);
 });
 
+// --- Image storage (Cloudinary when configured, local wwwroot/uploads otherwise) ---
+builder.Services.Configure<FashionFix.Web.Services.Images.CloudinarySettings>(
+    builder.Configuration.GetSection("Cloudinary"));
+builder.Services.AddHttpClient("cloudinary", c =>
+{
+    c.BaseAddress = new Uri("https://api.cloudinary.com/v1_1/");
+    c.Timeout = TimeSpan.FromSeconds(30);
+});
+if (builder.Configuration.GetSection("Cloudinary").Get<FashionFix.Web.Services.Images.CloudinarySettings>()?.IsConfigured == true)
+    builder.Services.AddScoped<FashionFix.Web.Services.Images.IImageStorage, FashionFix.Web.Services.Images.CloudinaryImageStorage>();
+else
+    builder.Services.AddScoped<FashionFix.Web.Services.Images.IImageStorage, FashionFix.Web.Services.Images.LocalImageStorage>();
+
 // --- Authorization ---
 builder.Services.AddAuthorization(options =>
 {
@@ -92,6 +105,7 @@ builder.Services.Configure<EmailOptions>(
     builder.Configuration.GetSection("Email"));
 
 builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
+builder.Services.AddScoped<ICustomerNotificationService, CustomerNotificationService>();
 
 builder.Services.Configure<PaystackOptions>(
     builder.Configuration.GetSection("Paystack"));

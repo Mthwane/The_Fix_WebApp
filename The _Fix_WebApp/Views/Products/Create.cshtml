@@ -11,7 +11,7 @@
     <span class="stf-eyebrow">Catalogue</span>
     <h1 style="margin-bottom:20px;">Add New Product</h1>
 
-    <form asp-action="Create" method="post" id="productForm" class="stf-card">
+    <form asp-action="Create" method="post" enctype="multipart/form-data" id="productForm" class="stf-card">
         <div asp-validation-summary="ModelOnly" style="color:var(--stf-error);margin-bottom:10px;"></div>
         @{ string L = "font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;"; string F = "width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:9px 14px;font-size:0.9rem;"; string EV = "color:var(--stf-error);font-size:0.8rem;"; string HINT = "font-size:0.75rem;color:var(--stf-on-surface-variant);margin-top:4px;"; }
 
@@ -70,9 +70,11 @@
                 <span asp-validation-for="CompareAtPrice" style="@EV"></span>
             </div>
             <div>
-                <label asp-for="ImageUrl" style="@L"></label>
-                <input asp-for="ImageUrl" style="@F" placeholder="https://..." />
+                <label style="@L">Main Photo</label>
+                <input type="file" name="imageFile" accept="image/jpeg,image/png,image/webp,image/gif" style="@F" />
+                <input asp-for="ImageUrl" style="@F margin-top:6px;" placeholder="...or paste an image URL (https://...)" />
                 <span asp-validation-for="ImageUrl" style="@EV"></span>
+                <div style="@HINT">Upload a JPG, PNG or WebP (max 5 MB), or paste a link. An uploaded file takes priority.</div>
             </div>
             <div>
                 <label asp-for="LowStockThreshold" style="@L"></label>

@@ -10,12 +10,17 @@
     <p style="color:var(--stf-on-surface-variant);margin-bottom:4px;">Additional photos for this product's detail page. The main product photo (used on cards/grids) is still set on the product's own Edit screen.</p>
     <a asp-action="Edit" asp-route-id="@product?.ProductId" style="font-size:0.85rem;color:var(--stf-secondary);">&larr; Back to Product</a>
 
-    <form asp-action="AddImage" method="post" class="stf-card" style="display:flex;gap:14px;align-items:flex-end;margin:20px 0;">
+    <form asp-action="AddImage" method="post" enctype="multipart/form-data" class="stf-card" style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;margin:20px 0;">
         @Html.AntiForgeryToken()
         <input type="hidden" name="productId" value="@product?.ProductId" />
-        <div style="flex:1;">
-            <label style="font-size:0.82rem;display:block;margin-bottom:6px;">Image URL</label>
-            <input name="imageUrl" required placeholder="https://..." style="width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:8px 12px;font-size:0.88rem;" />
+        <div style="flex:1;min-width:240px;">
+            <label style="font-size:0.82rem;display:block;margin-bottom:6px;">Upload photos (you can pick several)</label>
+            <input type="file" name="imageFiles" multiple accept="image/jpeg,image/png,image/webp,image/gif" style="width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:8px 12px;font-size:0.88rem;" />
+            <div style="font-size:0.75rem;color:var(--stf-on-surface-variant);margin-top:4px;">JPG, PNG or WebP, max 5 MB each.</div>
+        </div>
+        <div style="flex:1;min-width:240px;">
+            <label style="font-size:0.82rem;display:block;margin-bottom:6px;">...or an image URL</label>
+            <input name="imageUrl" placeholder="https://..." style="width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:8px 12px;font-size:0.88rem;" />
         </div>
         <label style="font-size:0.82rem;display:flex;align-items:center;gap:6px;">
             <input type="checkbox" name="isPrimary" value="true" id="isPrimaryCheck" /> Set as primary gallery image
@@ -33,7 +38,7 @@
             @foreach (var img in Model)
             {
                 <div class="stf-card" style="padding:0;overflow:hidden;">
-                    <img src="@img.ImageUrl" style="width:100%;aspect-ratio:1;object-fit:cover;" alt="" />
+                    <img src="@img.ImageUrl.Sized(400)" loading="lazy" style="width:100%;aspect-ratio:1;object-fit:cover;" alt="" />
                     <div style="padding:14px;">
                         @if (img.IsPrimary)
                         {

@@ -2,6 +2,7 @@ using FashionFix.Web.Data;
 using FashionFix.Web.Models.Entities;
 using FashionFix.Web.Models.ViewModels;
 using FashionFix.Web.Security;
+using FashionFix.Web.Services.Images;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -60,13 +61,27 @@ public class DepartmentsController : Controller
     // POST: /Departments/Create
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Create(DepartmentViewModel model)
+    public async Task<IActionResult> Create(DepartmentViewModel model, IFormFile? heroFile, IFormFile? tileFile, [FromServices] IImageStorage imageStorage)
     {
         if (await _context.Departments.AnyAsync(d => d.Slug == model.Slug))
             ModelState.AddModelError(nameof(model.Slug), "That slug is already in use by another department.");
 
         if (!ModelState.IsValid)
             return View(model);
+
+        // Uploaded files win over pasted URLs; uploaded only once the rest of the form is valid.
+        if (heroFile is { Length: > 0 })
+        {
+            var up = await imageStorage.UploadAsync(heroFile, "departments");
+            if (!up.Success) { ModelState.AddModelError(nameof(model.HeroImageUrl), up.Error ?? "Upload failed."); return View(model); }
+            model.HeroImageUrl = up.Url;
+        }
+        if (tileFile is { Length: > 0 })
+        {
+            var up = await imageStorage.UploadAsync(tileFile, "departments");
+            if (!up.Success) { ModelState.AddModelError(nameof(model.TileImageUrl), up.Error ?? "Upload failed."); return View(model); }
+            model.TileImageUrl = up.Url;
+        }
 
         var department = new Department
         {
@@ -133,7 +148,7 @@ public class DepartmentsController : Controller
     // POST: /Departments/Edit/5
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Edit(int id, DepartmentViewModel model)
+    public async Task<IActionResult> Edit(int id, DepartmentViewModel model, IFormFile? heroFile, IFormFile? tileFile, [FromServices] IImageStorage imageStorage)
     {
         if (id != model.DepartmentId) return BadRequest();
 
@@ -147,6 +162,32 @@ public class DepartmentsController : Controller
             .Include(d => d.SubCategories)
             .FirstOrDefaultAsync(d => d.DepartmentId == id);
         if (department is null) return NotFound();
+
+        var oldHero = department.HeroImageUrl;
+        var oldTile = department.TileImageUrl;
+        var heroReplaced = false;
+        var tileReplaced = false;
+
+        if (heroFile is { Length: > 0 })
+        {
+            var up = await imageStorage.UploadAsync(heroFile, "departments");
+            if (!up.Success) { ModelState.AddModelError(nameof(model.HeroImageUrl), up.Error ?? "Upload failed."); return View(model); }
+            model.HeroImageUrl = up.Url;
+            heroReplaced = true;
+        }
+        if (tileFile is { Length: > 0 })
+        {
+            var up = await imageStorage.UploadAsync(tileFile, "departments");
+            if (!up.Success)
+            {
+                // The hero upload (if any) already succeeded; don't leave it orphaned.
+                if (heroReplaced) await imageStorage.DeleteAsync(model.HeroImageUrl);
+                ModelState.AddModelError(nameof(model.TileImageUrl), up.Error ?? "Upload failed.");
+                return View(model);
+            }
+            model.TileImageUrl = up.Url;
+            tileReplaced = true;
+        }
 
         department.Name = model.Name;
         department.Slug = model.Slug;
@@ -195,8 +236,19 @@ public class DepartmentsController : Controller
 
         await _context.SaveChangesAsync();
 
+        // Clean up replaced files (skipped if the same URL is still used by another department).
+        if (heroReplaced) await DeleteIfUnusedAsync(oldHero, imageStorage);
+        if (tileReplaced) await DeleteIfUnusedAsync(oldTile, imageStorage);
+
         this.ToastSuccess($"'{department.Name}' department updated.");
         return RedirectToAction(nameof(Index));
+    }
+
+    private async Task DeleteIfUnusedAsync(string? url, IImageStorage imageStorage)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return;
+        var stillUsed = await _context.Departments.AnyAsync(d => d.HeroImageUrl == url || d.TileImageUrl == url);
+        if (!stillUsed) await imageStorage.DeleteAsync(url);
     }
 
     // POST: /Departments/ToggleActive/5 - soft "remove"/restore, matching the rest of the app's

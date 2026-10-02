@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using The__Fix_WebApp.Services;
 
 namespace FashionFix.Web.Controllers;
 
@@ -21,19 +22,28 @@ public class ReturnsController : Controller
     private readonly IInventoryService _inventoryService;
     private readonly IWalletService _walletService;
     private readonly IRewardsService _rewardsService;
+    private readonly IPaymentService _payments;
+    private readonly ICustomerNotificationService _notify;
+    private readonly ILogger<ReturnsController> _logger;
 
     public ReturnsController(
         ApplicationDbContext context,
         UserManager<ApplicationUser> userManager,
         IInventoryService inventoryService,
         IWalletService walletService,
-        IRewardsService rewardsService)
+        IRewardsService rewardsService,
+        IPaymentService payments,
+        ICustomerNotificationService notify,
+        ILogger<ReturnsController> logger)
     {
         _context = context;
         _userManager = userManager;
         _inventoryService = inventoryService;
         _walletService = walletService;
         _rewardsService = rewardsService;
+        _payments = payments;
+        _notify = notify;
+        _logger = logger;
     }
 
     // GET: /Returns - recent returns, newest first.
@@ -222,32 +232,112 @@ public class ReturnsController : Controller
             }
         }
 
+        // ---- Where the money goes ----
+        // Store Credit: the whole refund goes to the customer's FixCash wallet.
+        // Original Payment on an ONLINE order: the FixCash share goes back to the wallet and the card
+        // share is requested from Paystack (the order number is the payment reference), split pro rata
+        // to how the order was paid. Original Payment on a POS sale stays a manual at-the-till refund.
+        var order = item.Order;
+        decimal toWallet = 0m;
+        decimal toCard = 0m;
+
         if (refundMethod == RefundMethod.StoreCredit)
         {
-            var creditResult = await _walletService.CreditRefundAsync(
-                item.Order.CustomerId!,
-                refundAmount,
-                item.OrderId,
-                $"Refund for return on order {item.Order.OrderNumber}.");
-
-            if (!creditResult.Success)
+            toWallet = refundAmount;
+        }
+        else if (order.OrderType == OrderType.Online &&
+                 !string.IsNullOrEmpty(order.CustomerId) &&
+                 order.GrandTotal > 0)
+        {
+            if (order.WalletAmountApplied > 0)
             {
-                // The ReturnTransaction record and stock adjustment above are already
-                // committed - the return itself genuinely happened. Only the wallet credit
-                // failed, so say so precisely rather than implying the whole return needs
-                // redoing.
-                this.ToastError(
-                    $"Return processed and stock adjusted, but crediting the customer's FixCash wallet failed: " +
-                    $"{creditResult.ErrorMessage}. Credit it manually.");
+                toWallet = Math.Min(
+                    refundAmount,
+                    Math.Round(refundAmount * order.WalletAmountApplied / order.GrandTotal, 2, MidpointRounding.AwayFromZero));
+            }
 
-                return RedirectToAction(
-                    nameof(Lookup),
-                    new { orderNumber = item.Order.OrderNumber });
+            if (order.PaymentMethod is PaymentMethod.CreditCard or PaymentMethod.DebitCard)
+                toCard = refundAmount - toWallet;
+        }
+
+        decimal walletCredited = 0m;
+        var problems = new List<string>();
+        var cardFailed = false;
+
+        if (toWallet > 0)
+        {
+            var creditResult = await _walletService.CreditReturnAsync(
+                order.CustomerId!,
+                toWallet,
+                item.OrderId,
+                returnTxn.ReturnId,
+                $"Refund for return on order {order.OrderNumber}.");
+
+            if (creditResult.Success)
+                walletCredited = toWallet;
+            else
+                problems.Add($"crediting the FixCash wallet failed ({creditResult.ErrorMessage}) - credit {toWallet:C} manually");
+        }
+
+        if (toCard > 0)
+        {
+            try
+            {
+                var cardResult = await _payments.RefundTransactionAsync(order.OrderNumber, toCard);
+                if (!cardResult.Success)
+                {
+                    cardFailed = true;
+                    problems.Add($"the {toCard:C} card refund was rejected ({cardResult.ErrorMessage}) - refund it manually");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Card refund for return {ReturnId} on order {OrderNumber} threw.", returnTxn.ReturnId, order.OrderNumber);
+                cardFailed = true;
+                problems.Add($"the {toCard:C} card refund failed - refund it manually");
             }
         }
 
-        this.ToastSuccess(
-            $"Return processed - {refundAmount:C} refunded via {refundMethod}.{rewardsNote}");
+        if (toWallet > 0 || toCard > 0)
+        {
+            var auditDetails =
+                $"Return {returnTxn.ReturnId} on {order.OrderNumber}: FixCash {walletCredited:0.00} of {toWallet:0.00}, " +
+                $"card {(cardFailed ? 0m : toCard):0.00} of {toCard:0.00}." +
+                (problems.Count > 0 ? " PROBLEM: " + string.Join("; ", problems) : "");
+
+            _context.AuditLogs.Add(new AuditLog
+            {
+                UserId = _userManager.GetUserId(User),
+                Action = problems.Count > 0 ? "ReturnRefundFailed" : "ReturnRefundIssued",
+                Details = auditDetails.Length <= 500 ? auditDetails : auditDetails[..500]
+            });
+            await _context.SaveChangesAsync();
+
+            if (!string.IsNullOrEmpty(order.CustomerId))
+            {
+                var customer = await _userManager.FindByIdAsync(order.CustomerId);
+                await _notify.ReturnRefundAsync(customer, order, walletCredited, toCard, cardFailed);
+            }
+        }
+
+        if (problems.Count > 0)
+        {
+            this.ToastError(
+                "Return processed and stock adjusted, but " + string.Join("; and ", problems) + ".");
+        }
+        else
+        {
+            var where = toWallet > 0 && toCard > 0
+                ? $"{toWallet:C} to FixCash and {toCard:C} to the card"
+                : toWallet > 0
+                    ? "to the customer's FixCash wallet"
+                    : toCard > 0
+                        ? "to the card"
+                        : $"via {refundMethod}";
+
+            this.ToastSuccess(
+                $"Return processed - {refundAmount:C} refunded ({where}).{rewardsNote}");
+        }
 
         return RedirectToAction(
             nameof(Lookup),

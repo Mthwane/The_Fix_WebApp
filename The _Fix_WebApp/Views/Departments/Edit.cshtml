@@ -7,7 +7,7 @@
     <span class="stf-eyebrow">Storefront</span>
     <h1 style="margin-bottom:20px;">Edit Department</h1>
 
-    <form asp-action="Edit" asp-route-id="@Model.DepartmentId" method="post" class="stf-card">
+    <form asp-action="Edit" asp-route-id="@Model.DepartmentId" method="post" enctype="multipart/form-data" class="stf-card">
         <input type="hidden" asp-for="DepartmentId" />
         <div asp-validation-summary="ModelOnly" style="color:var(--stf-error);margin-bottom:10px;"></div>
         @{ string L = "font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;"; string F = "width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:9px 14px;font-size:0.9rem;"; }
@@ -34,12 +34,26 @@
                 </label>
             </div>
             <div>
-                <label asp-for="HeroImageUrl" style="@L"></label>
-                <input asp-for="HeroImageUrl" style="@F" />
+                <label style="@L">Hero Image</label>
+                @if (!string.IsNullOrWhiteSpace(Model.HeroImageUrl))
+                {
+                    <img src="@Model.HeroImageUrl.Sized(240)" alt="" style="height:70px;max-width:100%;object-fit:cover;border-radius:8px;display:block;margin-bottom:8px;border:1px solid var(--stf-outline-variant);" />
+                }
+                <input type="file" name="heroFile" accept="image/jpeg,image/png,image/webp,image/gif" style="@F" />
+                <input asp-for="HeroImageUrl" style="@F margin-top:6px;" placeholder="...or paste an image URL" />
+                <span asp-validation-for="HeroImageUrl" style="color:var(--stf-error);font-size:0.8rem;"></span>
+                <div style="font-size:0.75rem;color:var(--stf-on-surface-variant);margin-top:4px;">JPG, PNG or WebP, max 5 MB. An uploaded file takes priority over the link.</div>
             </div>
             <div>
-                <label asp-for="TileImageUrl" style="@L"></label>
-                <input asp-for="TileImageUrl" style="@F" />
+                <label style="@L">Tile Image (homepage portal card)</label>
+                @if (!string.IsNullOrWhiteSpace(Model.TileImageUrl))
+                {
+                    <img src="@Model.TileImageUrl.Sized(240)" alt="" style="height:70px;max-width:100%;object-fit:cover;border-radius:8px;display:block;margin-bottom:8px;border:1px solid var(--stf-outline-variant);" />
+                }
+                <input type="file" name="tileFile" accept="image/jpeg,image/png,image/webp,image/gif" style="@F" />
+                <input asp-for="TileImageUrl" style="@F margin-top:6px;" placeholder="...or paste an image URL" />
+                <span asp-validation-for="TileImageUrl" style="color:var(--stf-error);font-size:0.8rem;"></span>
+                <div style="font-size:0.75rem;color:var(--stf-on-surface-variant);margin-top:4px;">JPG, PNG or WebP, max 5 MB. An uploaded file takes priority over the link.</div>
             </div>
             <div>
                 <label asp-for="HeroHeadline" style="@L"></label>

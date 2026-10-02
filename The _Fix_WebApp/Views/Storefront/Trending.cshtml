@@ -29,10 +29,10 @@
     {
         @foreach (var f in Model)
         {
-            <form asp-action="UpdateTrending" asp-route-id="@f.FeaturedProductId" method="post" class="stf-card" style="margin-bottom:16px;">
+            <form asp-action="UpdateTrending" asp-route-id="@f.FeaturedProductId" method="post" enctype="multipart/form-data" class="stf-card" style="margin-bottom:16px;">
                 @Html.AntiForgeryToken()
                 <div style="display:grid;grid-template-columns:80px 1fr 1fr 1fr 70px 80px;gap:14px;align-items:end;">
-                    <img src="@(f.OverrideImageUrl ?? f.Product.ImageUrl ?? "https://placehold.co/150x150?text=No+Image")" style="width:80px;height:80px;object-fit:cover;border-radius:8px;" alt="" />
+                    <img src="@((f.OverrideImageUrl ?? f.Product.ImageUrl ?? "https://placehold.co/150x150?text=No+Image").Sized(160))" style="width:80px;height:80px;object-fit:cover;border-radius:8px;" alt="" />
                     <div>
                         <div style="font-size:0.72rem;color:var(--stf-on-surface-variant);margin-bottom:4px;">Product</div>
                         <div style="font-weight:600;">@f.Product.Name</div>
@@ -55,8 +55,9 @@
                     </label>
                 </div>
                 <div style="margin-top:12px;">
-                    <label style="font-size:0.75rem;display:block;margin-bottom:4px;">Override Image URL <span style="color:var(--stf-outline);">(blank = product's own image)</span></label>
-                    <input name="overrideImageUrl" value="@f.OverrideImageUrl" placeholder="https://..." style="width:100%;border:1px solid var(--stf-outline-variant);border-radius:6px;padding:6px 10px;font-size:0.85rem;" />
+                    <label style="font-size:0.75rem;display:block;margin-bottom:4px;">Override Image <span style="color:var(--stf-outline);">(blank = product's own image; an uploaded file wins over the URL)</span></label>
+                    <input type="file" name="overrideImageFile" accept="image/jpeg,image/png,image/webp,image/gif" style="width:100%;border:1px solid var(--stf-outline-variant);border-radius:6px;padding:6px 10px;font-size:0.85rem;margin-bottom:6px;" />
+                    <input name="overrideImageUrl" value="@f.OverrideImageUrl" placeholder="...or paste an image URL (clear this to go back to the product's image)" style="width:100%;border:1px solid var(--stf-outline-variant);border-radius:6px;padding:6px 10px;font-size:0.85rem;" />
                 </div>
                 <div style="margin-top:14px;display:flex;gap:10px;">
                     <button type="submit" class="stf-btn stf-btn-outline" style="padding:7px 16px;font-size:0.8rem;">Save</button>

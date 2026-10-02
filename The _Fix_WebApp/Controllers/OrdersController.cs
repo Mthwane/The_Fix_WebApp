@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Net;
+using The__Fix_WebApp.Services;
 
 namespace FashionFix.Web.Controllers;
 
@@ -34,6 +35,9 @@ public class OrdersController : Controller
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly ILogger<OrdersController> _logger;
     private readonly IRewardsService _rewards;
+    private readonly IWalletService _wallet;
+    private readonly IPaymentService _payments;
+    private readonly ICustomerNotificationService _notify;
 
     public OrdersController(
         ApplicationDbContext context,
@@ -41,7 +45,10 @@ public class OrdersController : Controller
         IEmailSender emailSender,
         UserManager<ApplicationUser> userManager,
         ILogger<OrdersController> logger,
-        IRewardsService rewardsService)
+        IRewardsService rewardsService,
+        IWalletService wallet,
+        IPaymentService payments,
+        ICustomerNotificationService notify)
     {
         _context = context;
         _inventoryService = inventoryService;
@@ -49,6 +56,9 @@ public class OrdersController : Controller
         _userManager = userManager;
         _logger = logger;
         _rewards = rewardsService;
+        _wallet = wallet;
+        _payments = payments;
+        _notify = notify;
     }
 
     // GET: /Orders?category=&status=&type=&search=
@@ -208,14 +218,22 @@ public class OrdersController : Controller
             $"Order {order.OrderNumber} is now {order.Status}.");
 
         // Best-effort customer notification on each status change.
-        if (order.Customer is not null &&
-            !string.IsNullOrWhiteSpace(order.Customer.Email))
+        if (order.Status == OrderStatus.Shipped)
+        {
+            await _notify.OrderDispatchedAsync(order.Customer, order);
+        }
+        else if (order.Status == OrderStatus.Delivered)
+        {
+            await _notify.OrderDeliveredAsync(order.Customer, order);
+        }
+        else if (order.Customer is not null &&
+                 !string.IsNullOrWhiteSpace(order.Customer.Email))
         {
             await _emailSender.SendAsync(
                 order.Customer.Email,
                 $"Order {order.OrderNumber} update: {order.Status}",
-                $"<p>Hi {order.Customer.FullName},</p>" +
-                $"<p>Your order <strong>{order.OrderNumber}</strong> is now " +
+                $"<p>Hi {WebUtility.HtmlEncode(order.Customer.FullName)},</p>" +
+                $"<p>Your order <strong>{WebUtility.HtmlEncode(order.OrderNumber)}</strong> is now " +
                 $"<strong>{order.Status}</strong>.</p>");
         }
 
@@ -304,22 +322,39 @@ public class OrdersController : Controller
                     order.OrderNumber);
             }
 
-            this.ToastSuccess(
-                $"Order {order.OrderNumber} was cancelled and stock restored.");
+            // Return the customer's money. The cancellation is already committed, so a refund
+            // problem is reported to staff (toast + audit log) rather than undoing the cancel.
+            var refund = await RefundCancelledOrderAsync(order);
 
-            if (order.Customer is not null &&
-                !string.IsNullOrWhiteSpace(order.Customer.Email))
+            var message = $"Order {order.OrderNumber} was cancelled and stock restored.";
+            if (refund.Wallet > 0)
+                message += $" {refund.Wallet:C} returned to the customer's FixCash wallet.";
+            if (refund.Card > 0 && !refund.CardFailed)
+                message += $" {refund.Card:C} card refund requested.";
+
+            if (refund.WalletError is not null || refund.CardFailed)
             {
-                await _emailSender.SendAsync(
-                    order.Customer.Email,
-                    $"Order {order.OrderNumber} cancelled",
-                    $"<p>Hi {order.Customer.FullName},</p>" +
-                    $"<p>Your order <strong>{order.OrderNumber}</strong> has been cancelled." +
-                    (string.IsNullOrWhiteSpace(reason)
-                        ? ""
-                        : $" Reason: {reason}") +
-                    "</p>");
+                var problems = new List<string>();
+                if (refund.WalletError is not null)
+                    problems.Add($"FixCash refund failed ({refund.WalletError})");
+                if (refund.CardFailed)
+                    problems.Add($"{refund.Card:C} card refund failed ({refund.CardError ?? "gateway error"})");
+
+                this.ToastWarning(
+                    $"{message} BUT: {string.Join("; ", problems)}. Refund the customer manually.");
             }
+            else
+            {
+                this.ToastSuccess(message);
+            }
+
+            await _notify.OrderCancelledAsync(
+                order.Customer,
+                order,
+                reason,
+                refund.Wallet,
+                refund.Card,
+                refund.CardFailed);
         }
         catch (Exception ex)
         {
@@ -333,6 +368,92 @@ public class OrdersController : Controller
         }
 
         return RedirectToAction(nameof(Index));
+    }
+
+    /// <summary>What a cancellation sent back to the customer. Card is the amount attempted; CardFailed
+    /// says whether the gateway rejected it.</summary>
+    private sealed record CancelRefundOutcome(
+        decimal Wallet, decimal Card, bool CardFailed, string? CardError, string? WalletError);
+
+    /// <summary>
+    /// Online orders only (POS sales are settled at the till). The FixCash portion goes back to the wallet
+    /// (idempotent per order); the card portion is refunded through Paystack against the order's payment
+    /// reference (an online order's OrderNumber IS its Paystack reference). Each leg is attempted
+    /// independently, and the outcome is written to the audit log either way.
+    /// </summary>
+    private async Task<CancelRefundOutcome> RefundCancelledOrderAsync(Order order)
+    {
+        if (order.OrderType != OrderType.Online || string.IsNullOrEmpty(order.CustomerId))
+            return new CancelRefundOutcome(0m, 0m, false, null, null);
+
+        decimal wallet = 0m;
+        string? walletError = null;
+
+        if (order.WalletAmountApplied > 0)
+        {
+            try
+            {
+                var result = await _wallet.RefundCancelledOrderAsync(order);
+                if (result.Success) wallet = order.WalletAmountApplied;
+                else walletError = result.ErrorMessage ?? "unknown error";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "FixCash refund for cancelled order {OrderNumber} threw.", order.OrderNumber);
+                walletError = "unexpected error";
+            }
+        }
+
+        decimal card = 0m;
+        var cardFailed = false;
+        string? cardError = null;
+        var cardPart = Math.Round(order.GrandTotal - order.WalletAmountApplied, 2, MidpointRounding.AwayFromZero);
+        var paidByCard = order.PaymentMethod is PaymentMethod.CreditCard or PaymentMethod.DebitCard;
+
+        if (cardPart > 0 && paidByCard)
+        {
+            card = cardPart;
+            try
+            {
+                var result = await _payments.RefundTransactionAsync(order.OrderNumber, cardPart);
+                if (!result.Success)
+                {
+                    cardFailed = true;
+                    cardError = result.ErrorMessage;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Card refund for cancelled order {OrderNumber} threw.", order.OrderNumber);
+                cardFailed = true;
+                cardError = "unexpected error";
+            }
+        }
+
+        if (wallet > 0 || card > 0 || walletError is not null)
+        {
+            var details =
+                $"Refund for cancelled order {order.OrderNumber}: " +
+                $"FixCash {wallet:0.00}" + (walletError is null ? "" : $" (FAILED: {walletError})") +
+                $", card {card:0.00}" + (card > 0 ? (cardFailed ? $" (FAILED: {cardError})" : " (requested)") : "") + ".";
+
+            try
+            {
+                _context.AuditLogs.Add(new AuditLog
+                {
+                    UserId = _userManager.GetUserId(User),
+                    Action = (walletError is not null || cardFailed) ? "CancelRefundFailed" : "CancelRefundIssued",
+                    Details = details.Length <= 500 ? details : details[..500]
+                });
+                await _context.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Could not write the refund audit entry for order {OrderNumber}.", order.OrderNumber);
+            }
+        }
+
+        return new CancelRefundOutcome(wallet, card, cardFailed, cardError, walletError);
     }
 
     // ===================== Courier delivery =====================
@@ -361,10 +482,14 @@ public class OrdersController : Controller
 
         // Booking the courier is what "shipped" actually means for an online order, so advance
         // the status here rather than making staff do it as a separate manual step.
-        if (order.Status is OrderStatus.Pending or OrderStatus.Processing)
+        var becameShipped = order.Status is OrderStatus.Pending or OrderStatus.Processing;
+        if (becameShipped)
             order.Status = OrderStatus.Shipped;
 
         await _context.SaveChangesAsync();
+
+        if (becameShipped)
+            await _notify.OrderDispatchedAsync(order.Customer, order, result.Data!.TrackingReference);
 
         this.ToastSuccess(
             $"Waybill {result.Data!.TrackingReference} created for {order.OrderNumber}.");

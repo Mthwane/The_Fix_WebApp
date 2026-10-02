@@ -44,6 +44,15 @@
                     <div><span class="stf-badge stf-badge-muted">@Model.Status</span></div>
                 </div>
             </div>
+            @if (Model.OrderType == OrderType.Online)
+            {
+                var walletPart = Model.WalletAmountApplied;
+                var cardPart = Model.GrandTotal - walletPart;
+                var paidBy = walletPart > 0 && cardPart > 0 ? "FixCash and card" : walletPart > 0 ? "FixCash" : "card";
+                <p style="margin:12px 0 0;font-size:0.8rem;color:var(--stf-on-surface-variant);">
+                    Online order, paid by @paidBy. "Refund to Original Payment" returns the FixCash share to the wallet and requests the card share from Paystack automatically. "Store Credit" puts the whole refund in the FixCash wallet instead.
+                </p>
+            }
         </div>
 
         <table class="stf-table">

@@ -1,14 +1,16 @@
-@model List<WalletTransaction>
+@model WalletIndexViewModel
 @{
     ViewData["Title"] = "FixCash Wallet";
     Layout = "_StorefrontLayout";
-    var balance = ViewBag.Balance as decimal? ?? 0m;
+    var balance = Model.Balance;
 
     (string label, string color) DescribeType(WalletTransactionType t) => t switch
     {
         WalletTransactionType.Deposit => ("Deposit", "var(--ffs-forest)"),
         WalletTransactionType.Spend => ("Spent on order", "var(--ffs-clay)"),
         WalletTransactionType.RefundCredit => ("Refund credit", "var(--ffs-forest)"),
+        WalletTransactionType.AdminAdjustment => ("Credit from Fashion Fix", "var(--ffs-forest)"),
+        WalletTransactionType.AdminDebit => ("Adjustment by Fashion Fix", "var(--ffs-clay)"),
         _ => ("Adjustment", "var(--ffs-ink-muted)")
     };
     bool IsCredit(WalletTransactionType t) => t is WalletTransactionType.Deposit or WalletTransactionType.RefundCredit or WalletTransactionType.AdminAdjustment;
@@ -29,14 +31,14 @@
 
         <h2 style="font-family:'Fraunces',serif;font-size:1.2rem;margin-bottom:12px;">Transaction History</h2>
 
-        @if (!Model.Any())
+        @if (!Model.Items.Any())
         {
             <p style="color:var(--ffs-ink-muted);">No transactions yet - add funds to get started.</p>
         }
         else
         {
             <div style="display:flex;flex-direction:column;gap:8px;">
-                @foreach (var t in Model)
+                @foreach (var t in Model.Items)
                 {
                     var (label, color) = DescribeType(t.Type);
                     var isCredit = IsCredit(t.Type);
@@ -61,6 +63,29 @@
                     </div>
                 }
             </div>
+
+            if (Model.TotalPages > 1)
+            {
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;font-size:0.85rem;">
+                    @if (Model.Page > 1)
+                    {
+                        <a asp-action="Index" asp-route-page="@(Model.Page - 1)">&larr; Newer</a>
+                    }
+                    else
+                    {
+                        <span></span>
+                    }
+                    <span style="color:var(--ffs-ink-muted);">Page @Model.Page of @Model.TotalPages</span>
+                    @if (Model.Page < Model.TotalPages)
+                    {
+                        <a asp-action="Index" asp-route-page="@(Model.Page + 1)">Older &rarr;</a>
+                    }
+                    else
+                    {
+                        <span></span>
+                    }
+                </div>
+            }
         }
     </div>
 </section>

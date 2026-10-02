@@ -1,0 +1,107 @@
+@model WalletLiabilityViewModel
+@{
+    ViewData["Title"] = "FixCash Liability";
+    Layout = "_StaffLayout";
+    var muted = "font-size:0.8rem;color:var(--stf-on-surface-variant);";
+    var inputStyle = "border:1px solid var(--stf-outline-variant);border-radius:8px;padding:8px 12px;font-size:0.85rem;";
+    var balanced = Math.Abs(Model.Discrepancy) < 0.005m;
+    var creditsIn = Model.Movements.Where(m => m.IsCredit).Sum(m => m.Total);
+    var debitsOut = Model.Movements.Where(m => !m.IsCredit).Sum(m => m.Total);
+}
+<div class="stf-content" style="max-width:980px;">
+    <a asp-action="Index" class="stf-btn stf-btn-outline" style="margin-bottom:16px;display:inline-flex;">&larr; All wallets</a>
+
+    <span class="stf-eyebrow">Reports</span>
+    <h1 style="margin-bottom:6px;">FixCash liability</h1>
+    <p style="@muted margin-bottom:20px;">
+        Money customers have paid in and not yet spent. It is owed to them until they use it or it is refunded, so it is not revenue.
+    </p>
+
+    <div class="stf-stat-grid">
+        <div class="stf-stat">
+            <div class="stf-stat-label">Outstanding liability</div>
+            <div class="stf-stat-value">@Model.TotalLiability.ToString("C")</div>
+            <div class="stf-stat-sub">across @Model.WalletsWithBalance wallet(s) with a balance</div>
+        </div>
+        <div class="stf-stat">
+            <div class="stf-stat-label">Wallets opened</div>
+            <div class="stf-stat-value">@Model.TotalWallets</div>
+            <div class="stf-stat-sub">all time</div>
+        </div>
+        <div class="stf-stat">
+            <div class="stf-stat-label">Dormant @Model.DormantDays+ days</div>
+            <div class="stf-stat-value">@Model.DormantAmount.ToString("C")</div>
+            <div class="stf-stat-sub">@Model.DormantWallets wallet(s), no activity</div>
+        </div>
+        <div class="stf-stat">
+            <div class="stf-stat-label">Ledger check</div>
+            <div class="stf-stat-value" style="color:@(balanced ? "var(--stf-primary)" : "var(--stf-error)");">@(balanced ? "Balanced" : "Mismatch")</div>
+            <div class="stf-stat-sub">ledger net @Model.LedgerNet.ToString("C")</div>
+        </div>
+    </div>
+
+    @if (!balanced)
+    {
+        <div class="stf-card" style="margin-bottom:20px;border-color:var(--stf-error);color:var(--stf-error);">
+            The wallet balances and the ledger disagree by @Model.Discrepancy.ToString("C"). Balances should always equal the sum of the ledger.
+            Don't adjust anything to hide it - find the entry that is missing or duplicated first.
+        </div>
+    }
+
+    <h2 style="font-size:1.1rem;margin:8px 0 10px;">Movement in period</h2>
+    <form asp-action="Liability" method="get" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px;">
+        <label style="@muted">From</label>
+        <input type="date" name="from" value="@Model.From.ToString("yyyy-MM-dd")" style="@inputStyle" />
+        <label style="@muted">To</label>
+        <input type="date" name="to" value="@Model.To.ToString("yyyy-MM-dd")" style="@inputStyle" />
+        <button type="submit" class="stf-btn stf-btn-outline">Apply</button>
+        <span style="@muted">South African dates, both days included.</span>
+    </form>
+
+    <table class="stf-table" style="margin-bottom:24px;">
+        <thead>
+            <tr><th>Type</th><th style="text-align:right;">Entries</th><th style="text-align:right;">Amount</th></tr>
+        </thead>
+        <tbody>
+            @foreach (var m in Model.Movements)
+            {
+                <tr>
+                    <td>@m.Label</td>
+                    <td style="text-align:right;">@m.Count</td>
+                    <td style="text-align:right;">@(m.IsCredit ? "+" : "-")@m.Total.ToString("C")</td>
+                </tr>
+            }
+            <tr style="font-weight:600;">
+                <td>Net change in period</td>
+                <td></td>
+                <td style="text-align:right;">@((creditsIn - debitsOut).ToString("C"))</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin:8px 0 10px;">
+        <h2 style="font-size:1.1rem;margin:0;">Largest balances</h2>
+        <a asp-action="ExportBalances" class="stf-btn stf-btn-outline">Download all balances (CSV)</a>
+    </div>
+    <table class="stf-table">
+        <thead>
+            <tr><th>Customer</th><th>Email</th><th style="text-align:right;">Balance</th><th>Last activity</th><th></th></tr>
+        </thead>
+        <tbody>
+            @foreach (var w in Model.TopBalances)
+            {
+                <tr>
+                    <td style="font-weight:600;">@w.FullName</td>
+                    <td>@w.Email</td>
+                    <td style="text-align:right;">@w.Balance.ToString("C")</td>
+                    <td>@(w.LastActivity.HasValue ? w.LastActivity.Value.ToLocalTime().ToString("dd MMM yyyy") : "-")</td>
+                    <td style="text-align:right;"><a asp-action="Details" asp-route-id="@w.CustomerId">Open</a></td>
+                </tr>
+            }
+            @if (!Model.TopBalances.Any())
+            {
+                <tr><td colspan="5" style="color:var(--stf-on-surface-variant);">No wallet holds a balance.</td></tr>
+            }
+        </tbody>
+    </table>
+</div>

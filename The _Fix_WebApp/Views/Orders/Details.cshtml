@@ -51,6 +51,14 @@
         <div style="color:var(--stf-on-surface-variant);">VAT: @Model.TaxTotal.ToString("C")</div>
         @if (Model.DiscountTotal > 0) { <div style="color:var(--stf-on-surface-variant);">Discount: -@Model.DiscountTotal.ToString("C")</div> }
         <div style="font-size:1.1rem;font-weight:600;margin-top:4px;">Total: @Model.GrandTotal.ToString("C")</div>
+        @if (Model.WalletAmountApplied > 0)
+        {
+            <div style="color:var(--stf-on-surface-variant);">Paid from FixCash: @Model.WalletAmountApplied.ToString("C")</div>
+            if (Model.GrandTotal - Model.WalletAmountApplied > 0)
+            {
+                <div style="color:var(--stf-on-surface-variant);">Paid by card: @((Model.GrandTotal - Model.WalletAmountApplied).ToString("C"))</div>
+            }
+        }
     </div>
 
     @if (Model.Status is OrderStatus.Pending or OrderStatus.Processing or OrderStatus.Shipped)
@@ -60,7 +68,7 @@
                 <button type="submit" class="stf-btn stf-btn-primary">Advance Status</button>
             </form>
             <form asp-controller="Orders" asp-action="Cancel" asp-route-id="@Model.OrderId" method="post">
-                <button type="submit" class="stf-btn stf-btn-danger-outline" onclick="return confirm('Cancel this order and restock its items?');">Cancel Order</button>
+                <button type="submit" class="stf-btn stf-btn-danger-outline" onclick="return confirm('Cancel this order, restock its items and refund the customer (FixCash to the wallet, card via Paystack)?');">Cancel Order</button>
             </form>
         </div>
     }

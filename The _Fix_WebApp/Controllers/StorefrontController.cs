@@ -1,6 +1,7 @@
 using FashionFix.Web.Data;
 using FashionFix.Web.Models.Entities;
 using FashionFix.Web.Security;
+using FashionFix.Web.Services.Images;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -81,10 +82,22 @@ public class StorefrontController : Controller
     // POST: /Storefront/UpdateTrending/5 - save per-card overrides + order for one featured pick.
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> UpdateTrending(int id, string? overrideTitle, string? overrideImageUrl, string? overrideBadge, int displayOrder, bool isActive)
+    public async Task<IActionResult> UpdateTrending(int id, string? overrideTitle, string? overrideImageUrl, IFormFile? overrideImageFile, string? overrideBadge, int displayOrder, bool isActive, [FromServices] IImageStorage imageStorage)
     {
         var featured = await _context.FeaturedProducts.FindAsync(id);
         if (featured is null) return NotFound();
+
+        var oldImage = featured.OverrideImageUrl;
+        if (overrideImageFile is { Length: > 0 })
+        {
+            var up = await imageStorage.UploadAsync(overrideImageFile, "trending");
+            if (!up.Success)
+            {
+                this.ToastError(up.Error ?? "Image upload failed.");
+                return RedirectToAction(nameof(Trending));
+            }
+            overrideImageUrl = up.Url; // a chosen file wins over the pasted URL
+        }
 
         featured.OverrideTitle = string.IsNullOrWhiteSpace(overrideTitle) ? null : overrideTitle.Trim();
         featured.OverrideImageUrl = string.IsNullOrWhiteSpace(overrideImageUrl) ? null : overrideImageUrl.Trim();
@@ -93,6 +106,10 @@ public class StorefrontController : Controller
         featured.IsActive = isActive;
         await _context.SaveChangesAsync();
 
+        // Image replaced or cleared: remove the old stored file if nothing else uses it.
+        if (!string.IsNullOrWhiteSpace(oldImage) && oldImage != featured.OverrideImageUrl)
+            await DeleteIfUnusedAsync(oldImage, imageStorage);
+
         this.ToastSuccess("Trending pick updated.");
         return RedirectToAction(nameof(Trending));
     }
@@ -100,13 +117,17 @@ public class StorefrontController : Controller
     // POST: /Storefront/RemoveTrending/5
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> RemoveTrending(int id)
+    public async Task<IActionResult> RemoveTrending(int id, [FromServices] IImageStorage imageStorage)
     {
         var featured = await _context.FeaturedProducts.FindAsync(id);
         if (featured is null) return NotFound();
 
+        var oldImage = featured.OverrideImageUrl;
         _context.FeaturedProducts.Remove(featured);
         await _context.SaveChangesAsync();
+
+        if (!string.IsNullOrWhiteSpace(oldImage))
+            await DeleteIfUnusedAsync(oldImage, imageStorage);
 
         this.ToastSuccess("Removed from Trending This Week.");
         return RedirectToAction(nameof(Trending));
@@ -126,9 +147,21 @@ public class StorefrontController : Controller
     // POST: /Storefront/Content
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Content(SiteSettings model)
+    public async Task<IActionResult> Content(SiteSettings model, IFormFile? heroFile, [FromServices] IImageStorage imageStorage)
     {
         if (!ModelState.IsValid) return View(model);
+
+        var existingHero = (await _context.SiteSettings.AsNoTracking().FirstOrDefaultAsync(s => s.Id == 1))?.HeroImageUrl;
+        if (heroFile is { Length: > 0 })
+        {
+            var up = await imageStorage.UploadAsync(heroFile, "homepage");
+            if (!up.Success)
+            {
+                ModelState.AddModelError(nameof(SiteSettings.HeroImageUrl), up.Error ?? "Image upload failed.");
+                return View(model);
+            }
+            model.HeroImageUrl = up.Url; // a chosen file wins over the pasted URL
+        }
 
         var settings = await _context.SiteSettings.FirstOrDefaultAsync(s => s.Id == 1);
         if (settings is null)
@@ -151,8 +184,23 @@ public class StorefrontController : Controller
         }
 
         await _context.SaveChangesAsync();
+
+        if (!string.IsNullOrWhiteSpace(existingHero) && existingHero != model.HeroImageUrl)
+            await DeleteIfUnusedAsync(existingHero, imageStorage);
+
         this.ToastSuccess("Homepage content updated.");
         return RedirectToAction(nameof(Content));
+    }
+
+    /// <summary>Deletes a stored image only if no product, gallery row, department, trending card or homepage setting still uses it.</summary>
+    private async Task DeleteIfUnusedAsync(string url, IImageStorage imageStorage)
+    {
+        var used = await _context.Products.AnyAsync(p => p.ImageUrl == url)
+            || await _context.ProductImages.AnyAsync(i => i.ImageUrl == url)
+            || await _context.Departments.AnyAsync(d => d.HeroImageUrl == url || d.TileImageUrl == url)
+            || await _context.FeaturedProducts.AnyAsync(f => f.OverrideImageUrl == url)
+            || await _context.SiteSettings.AnyAsync(s => s.HeroImageUrl == url);
+        if (!used) await imageStorage.DeleteAsync(url);
     }
 
     // ===================== Review moderation =====================

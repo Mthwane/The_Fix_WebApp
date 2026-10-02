@@ -114,7 +114,7 @@
                         @if (canCancel)
                         {
                             <form asp-controller="Orders" asp-action="Cancel" asp-route-id="@o.OrderId" method="post" style="display:inline;">
-                                <button type="submit" class="stf-btn stf-btn-danger-outline" style="padding:6px 12px;font-size:0.75rem;" onclick="return confirm('Cancel this order and restock its items?');">Cancel</button>
+                                <button type="submit" class="stf-btn stf-btn-danger-outline" style="padding:6px 12px;font-size:0.75rem;" onclick="return confirm('Cancel this order, restock its items and refund the customer (FixCash to the wallet, card via Paystack)?');">Cancel</button>
                             </form>
                         }
                     </td>

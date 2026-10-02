@@ -1,0 +1,118 @@
+@model WalletAdminDetailsViewModel
+@{
+    ViewData["Title"] = $"Wallet - {Model.Customer.FullName}";
+    Layout = "_StaffLayout";
+    var muted = "font-size:0.8rem;color:var(--stf-on-surface-variant);";
+    var eyebrow = "font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--stf-outline);margin-bottom:6px;";
+    var inputStyle = "border:1px solid var(--stf-outline-variant);border-radius:8px;padding:9px 12px;font-size:0.9rem;";
+
+    string LabelFor(WalletTransactionType t) => t switch
+    {
+        WalletTransactionType.Deposit => "Top-up",
+        WalletTransactionType.Spend => "Spent on order",
+        WalletTransactionType.RefundCredit => "Refund",
+        WalletTransactionType.AdminAdjustment => "Staff credit",
+        WalletTransactionType.AdminDebit => "Staff debit",
+        _ => t.ToString()
+    };
+    bool IsCredit(WalletTransactionType t) =>
+        t is WalletTransactionType.Deposit or WalletTransactionType.RefundCredit or WalletTransactionType.AdminAdjustment;
+}
+<div class="stf-content" style="max-width:980px;">
+    <a asp-action="Index" class="stf-btn stf-btn-outline" style="margin-bottom:16px;display:inline-flex;">&larr; All wallets</a>
+
+    <span class="stf-eyebrow">FixCash wallet</span>
+    <h1 style="margin-bottom:4px;">@Model.Customer.FullName</h1>
+    <div style="@muted margin-bottom:18px;">@Model.Customer.Email</div>
+
+    <div class="stf-card" style="margin-bottom:20px;display:flex;gap:40px;flex-wrap:wrap;">
+        <div>
+            <div style="@eyebrow">Balance</div>
+            <div style="font-size:1.8rem;font-weight:600;">@Model.Balance.ToString("C")</div>
+        </div>
+        <div>
+            <div style="@eyebrow">Ledger entries</div>
+            <div style="font-size:1.8rem;font-weight:600;">@Model.TotalCount</div>
+        </div>
+    </div>
+
+    @if (Model.CanAdjust)
+    {
+        <form asp-action="Adjust" method="post" class="stf-card" style="margin-bottom:24px;">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="id" value="@Model.Customer.Id" />
+            <div style="@eyebrow">Manual adjustment</div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+                <select name="direction" style="@inputStyle">
+                    <option value="credit">Add to wallet</option>
+                    <option value="debit">Remove from wallet</option>
+                </select>
+                <input type="number" name="amount" min="0.01" max="50000" step="0.01" required placeholder="Amount (ZAR)" style="@inputStyle width:150px;" />
+                <input type="text" name="note" required minlength="5" maxlength="250" placeholder="Reason (required, shown to the customer)" style="@inputStyle flex:1;min-width:240px;" />
+                <button type="submit" class="stf-btn stf-btn-primary"
+                        onclick="return confirm('Apply this adjustment? It is recorded in the ledger and the audit log, and the customer is emailed.');">Apply</button>
+            </div>
+            <div style="@muted margin-top:8px;">Adjustments can't be edited or deleted. To undo one, make an equal and opposite adjustment.</div>
+        </form>
+    }
+
+    <table class="stf-table">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Type</th>
+                <th style="text-align:right;">Amount</th>
+                <th style="text-align:right;">Balance after</th>
+                <th>Order</th>
+                <th>Note / reference</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var t in Model.Items)
+            {
+                var credit = IsCredit(t.Type);
+                <tr>
+                    <td>@t.DateCreated.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</td>
+                    <td>@LabelFor(t.Type)</td>
+                    <td style="text-align:right;color:@(credit ? "var(--stf-primary)" : "var(--stf-error)");">@(credit ? "+" : "-")@t.Amount.ToString("C")</td>
+                    <td style="text-align:right;">@t.BalanceAfter.ToString("C")</td>
+                    <td>@(t.Order?.OrderNumber ?? "-")</td>
+                    <td style="font-size:0.8rem;">
+                        @t.Note
+                        @if (!string.IsNullOrWhiteSpace(t.Reference))
+                        {
+                            <div style="color:var(--stf-on-surface-variant);">@t.Reference</div>
+                        }
+                    </td>
+                </tr>
+            }
+            @if (!Model.Items.Any())
+            {
+                <tr><td colspan="6" style="color:var(--stf-on-surface-variant);">No wallet activity yet.</td></tr>
+            }
+        </tbody>
+    </table>
+
+    @if (Model.TotalPages > 1)
+    {
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;font-size:0.85rem;">
+            @if (Model.Page > 1)
+            {
+                <a asp-action="Details" asp-route-id="@Model.Customer.Id" asp-route-page="@(Model.Page - 1)">&larr; Newer</a>
+            }
+            else
+            {
+                <span></span>
+            }
+            <span style="color:var(--stf-on-surface-variant);">Page @Model.Page of @Model.TotalPages</span>
+            @if (Model.Page < Model.TotalPages)
+            {
+                <a asp-action="Details" asp-route-id="@Model.Customer.Id" asp-route-page="@(Model.Page + 1)">Older &rarr;</a>
+            }
+            else
+            {
+                <span></span>
+            }
+        </div>
+    }
+</div>

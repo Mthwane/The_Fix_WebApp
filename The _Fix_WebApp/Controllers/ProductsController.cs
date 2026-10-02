@@ -3,6 +3,7 @@ using FashionFix.Web.Models.Entities;
 using FashionFix.Web.Models.ViewModels;
 using FashionFix.Web.Security;
 using FashionFix.Web.Services;
+using FashionFix.Web.Services.Images;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -138,7 +139,7 @@ public class ProductsController : Controller
     // POST: /Products/Create
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Create(ProductViewModel model)
+    public async Task<IActionResult> Create(ProductViewModel model, IFormFile? imageFile, [FromServices] IImageStorage imageStorage)
     {
         // Style code is never taken from the posted form - it's always server-generated,
         // and so is every variant's own SKU.
@@ -172,6 +173,19 @@ public class ProductsController : Controller
         {
             await PopulateDropdownsAsync();
             return View(model);
+        }
+
+        // A chosen file wins over a pasted URL. Uploaded only after the rest of the form is valid.
+        if (imageFile is { Length: > 0 })
+        {
+            var upload = await imageStorage.UploadAsync(imageFile, "products");
+            if (!upload.Success)
+            {
+                ModelState.AddModelError(nameof(ProductViewModel.ImageUrl), upload.Error ?? "Image upload failed.");
+                await PopulateDropdownsAsync();
+                return View(model);
+            }
+            model.ImageUrl = upload.Url;
         }
 
         var styleCode = await GenerateUniqueStyleCodeAsync(model.Category);
@@ -272,7 +286,7 @@ public class ProductsController : Controller
     // POST: /Products/Edit/5
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Edit(int id, ProductViewModel model)
+    public async Task<IActionResult> Edit(int id, ProductViewModel model, IFormFile? imageFile, [FromServices] IImageStorage imageStorage)
     {
         if (id != model.ProductId) return BadRequest();
 
@@ -309,6 +323,21 @@ public class ProductsController : Controller
             return View(model);
         }
 
+        var oldImageUrl = product.ImageUrl;
+        var uploadedNew = false;
+        if (imageFile is { Length: > 0 })
+        {
+            var upload = await imageStorage.UploadAsync(imageFile, "products");
+            if (!upload.Success)
+            {
+                ModelState.AddModelError(nameof(ProductViewModel.ImageUrl), upload.Error ?? "Image upload failed.");
+                await PopulateDropdownsAsync();
+                return View(model);
+            }
+            model.ImageUrl = upload.Url;
+            uploadedNew = true;
+        }
+
         product.Name = model.Name;
         product.Description = model.Description;
         // product.SKU (style code) intentionally left unchanged - it's fixed at creation time.
@@ -327,6 +356,13 @@ public class ProductsController : Controller
         product.DateUpdated = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
+
+        // Replaced photo: clean up the old file so storage doesn't fill with orphans.
+        if (uploadedNew && !string.IsNullOrWhiteSpace(oldImageUrl) && oldImageUrl != product.ImageUrl
+            && !await IsImageReferencedAsync(oldImageUrl))
+        {
+            await imageStorage.DeleteAsync(oldImageUrl);
+        }
 
         // Variant-by-variant reconciliation:
         //  - rows with ProductVariantId == 0 are brand new sizes/colours added on this edit
@@ -557,14 +593,28 @@ public class ProductsController : Controller
         return View(images);
     }
 
-    // POST: /Products/AddImage
+    // POST: /Products/AddImage - accepts uploaded files (one or many) and/or a pasted URL.
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> AddImage(int productId, string imageUrl, bool isPrimary)
+    public async Task<IActionResult> AddImage(int productId, string? imageUrl, List<IFormFile>? imageFiles, bool isPrimary, [FromServices] IImageStorage imageStorage)
     {
-        if (string.IsNullOrWhiteSpace(imageUrl))
+        var product = await _context.Products.FindAsync(productId);
+        if (product is null) return NotFound();
+
+        var newUrls = new List<string>();
+        var errors = new List<string>();
+
+        foreach (var file in (imageFiles ?? new List<IFormFile>()).Where(f => f.Length > 0))
         {
-            this.ToastError("Enter an image URL first.");
+            var upload = await imageStorage.UploadAsync(file, "products");
+            if (upload.Success) newUrls.Add(upload.Url!);
+            else errors.Add($"{file.FileName}: {upload.Error}");
+        }
+        if (!string.IsNullOrWhiteSpace(imageUrl)) newUrls.Add(imageUrl.Trim());
+
+        if (newUrls.Count == 0)
+        {
+            this.ToastError(errors.Count > 0 ? string.Join(" ", errors) : "Choose an image file or enter an image URL first.");
             return RedirectToAction(nameof(Images), new { id = productId });
         }
 
@@ -579,16 +629,22 @@ public class ProductsController : Controller
             ? await _context.ProductImages.Where(i => i.ProductId == productId).MaxAsync(i => i.DisplayOrder)
             : 0;
 
-        _context.ProductImages.Add(new ProductImage
+        for (var n = 0; n < newUrls.Count; n++)
         {
-            ProductId = productId,
-            ImageUrl = imageUrl.Trim(),
-            IsPrimary = isPrimary,
-            DisplayOrder = maxOrder + 1
-        });
+            _context.ProductImages.Add(new ProductImage
+            {
+                ProductId = productId,
+                ImageUrl = newUrls[n],
+                IsPrimary = isPrimary && n == 0, // at most one primary, even for a multi-file upload
+                DisplayOrder = maxOrder + 1 + n
+            });
+        }
         await _context.SaveChangesAsync();
 
-        this.ToastSuccess("Image added to gallery.");
+        if (errors.Count > 0)
+            this.ToastError($"{newUrls.Count} added, but some failed - {string.Join(" ", errors)}");
+        else
+            this.ToastSuccess(newUrls.Count == 1 ? "Image added to gallery." : $"{newUrls.Count} images added to gallery.");
         return RedirectToAction(nameof(Images), new { id = productId });
     }
 
@@ -611,17 +667,28 @@ public class ProductsController : Controller
     // POST: /Products/RemoveImage/5
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> RemoveImage(int id)
+    public async Task<IActionResult> RemoveImage(int id, [FromServices] IImageStorage imageStorage)
     {
         var image = await _context.ProductImages.FindAsync(id);
         if (image is null) return NotFound();
 
         var productId = image.ProductId;
+        var url = image.ImageUrl;
         _context.ProductImages.Remove(image);
         await _context.SaveChangesAsync();
 
+        if (!await IsImageReferencedAsync(url))
+            await imageStorage.DeleteAsync(url);
+
         this.ToastSuccess("Image removed from gallery.");
         return RedirectToAction(nameof(Images), new { id = productId });
+    }
+
+    /// <summary>True if any product main image or gallery row still uses this URL (so it must not be deleted from storage).</summary>
+    private async Task<bool> IsImageReferencedAsync(string url)
+    {
+        return await _context.Products.AnyAsync(p => p.ImageUrl == url)
+            || await _context.ProductImages.AnyAsync(i => i.ImageUrl == url);
     }
 
     private async Task LogAuditAsync(string action, string details)

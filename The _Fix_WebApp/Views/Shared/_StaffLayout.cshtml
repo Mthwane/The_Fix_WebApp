@@ -72,6 +72,10 @@
             {
                 <a class="@NavClass("RewardsAdmin")" asp-controller="RewardsAdmin" asp-action="Index">Rewards</a>
             }
+            @if (Can(Permissions.WalletView))
+            {
+                <a class="@NavClass("WalletAdmin")" asp-controller="WalletAdmin" asp-action="Index">FixCash Wallets</a>
+            }
 
 @if (Can(Permissions.SuppliersManage) || Can(Permissions.PurchaseOrdersManage) || Can(Permissions.ReturnsProcess))
 {

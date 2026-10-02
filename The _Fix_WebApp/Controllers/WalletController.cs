@@ -1,4 +1,5 @@
 using FashionFix.Web.Models.Entities;
+using FashionFix.Web.Models.ViewModels;
 using FashionFix.Web.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -17,22 +18,47 @@ public class WalletController : Controller
     private readonly IWalletService _wallet;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly ILogger<WalletController> _logger;
+    private readonly ICustomerNotificationService _notify;
 
-    public WalletController(IWalletService wallet, UserManager<ApplicationUser> userManager, ILogger<WalletController> logger)
+    private const int HistoryPageSize = 15;
+
+    public WalletController(
+        IWalletService wallet,
+        UserManager<ApplicationUser> userManager,
+        ILogger<WalletController> logger,
+        ICustomerNotificationService notify)
     {
         _wallet = wallet;
         _userManager = userManager;
         _logger = logger;
+        _notify = notify;
     }
 
-    // GET: /Wallet
+    // GET: /Wallet?page=2
     [HttpGet]
-    public async Task<IActionResult> Index()
+    public async Task<IActionResult> Index(int page = 1)
     {
         var userId = _userManager.GetUserId(User)!;
-        ViewBag.Balance = await _wallet.GetBalanceAsync(userId);
-        var history = await _wallet.GetHistoryAsync(userId);
-        return View(history);
+        page = Math.Max(1, page);
+
+        var (items, total) = await _wallet.GetHistoryPageAsync(userId, page, HistoryPageSize);
+        var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)HistoryPageSize));
+
+        // A page past the end (e.g. a stale bookmark) falls back to the last real page.
+        if (page > totalPages)
+        {
+            page = totalPages;
+            (items, total) = await _wallet.GetHistoryPageAsync(userId, page, HistoryPageSize);
+        }
+
+        return View(new WalletIndexViewModel
+        {
+            Balance = await _wallet.GetBalanceAsync(userId),
+            Items = items,
+            Page = page,
+            TotalPages = totalPages,
+            TotalCount = total
+        });
     }
 
     // GET: /Wallet/Deposit
@@ -126,6 +152,14 @@ public class WalletController : Controller
         this.ToastSuccess(creditResult.AlreadyProcessed
             ? "This deposit was already credited."
             : $"R{verifyResult.AmountRands:N2} added to your FixCash balance.");
+
+        // Only email for a genuinely new credit - a duplicate callback must not send a second receipt.
+        if (!creditResult.AlreadyProcessed)
+        {
+            var customer = await _userManager.GetUserAsync(User);
+            await _notify.TopUpReceivedAsync(customer, verifyResult.AmountRands, creditResult.BalanceAfter, actualReference);
+        }
+
         return RedirectToAction(nameof(Index));
     }
 }

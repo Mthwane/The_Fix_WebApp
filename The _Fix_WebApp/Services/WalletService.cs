@@ -29,6 +29,8 @@ public interface IWalletService
     Task<WalletResult> RestoreDebitAsync(string customerId, string reference);
     Task LinkOrderAsync(string reference, int orderId);
     Task<WalletResult> CreditRefundAsync(string customerId, decimal amount, int orderId, string note);
+    /// <summary>Credits the wallet for a processed return. Idempotent per returnId (reference RETURN-{returnId}).</summary>
+    Task<WalletResult> CreditReturnAsync(string customerId, decimal amount, int orderId, int returnId, string note);
     /// <summary>Returns an order's FixCash portion to the wallet when the order is cancelled. Idempotent.</summary>
     Task<WalletResult> RefundCancelledOrderAsync(Order order);
     /// <summary>Staff correction: positive = credit, negative = debit. Requires a note.</summary>
@@ -129,6 +131,9 @@ public class WalletService : IWalletService
             });
         }, amount);
     }
+
+    public async Task<WalletResult> CreditReturnAsync(string customerId, decimal amount, int orderId, int returnId, string note) =>
+        await CreditOnceAsync(customerId, amount, orderId, $"RETURN-{returnId}", note);
 
     public async Task<WalletResult> RefundCancelledOrderAsync(Order order)
     {
