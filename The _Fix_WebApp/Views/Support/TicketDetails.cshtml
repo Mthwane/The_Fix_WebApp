@@ -1,7 +1,7 @@
 @model SupportTicket
 @{
     ViewData["Title"] = $"Ticket: {Model.Subject}";
-    Layout = "_StorefrontLayout";
+    Layout = "_AccountLayout";
 
     (string bg, string fg) BadgeColors(TicketStatus s) => s switch
     {

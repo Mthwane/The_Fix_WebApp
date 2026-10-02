@@ -60,6 +60,7 @@ public class AccountController : Controller
         var user = await _userManager.FindByNameAsync(model.Username);
         if (user is not null && !user.IsActive)
         {
+            await LogAuditAsync(user.Id, "LoginFailed", $"Sign-in refused for deactivated account '{user.UserName}'.");
             ModelState.AddModelError(string.Empty, "This account has been deactivated. Contact an administrator.");
             return View(viewName, model);
         }
@@ -92,12 +93,16 @@ public class AccountController : Controller
             return RedirectAfterLogin(model.ReturnUrl, roles);
         }
 
+        // Failed attempts go in the audit trail (user id is null when the username doesn't exist).
+        var attempted = model.Username.Length > 60 ? model.Username[..60] : model.Username;
         if (result.IsLockedOut)
         {
+            await LogAuditAsync(user?.Id, "LoginLockedOut", $"Account '{attempted}' locked after repeated failed sign-ins.");
             ModelState.AddModelError(string.Empty, "This account is locked due to repeated failed attempts. Try again later.");
         }
         else
         {
+            await LogAuditAsync(user?.Id, "LoginFailed", $"Failed sign-in for '{attempted}' ({(model.IsEmployeeLogin ? "staff" : "customer")} portal).");
             ModelState.AddModelError(string.Empty, "Invalid username or password.");
         }
 
@@ -229,7 +234,7 @@ public class AccountController : Controller
         return RedirectToAction("Dashboard", "Home");
     }
 
-    private async Task LogAuditAsync(string userId, string action, string? details)
+    private async Task LogAuditAsync(string? userId, string action, string? details)
     {
         _context.AuditLogs.Add(new AuditLog
         {

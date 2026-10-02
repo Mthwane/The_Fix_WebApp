@@ -18,6 +18,7 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(connectionString));
+builder.Services.AddScoped<FashionFix.Web.Services.Audit.AuditLedgerService>();
 
 // --- Data Protection ---
 builder.Services.AddDataProtection()
@@ -523,6 +524,13 @@ app.UseRequestLocalization(
 
 app.UseHttpsRedirection();
 app.UseStaticFiles();
+
+// Make the client IP available to the audit ledger (see AuditRequestContext).
+app.Use(async (ctx, next) =>
+{
+    FashionFix.Web.Services.Audit.AuditRequestContext.IpAddress = ctx.Connection.RemoteIpAddress?.ToString();
+    await next();
+});
 
 app.UseRouting();
 

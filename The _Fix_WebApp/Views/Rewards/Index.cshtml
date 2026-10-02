@@ -1,7 +1,7 @@
 ﻿@model RewardsCustomerViewModel
 @{
     ViewData["Title"] = "FixRewards";
-    Layout = "_StorefrontLayout";
+    Layout = "_AccountLayout";
 
     (string label, bool isCredit) Describe(RewardsTransactionType t) => t switch
     {

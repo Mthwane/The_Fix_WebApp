@@ -14,7 +14,7 @@
 <section class="ffs-section" style="padding-top:32px;padding-bottom:0;">
     <div class="ffs-container">
         <div class="ffs-hero-image" style="aspect-ratio:16/6;margin-bottom:28px;">
-            <img src="@(dept.HeroImageUrl ?? Ph(dept.Name))" alt="@dept.Name" />
+            <img src="@((dept.HeroImageUrl ?? Ph(dept.Name)).Sized(1600))" alt="@dept.Name" />
         </div>
         <span class="ffs-eyebrow">@dept.Name Department</span>
         <h1 style="font-size:2.1rem;margin-bottom:10px;">@(dept.HeroHeadline ?? $"{dept.Name}: Considered Essentials")</h1>
@@ -219,7 +219,7 @@
                     var variants = product.Variants.Where(v => v.IsActive && v.StockQuantity > 0).ToList();
                     <div class="ffs-product-card">
                         <a asp-controller="Shop" asp-action="Product" asp-route-id="@product.ProductId" class="ffs-product-img-wrap" style="display:block;">
-                            <img src="@(product.ImageUrl ?? Ph(product.Name, 500, 650))" alt="@product.Name" />
+                            <img src="@((product.ImageUrl ?? Ph(product.Name, 500, 650)).Sized(600))" loading="lazy" alt="@product.Name" />
                             @if (!string.IsNullOrWhiteSpace(product.Badge))
                             {
                                 <span class="ffs-product-badge @(product.IsOnSale ? "ffs-badge-clay" : "")">@product.Badge</span>

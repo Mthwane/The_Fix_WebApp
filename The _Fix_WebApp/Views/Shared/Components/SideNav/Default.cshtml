@@ -1,0 +1,65 @@
+@model SideNavViewModel
+@{
+    bool IsActive(SideNavItem i)
+    {
+        if (!string.Equals(i.Controller, Model.CurrentController, StringComparison.OrdinalIgnoreCase)) return false;
+        if (i.OnlyActions is { Length: > 0 } && !i.OnlyActions.Contains(Model.CurrentAction, StringComparer.OrdinalIgnoreCase)) return false;
+        if (i.ExceptActions is { Length: > 0 } && i.ExceptActions.Contains(Model.CurrentAction, StringComparer.OrdinalIgnoreCase)) return false;
+        return true;
+    }
+}
+<aside class="sn sn-@Model.Mode" id="sn" aria-label="Main navigation">
+    <div class="sn-head">
+        <div class="sn-brand">
+            <div class="sn-brand-title">@Model.BrandTitle</div>
+            <div class="sn-brand-sub">@Model.BrandSubtitle</div>
+        </div>
+        <button type="button" class="sn-collapse" id="snCollapse" aria-label="Collapse sidebar" aria-expanded="true" title="Collapse sidebar">
+            <span class="material-symbols-outlined sn-collapse-ico">keyboard_double_arrow_left</span>
+        </button>
+    </div>
+
+    <nav class="sn-nav">
+        @foreach (var group in Model.Sections)
+        {
+            <div class="sn-section">
+                @if (!string.IsNullOrEmpty(group.Title))
+                {
+                    <div class="sn-section-title">@group.Title</div>
+                }
+                @foreach (var item in group.Items)
+                {
+                    var active = IsActive(item);
+                    <a class="sn-link@(active ? " active" : "")" asp-controller="@item.Controller" asp-action="@item.Action" title="@item.Label" aria-current="@(active ? "page" : null)">
+                        <span class="sn-ico material-symbols-outlined" aria-hidden="true">@item.Icon</span>
+                        <span class="sn-label">@item.Label</span>
+                        @if (item.BadgeKey is not null && Model.Badges.TryGetValue(item.BadgeKey, out var badge))
+                        {
+                            <span class="sn-badge">@badge</span>
+                        }
+                    </a>
+                }
+            </div>
+        }
+    </nav>
+
+    <div class="sn-foot">
+        @if (!string.IsNullOrEmpty(Model.UserName))
+        {
+            <div class="sn-user" title="@Model.UserName">
+                <div class="sn-avatar">@Model.Initials</div>
+                <div class="sn-user-text">
+                    <div class="sn-user-name">@Model.UserName</div>
+                    <div class="sn-user-sub">@Model.UserSubtitle</div>
+                </div>
+            </div>
+        }
+        <form asp-controller="Account" asp-action="Logout" method="post" class="sn-logout-form">
+            <button type="submit" class="sn-link sn-logout" title="Log out">
+                <span class="sn-ico material-symbols-outlined" aria-hidden="true">logout</span>
+                <span class="sn-label">Log Out</span>
+            </button>
+        </form>
+    </div>
+</aside>
+<div class="sn-backdrop" id="snBackdrop"></div>

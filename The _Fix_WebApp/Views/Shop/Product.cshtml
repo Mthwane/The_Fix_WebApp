@@ -28,16 +28,16 @@
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:44px;align-items:flex-start;">
             <div>
                 <div class="ffs-hero-image" style="aspect-ratio:4/5;margin-bottom:10px;">
-                    <img id="mainProductImage" src="@galleryImages[0]" alt="@product.Name" />
+                    <img id="mainProductImage" src="@galleryImages[0].Sized(1000)" alt="@product.Name" />
                 </div>
                 @if (galleryImages.Count > 1)
                 {
                     <div style="display:flex;gap:8px;">
                         @foreach (var img in galleryImages)
                         {
-                            <button type="button" onclick="document.getElementById('mainProductImage').src='@img'"
+                            <button type="button" onclick="document.getElementById('mainProductImage').src='@img.Sized(1000)'"
                                     style="border:1px solid var(--ffs-border);border-radius:8px;overflow:hidden;padding:0;width:64px;height:80px;background:none;cursor:pointer;">
-                                <img src="@img" alt="" style="width:100%;height:100%;object-fit:cover;display:block;" />
+                                <img src="@img.Sized(160)" alt="" style="width:100%;height:100%;object-fit:cover;display:block;" />
                             </button>
                         }
                     </div>

@@ -1,7 +1,7 @@
 @model WalletIndexViewModel
 @{
     ViewData["Title"] = "FixCash Wallet";
-    Layout = "_StorefrontLayout";
+    Layout = "_AccountLayout";
     var balance = Model.Balance;
 
     (string label, string color) DescribeType(WalletTransactionType t) => t switch

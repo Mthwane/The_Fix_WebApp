@@ -134,6 +134,14 @@
 .ffs-btn-outline { background: transparent; border-color: var(--ffs-ink); color: var(--ffs-ink); }
 .ffs-btn-outline-light { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.4); color: #fff; }
 
+/* `.ffs-page a { color: inherit }` (specificity 0,1,1) beats the single-class button colours above,
+   which turned every <a class="ffs-btn ..."> into dark text on a dark background. Re-assert the
+   button colours at a higher specificity. */
+.ffs-page a.ffs-btn-forest { color: #fff; }
+.ffs-page a.ffs-btn-sage { color: var(--ffs-sage-text); }
+.ffs-page a.ffs-btn-outline { color: var(--ffs-ink); }
+.ffs-page a.ffs-btn-outline-light { color: #fff; }
+
 /* ---------- Section rhythm ---------- */
 .ffs-section { padding: 64px 0; }
 .ffs-section-alt { background: var(--ffs-cream-alt); }

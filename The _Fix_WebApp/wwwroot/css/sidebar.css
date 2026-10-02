@@ -1,0 +1,147 @@
+/* =====================================================================
+   Shared collapsible sidebar (staff portal + customer account suite).
+   One implementation, two themes: each layout maps its own design tokens
+   onto the --sn-* variables below.
+   ===================================================================== */
+
+.sn-staff {
+    --sn-bg: var(--stf-surface-container-low, #f4f4f0);
+    --sn-border: var(--stf-outline-variant, #c2c8c2);
+    --sn-ink: var(--stf-on-surface-variant, #424844);
+    --sn-strong: var(--stf-on-surface, #1b1c1a);
+    --sn-muted: var(--stf-outline, #727973);
+    --sn-hover: var(--stf-surface-container, #efeeea);
+    --sn-active-bg: var(--stf-primary, #0a2217);
+    --sn-active-ink: #fff;
+    --sn-badge-bg: var(--stf-secondary-container, #f1e0cb);
+    --sn-badge-ink: var(--stf-secondary, #695c4c);
+    --sn-danger: var(--stf-error, #ba1a1a);
+    --sn-font: 'Plus Jakarta Sans', 'Inter', sans-serif;
+    --sn-serif: 'Newsreader', serif;
+}
+.sn-account {
+    --sn-bg: transparent;
+    --sn-border: var(--ffs-border, #E4DEC9);
+    --sn-ink: var(--ffs-ink-muted, #5b5f5a);
+    --sn-strong: var(--ffs-ink, #1a1c19);
+    --sn-muted: var(--ffs-ink-muted, #7a7f78);
+    --sn-hover: var(--ffs-cream-alt, #f1ede3);
+    --sn-active-bg: var(--ffs-forest, #20382b);
+    --sn-active-ink: #fff;
+    --sn-badge-bg: #F1E0CB;
+    --sn-badge-ink: #6F6252;
+    --sn-danger: #b3261e;
+    --sn-font: 'Inter', sans-serif;
+    --sn-serif: 'Fraunces', serif;
+}
+
+.sn {
+    width: 248px; flex-shrink: 0;
+    background: var(--sn-bg); color: var(--sn-ink);
+    font-family: var(--sn-font);
+    display: flex; flex-direction: column;
+    position: sticky; top: 0; align-self: flex-start;
+    height: 100vh; overflow-y: auto; overflow-x: hidden;
+    padding: 18px 12px;
+    transition: width .2s ease, padding .2s ease;
+    z-index: 40;
+}
+.sn-staff { border-right: 1px solid var(--sn-border); }
+/* The storefront header is sticky (~90px), so the account sidebar sticks just below it. */
+.sn-account { height: auto; max-height: calc(100vh - 116px); top: 100px; padding: 8px 12px 14px 0; z-index: 30; }
+
+.sn-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin: 0 4px 14px; }
+.sn-brand-title { font-family: var(--sn-serif); font-size: 1.15rem; font-weight: 500; color: var(--sn-strong); line-height: 1.2; }
+.sn-brand-sub { font-size: .66rem; text-transform: uppercase; letter-spacing: .09em; color: var(--sn-muted); margin-top: 3px; }
+
+.sn-collapse {
+    flex-shrink: 0; width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--sn-border);
+    background: transparent; color: var(--sn-ink); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; padding: 0;
+}
+.sn-collapse:hover { background: var(--sn-hover); }
+.sn-collapse-ico { font-size: 18px; transition: transform .2s ease; }
+
+.sn-section { margin-bottom: 6px; }
+.sn-section-title { font-size: .66rem; text-transform: uppercase; letter-spacing: .08em; color: var(--sn-muted); margin: 14px 10px 6px; white-space: nowrap; }
+
+.sn .sn-link {
+    display: flex; align-items: center; gap: 12px; width: 100%;
+    padding: 9px 12px; border-radius: 12px; margin-bottom: 2px;
+    font-size: .85rem; font-weight: 500; color: var(--sn-ink); text-decoration: none;
+    background: transparent; border: 0; cursor: pointer; font-family: inherit; text-align: left;
+    white-space: nowrap; position: relative;
+}
+.sn .sn-link:hover { background: var(--sn-hover); color: var(--sn-strong); }
+.sn .sn-link.active { background: var(--sn-active-bg); color: var(--sn-active-ink); }
+.sn-ico { font-size: 20px; width: 20px; height: 20px; overflow: hidden; flex-shrink: 0; font-variation-settings: 'FILL' 0, 'wght' 400; line-height: 1; }
+.sn-link.active .sn-ico { font-variation-settings: 'FILL' 1, 'wght' 400; }
+.sn-label { overflow: hidden; text-overflow: ellipsis; }
+.sn-badge {
+    margin-left: auto; font-size: .66rem; font-weight: 600; letter-spacing: .03em;
+    background: var(--sn-badge-bg); color: var(--sn-badge-ink); padding: 2px 8px; border-radius: 999px;
+}
+.sn-link.active .sn-badge { background: rgba(255,255,255,.2); color: #fff; }
+
+.sn-foot { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--sn-border); }
+.sn-user { display: flex; align-items: center; gap: 10px; padding: 8px 6px; }
+.sn-avatar {
+    width: 32px; height: 32px; border-radius: 50%; background: var(--sn-active-bg); color: #fff;
+    display: flex; align-items: center; justify-content: center; font-size: .72rem; font-weight: 600; flex-shrink: 0;
+}
+.sn-user-name { font-size: .8rem; font-weight: 600; color: var(--sn-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
+.sn-user-sub { font-size: .7rem; color: var(--sn-muted); white-space: nowrap; }
+.sn-logout-form { margin: 4px 0 0; }
+.sn .sn-logout, .sn .sn-logout:hover { color: var(--sn-danger); }
+
+/* ---------- Collapsed (desktop): icon rail ---------- */
+html.sn-collapsed .sn { width: 72px; padding-left: 10px; padding-right: 10px; }
+html.sn-collapsed .sn-account { padding-right: 10px; }
+html.sn-collapsed .sn-brand,
+html.sn-collapsed .sn-section-title,
+html.sn-collapsed .sn-label,
+html.sn-collapsed .sn-badge,
+html.sn-collapsed .sn-user-text { display: none; }
+html.sn-collapsed .sn-head { justify-content: center; margin-bottom: 10px; }
+html.sn-collapsed .sn-collapse-ico { transform: rotate(180deg); }
+html.sn-collapsed .sn .sn-link { justify-content: center; padding: 10px 0; }
+html.sn-collapsed .sn-user { justify-content: center; padding: 8px 0; }
+/* A hint of the badge when collapsed: a small dot on the icon. */
+html.sn-collapsed .sn-link:has(.sn-badge)::after {
+    content: ''; position: absolute; top: 8px; right: 14px; width: 7px; height: 7px; border-radius: 50%; background: var(--sn-badge-ink);
+}
+
+/* ---------- Mobile: off-canvas drawer ---------- */
+.sn-open-btn {
+    display: none; align-items: center; justify-content: center; width: 38px; height: 38px;
+    border-radius: 10px; border: 1px solid var(--sn-border, #c2c8c2); background: transparent; cursor: pointer; color: inherit; padding: 0;
+}
+.sn-backdrop { display: none; }
+
+@media (max-width: 900px) {
+    .sn {
+        position: fixed; left: 0; top: 0; height: 100vh; max-height: none; width: 270px !important;
+        padding: 18px 12px !important; background: var(--sn-bg-solid, var(--stf-surface, #faf9f5));
+        transform: translateX(-100%); transition: transform .22s ease; box-shadow: none; z-index: 70;
+    }
+    .sn-account { top: 0; max-height: none; }
+    .sn-account { background: var(--ffs-cream, #faf9f5); border-right: 1px solid var(--sn-border); }
+    html.sn-drawer .sn { transform: translateX(0); box-shadow: 0 0 40px rgba(0,0,0,.25); }
+    html.sn-drawer .sn-backdrop { display: block; position: fixed; inset: 0; background: rgba(10,34,23,.4); z-index: 65; }
+    .sn-open-btn { display: inline-flex; }
+    .sn-collapse { display: none; }
+    /* Ignore the desktop collapsed state inside the drawer. */
+    html.sn-collapsed .sn-brand, html.sn-collapsed .sn-section-title, html.sn-collapsed .sn-label,
+    html.sn-collapsed .sn-badge, html.sn-collapsed .sn-user-text { display: revert; }
+    html.sn-collapsed .sn .sn-link { justify-content: flex-start; padding: 9px 12px; }
+    html.sn-collapsed .sn-link:has(.sn-badge)::after { display: none; }
+}
+
+/* ---------- Customer account shell ---------- */
+.acct-shell { display: flex; gap: 8px; align-items: flex-start; max-width: 1440px; margin: 0 auto; padding: 24px 24px 0; }
+.acct-content { flex: 1; min-width: 0; }
+.acct-content .ffs-container { max-width: none; padding-left: 16px; padding-right: 16px; }
+.acct-mobilebar { display: none; margin-bottom: 12px; }
+@media (max-width: 900px) {
+    .acct-shell { padding: 12px 8px 0; }
+    .acct-mobilebar { display: flex; align-items: center; gap: 10px; }
+}

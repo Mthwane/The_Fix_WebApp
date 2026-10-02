@@ -2,10 +2,12 @@ using FashionFix.Web.Data;
 using FashionFix.Web.Models.Entities;
 using FashionFix.Web.Models.ViewModels;
 using FashionFix.Web.Security;
+using FashionFix.Web.Services.Audit;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Text;
 
 namespace FashionFix.Web.Controllers;
 
@@ -344,18 +346,204 @@ public class EmployeesController : Controller
     }
 
 
-    // GET: /Employees/AuditLogs - admin-only audit trail (NFR-11).
+    // GET: /Employees/AuditLogs - admin-only audit trail (NFR-11): search, period, category chips, paging.
     [Authorize(Policy = Permissions.AuditLogsView)]
     [HttpGet]
-    public async Task<IActionResult> AuditLogs()
+    public async Task<IActionResult> AuditLogs(string? q, string? category, DateTime? from, DateTime? to, int page = 1)
     {
-        var logs = await _context.AuditLogs
+        const int pageSize = 25;
+        category = string.IsNullOrWhiteSpace(category) ? "all" : category;
+
+        var filtered = BuildAuditQuery(q, category, from, to);
+        var totalFiltered = await filtered.CountAsync();
+        var totalPages = Math.Max(1, (int)Math.Ceiling(totalFiltered / (double)pageSize));
+        page = Math.Clamp(page, 1, totalPages);
+
+        var logs = await filtered
             .Include(a => a.User)
-            .OrderByDescending(a => a.Timestamp)
-            .Take(200)
+            .OrderByDescending(a => a.Timestamp).ThenByDescending(a => a.AuditLogId)
+            .Skip((page - 1) * pageSize).Take(pageSize)
             .ToListAsync();
 
-        return View(logs);
+        // Role badge for each actor on this page (one query).
+        var userIds = logs.Where(l => l.UserId != null).Select(l => l.UserId!).Distinct().ToList();
+        var roleRows = await (from ur in _context.UserRoles
+                              join r in _context.Roles on ur.RoleId equals r.Id
+                              where userIds.Contains(ur.UserId)
+                              select new { ur.UserId, r.Name }).ToListAsync();
+        string[] rolePriority = { "Administrator", "Owner", "Manager", "Employee", "Customer" };
+        string RoleFor(string? uid)
+        {
+            var names = roleRows.Where(x => x.UserId == uid).Select(x => x.Name ?? "").ToList();
+            return rolePriority.FirstOrDefault(names.Contains) ?? names.FirstOrDefault() ?? "";
+        }
+
+        var rows = logs.Select(l =>
+        {
+            var cat = AuditCategories.For(l.Action);
+            var sast = AuditTime.ToSast(l.Timestamp);
+            var hasUser = l.User is not null;
+            var name = hasUser ? l.User!.FullName
+                : (l.Action.StartsWith("Login", StringComparison.Ordinal) ? "Unknown visitor" : "System process");
+            return new AuditRowViewModel
+            {
+                Id = l.AuditLogId,
+                Date = sast.ToString("yyyy/MM/dd"),
+                Time = sast.ToString("HH:mm:ss"),
+                ActorName = name,
+                ActorInitials = hasUser ? string.Concat(name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(w => char.ToUpperInvariant(w[0]))) : "SYS",
+                ActorRole = hasUser ? RoleFor(l.UserId) : "Automated",
+                ActorIsSystem = !hasUser,
+                Action = l.Action,
+                CategoryLabel = cat.Label,
+                CategoryCss = cat.Css,
+                Details = l.Details ?? string.Empty,
+                IpAddress = l.IpAddress,
+                Hash = l.Hash
+            };
+        }).ToList();
+
+        // One grouped query feeds every stat card and chip count.
+        var actionCounts = await _context.AuditLogs.AsNoTracking()
+            .GroupBy(a => a.Action)
+            .Select(g => new { Action = g.Key, Count = g.Count() })
+            .ToListAsync();
+
+        var categoryCounts = new Dictionary<string, int> { ["all"] = actionCounts.Sum(x => x.Count) };
+        foreach (var c in AuditCategories.All.Append(AuditCategories.Other))
+            categoryCounts[c.Key] = 0;
+        foreach (var x in actionCounts)
+            categoryCounts[AuditCategories.For(x.Action).Key] += x.Count;
+
+        var sealedCount = await _context.AuditLogs.CountAsync(a => a.Hash != null);
+        var since = DateTime.UtcNow.AddHours(-24);
+        var head = await _context.AuditLogs.AsNoTracking()
+            .Where(a => a.Hash != null).OrderByDescending(a => a.AuditLogId).Select(a => a.Hash).FirstOrDefaultAsync();
+
+        var model = new AuditLogsPageViewModel
+        {
+            Rows = rows,
+            Q = q,
+            Category = category,
+            From = from,
+            To = to,
+            Page = page,
+            PageSize = pageSize,
+            TotalFiltered = totalFiltered,
+            CategoryCounts = categoryCounts,
+            Stats = new AuditStatsViewModel
+            {
+                Total = categoryCounts["all"],
+                Last24Hours = await _context.AuditLogs.CountAsync(a => a.Timestamp >= since),
+                Logistics = categoryCounts["logistics"],
+                AutoBooked = actionCounts.Where(x => x.Action.StartsWith("AutoBooked", StringComparison.Ordinal)).Sum(x => x.Count),
+                AuthEvents = categoryCounts["auth"],
+                FailedSignIns = actionCounts.Where(x => x.Action == "LoginFailed" || x.Action == "LoginLockedOut").Sum(x => x.Count),
+                Sealed = sealedCount,
+                Legacy = categoryCounts["all"] - sealedCount,
+                HeadHash = head
+            }
+        };
+
+        return View(model);
+    }
+
+    // GET: /Employees/ExportAuditLogs - CSV of whatever the current filters show (capped at 50,000 rows).
+    [Authorize(Policy = Permissions.AuditLogsView)]
+    [HttpGet]
+    public async Task<IActionResult> ExportAuditLogs(string? q, string? category, DateTime? from, DateTime? to)
+    {
+        const int cap = 50_000;
+        var logs = await BuildAuditQuery(q, string.IsNullOrWhiteSpace(category) ? "all" : category, from, to)
+            .Include(a => a.User)
+            .OrderBy(a => a.AuditLogId)
+            .Take(cap)
+            .ToListAsync();
+
+        // Cells starting with = + - @ are prefixed so Excel can't run them as formulas.
+        static string Csv(string? v)
+        {
+            v ??= string.Empty;
+            if (v.Length > 0 && "=+-@\t\r".IndexOf(v[0]) >= 0) v = "'" + v;
+            return "\"" + v.Replace("\"", "\"\"") + "\"";
+        }
+
+        var sb = new StringBuilder();
+        sb.AppendLine("Id,Timestamp (SAST),Actor,Username,Action,Category,Details,IP,PreviousHash,Hash");
+        foreach (var l in logs)
+        {
+            sb.AppendLine(string.Join(',',
+                l.AuditLogId,
+                Csv(AuditTime.ToSast(l.Timestamp).ToString("yyyy-MM-dd HH:mm:ss")),
+                Csv(l.User?.FullName),
+                Csv(l.User?.UserName),
+                Csv(l.Action),
+                Csv(AuditCategories.For(l.Action).Label),
+                Csv(l.Details),
+                Csv(l.IpAddress),
+                Csv(l.PreviousHash),
+                Csv(l.Hash)));
+        }
+
+        _context.AuditLogs.Add(new AuditLog
+        {
+            UserId = _userManager.GetUserId(User),
+            Action = "AuditExported",
+            Details = $"Exported {logs.Count} audit row(s) to CSV."
+        });
+        await _context.SaveChangesAsync();
+
+        var bytes = new UTF8Encoding(encoderShouldEmitUTF8Identifier: true).GetPreamble()
+            .Concat(Encoding.UTF8.GetBytes(sb.ToString())).ToArray();
+        return File(bytes, "text/csv", $"fashionfix-audit-{DateTime.UtcNow:yyyyMMdd-HHmm}.csv");
+    }
+
+    // GET: /Employees/VerifyAuditLedger - recomputes the SHA-256 chain; read-only, returns JSON for the page.
+    [Authorize(Policy = Permissions.AuditLogsView)]
+    [HttpGet]
+    public async Task<IActionResult> VerifyAuditLedger([FromServices] AuditLedgerService ledger)
+    {
+        var r = await ledger.VerifyAsync();
+        return Json(new
+        {
+            valid = r.IsValid,
+            sealedCount = r.SealedCount,
+            legacyCount = r.LegacyCount,
+            validCount = r.ValidCount,
+            head = r.HeadHash,
+            issues = r.Issues.Select(i => new { id = i.AuditLogId, problem = i.Problem }),
+            verifiedAt = AuditTime.ToSast(r.VerifiedAtUtc).ToString("yyyy/MM/dd HH:mm:ss")
+        });
+    }
+
+    private IQueryable<AuditLog> BuildAuditQuery(string? q, string? category, DateTime? from, DateTime? to)
+    {
+        var query = _context.AuditLogs.AsNoTracking().AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(q))
+        {
+            q = q.Trim();
+            query = query.Where(a =>
+                a.Action.Contains(q) ||
+                (a.Details != null && a.Details.Contains(q)) ||
+                (a.IpAddress != null && a.IpAddress.Contains(q)) ||
+                (a.User != null && (a.User.FullName.Contains(q) || (a.User.UserName != null && a.User.UserName.Contains(q)))));
+        }
+
+        query = AuditCategories.Filter(query, category);
+
+        if (from.HasValue)
+        {
+            var fromUtc = AuditTime.SastDayStartToUtc(from.Value);
+            query = query.Where(a => a.Timestamp >= fromUtc);
+        }
+        if (to.HasValue)
+        {
+            var toUtc = AuditTime.SastDayStartToUtc(to.Value).AddDays(1); // inclusive of the whole "to" day
+            query = query.Where(a => a.Timestamp < toUtc);
+        }
+
+        return query;
     }
 
 }

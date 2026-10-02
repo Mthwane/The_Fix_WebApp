@@ -1,7 +1,7 @@
 @model List<WishlistItem>
 @{
     ViewData["Title"] = "My Wishlist";
-    Layout = "_StorefrontLayout";
+    Layout = "_AccountLayout";
     var fallbackImage = "https://placehold.co/400x500/E4DEC9/24211B?text=No+Image";
 }
 
@@ -32,7 +32,7 @@
                     var inStock = product.Variants.Any(v => v.IsActive && v.StockQuantity > 0);
                     <div class="ffs-product-card">
                         <a asp-controller="Shop" asp-action="Product" asp-route-id="@product.ProductId" class="ffs-product-img-wrap" style="display:block;">
-                            <img src="@(product.ImageUrl ?? fallbackImage)" alt="@product.Name" />
+                            <img src="@((product.ImageUrl ?? fallbackImage).Sized(500))" loading="lazy" alt="@product.Name" />
                             @if (!inStock)
                             {
                                 <span class="ffs-product-badge ffs-badge-clay">Out of Stock</span>

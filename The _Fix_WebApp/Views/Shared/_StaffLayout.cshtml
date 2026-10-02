@@ -2,11 +2,7 @@
 @using FashionFix.Web.Models.Entities
 @inject UserManager<ApplicationUser> UserManager
 @{
-    bool Can(string permission) => User.HasClaim(Permissions.ClaimType, permission);
     var currentUser = await UserManager.GetUserAsync(User);
-    var currentAction = ViewContext.RouteData.Values["action"]?.ToString();
-    var currentController = ViewContext.RouteData.Values["controller"]?.ToString();
-    string NavClass(string controller) => currentController == controller ? "stf-nav-link active" : "stf-nav-link";
 }
 <!DOCTYPE html>
 <html lang="en">
@@ -17,110 +13,19 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Newsreader:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="~/css/staff.css" asp-append-version="true" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..24,400,0..1,0&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="~/css/sidebar.css" asp-append-version="true" />
+    <script>try { if (localStorage.getItem('fashionfix:sidebar-collapsed') === '1') document.documentElement.classList.add('sn-collapsed'); } catch (e) { }</script>
     @await RenderSectionAsync("Styles", required: false)
 </head>
 <body class="stf-page">
     <div class="stf-shell">
-        <aside class="stf-sidebar">
-            <div class="stf-brand">FashionFix</div>
-            <div class="stf-brand-sub">Staff Operations</div>
-
-            <div class="stf-nav-label">Operations Core</div>
-            @if (Can(Permissions.DashboardView))
-            {
-                <a class="@NavClass("Home")" asp-controller="Home" asp-action="Dashboard">Dashboard</a>
-            }
-            @if (Can(Permissions.EmployeesManage))
-            {
-                <a class="@NavClass("Employees")" asp-controller="Employees" asp-action="Index">Staff &amp; Employees</a>
-            }
-            @if (Can(Permissions.RolesManage))
-            {
-                <a class="@NavClass("Roles")" asp-controller="Roles" asp-action="Index">Roles &amp; Permissions</a>
-            }
-            @if (Can(Permissions.AuditLogsView))
-            {
-                <a class="@NavClass("AuditLogs")" asp-controller="Employees" asp-action="AuditLogs">Audit Logs &amp; Trail</a>
-            }
-            @if (Can(Permissions.ProductsManage))
-            {
-                <a class="@NavClass("Products")" asp-controller="Products" asp-action="Index">Product Catalogue</a>
-                <a class="@NavClass("Pricing")" asp-controller="Pricing" asp-action="Index">Pricing</a>
-            }
-            @if (Can(Permissions.PosUse))
-            {
-                <a class="@NavClass("Pos")" asp-controller="Pos" asp-action="Index">POS Till Workstation</a>
-            }
-            @if (Can(Permissions.OrdersManage))
-            {
-                <a class="@NavClass("Orders")" asp-controller="Orders" asp-action="Index">Orders &amp; Dispatches</a>
-                <a class="@NavClass("PaymentIncidents")" asp-controller="PaymentIncidents" asp-action="Index">Payment Incidents</a>
-            }
-            @if (Can(Permissions.StorefrontManage))
-            {
-                <a class="@NavClass("Departments")" asp-controller="Departments" asp-action="Index">Departments</a>
-                <a class="@(currentController == "Storefront" && currentAction == "Trending" ? "stf-nav-link active" : "stf-nav-link")" asp-controller="Storefront" asp-action="Trending">Trending Picks</a>
-                <a class="@(currentController == "Storefront" && currentAction == "Content" ? "stf-nav-link active" : "stf-nav-link")" asp-controller="Storefront" asp-action="Content">Homepage Content</a>
-                <a class="@(currentController == "Storefront" && currentAction == "Reviews" ? "stf-nav-link active" : "stf-nav-link")" asp-controller="Storefront" asp-action="Reviews">Reviews</a>
-                <a class="@NavClass("Faqs")" asp-controller="Faqs" asp-action="Index">FAQs</a>
-            }
-            @if (Can(Permissions.SupportTicketsManage))
-            {
-                <a class="@NavClass("SupportTickets")" asp-controller="SupportTickets" asp-action="Index">Support Tickets</a>
-            }
-            @if (Can(Permissions.RewardsManage))
-            {
-                <a class="@NavClass("RewardsAdmin")" asp-controller="RewardsAdmin" asp-action="Index">Rewards</a>
-            }
-            @if (Can(Permissions.WalletView))
-            {
-                <a class="@NavClass("WalletAdmin")" asp-controller="WalletAdmin" asp-action="Index">FixCash Wallets</a>
-            }
-
-@if (Can(Permissions.SuppliersManage) || Can(Permissions.PurchaseOrdersManage) || Can(Permissions.ReturnsProcess))
-{
-    <div class="stf-nav-label">Supply Chain</div>
-}
-@if (Can(Permissions.SuppliersManage))
-{
-    <a class="@NavClass("Suppliers")" asp-controller="Suppliers" asp-action="Index">Suppliers</a>
-}
-@if (Can(Permissions.PurchaseOrdersManage))
-{
-    <a class="@NavClass("PurchaseOrders")" asp-controller="PurchaseOrders" asp-action="Index">Purchase Orders</a>
-    <a class="@NavClass("RestockBundles")" asp-controller="RestockBundles" asp-action="Index">Restock Bundles</a>
-}
-@if (Can(Permissions.ReturnsProcess))
-{
-    <a class="@NavClass("Returns")" asp-controller="Returns" asp-action="Index">Returns</a>
-}
-
-@if (Can(Permissions.ReportsView))
-{
-    <a class="@NavClass("Reports")" asp-controller="Reports" asp-action="Index">Reports &amp; Margins</a>
-}
-
-            <div class="stf-sidebar-footer">
-                @if (currentUser is not null)
-                {
-                    <div class="stf-user-chip">
-                        <div class="stf-user-avatar">@(string.Concat(currentUser.FullName.Split(' ').Select(w => w.Length > 0 ? w[0] : ' ')).ToUpperInvariant())</div>
-                        <div>
-                            <div style="font-weight:600;">@currentUser.FullName</div>
-                            <div style="color:var(--stf-outline);font-size:0.72rem;">@currentUser.JobPosition</div>
-                        </div>
-                    </div>
-                }
-                <form asp-controller="Account" asp-action="Logout" method="post" style="margin-top:6px;">
-                    @Html.AntiForgeryToken()
-                    <button type="submit" class="stf-btn stf-btn-outline" style="width:100%;justify-content:center;padding:7px;font-size:0.78rem;">Sign Out</button>
-                </form>
-            </div>
-        </aside>
+        @await Component.InvokeAsync("SideNav", new { mode = "staff" })
 
         <div class="stf-main">
             <div class="stf-topbar">
                 <div class="stf-topbar-left">
+                    <button type="button" class="sn-open-btn" aria-label="Open menu"><span class="material-symbols-outlined">menu</span></button>
                     <span class="stf-chip">Cape Town V&amp;A Waterfront Sanctuary</span>
                 </div>
                 <div style="display:flex;align-items:center;gap:10px;">
@@ -155,6 +60,7 @@
             new bootstrap.Toast(el, { delay: 5000 }).show();
         });
     </script>
+    <script src="~/js/sidebar.js" asp-append-version="true"></script>
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

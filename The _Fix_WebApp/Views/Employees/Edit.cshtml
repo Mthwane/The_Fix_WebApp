@@ -1,62 +1,72 @@
 @model EmployeeEditViewModel
 @{
     ViewData["Title"] = "Edit Employee";
+    Layout = "_StaffLayout";
+    var roles = ViewBag.AssignableRoles as List<string> ?? new List<string>();
 }
 
-<div class="container py-4" style="max-width:640px;">
-    <h2>Edit Employee</h2>
+<div class="stf-content">
+    <div class="stf-page-head">
+        <div>
+            <span class="stf-eyebrow">Identity &amp; Governance &bull; Employees.Manage</span>
+            <h1>Edit Employee</h1>
+            <p>Update profile details, role and employment status. Login credentials are not changed here.</p>
+        </div>
+        <a class="stf-btn stf-btn-outline" asp-controller="Employees" asp-action="Index">&larr; Back to directory</a>
+    </div>
 
-    <form asp-controller="Employees" asp-action="Edit" asp-route-id="@Model.Id" method="post" class="row g-3">
+    <form asp-controller="Employees" asp-action="Edit" asp-route-id="@Model.Id" method="post" class="stf-form-card" novalidate>
         <input type="hidden" asp-for="Id" />
-        <div asp-validation-summary="ModelOnly" class="text-danger col-12"></div>
+        <div asp-validation-summary="ModelOnly" class="stf-form-alert"></div>
 
-        <div class="col-md-6">
-            <label asp-for="FullName" class="form-label"></label>
-            <input asp-for="FullName" class="form-control" />
-            <span asp-validation-for="FullName" class="text-danger"></span>
-        </div>
-
-        <div class="col-md-6">
-            <label asp-for="Email" class="form-label"></label>
-            <input asp-for="Email" class="form-control" type="email" />
-            <span asp-validation-for="Email" class="text-danger"></span>
-        </div>
-
-        <div class="col-md-6">
-            <label asp-for="JobPosition" class="form-label"></label>
-            <input asp-for="JobPosition" class="form-control" />
-        </div>
-
-        <div class="col-md-6">
-            <label asp-for="EmploymentStatus" class="form-label"></label>
-            <select asp-for="EmploymentStatus" class="form-select">
-                @foreach (var status in EmployeeEditViewModel.EmploymentStatuses)
-                {
-                    <option value="@status">@status</option>
-                }
-            </select>
-        </div>
-
-        <div class="col-md-6">
-            <label asp-for="Role" class="form-label"></label>
-            <select asp-for="Role" class="form-select">
-                @foreach (var role in (ViewBag.AssignableRoles as List<string> ?? new List<string>()))
-                {
-                    <option value="@role">@role</option>
-                }
-            </select>
-        </div>
-
-        <div class="col-md-6 d-flex align-items-end">
-            <div class="form-check">
-                <input asp-for="IsActive" class="form-check-input" />
-                <label asp-for="IsActive" class="form-check-label"></label>
+        <h2 class="stf-form-section">Identity</h2>
+        <div class="stf-form-grid">
+            <div class="stf-field">
+                <label asp-for="FullName"></label>
+                <input asp-for="FullName" type="text" />
+                <span asp-validation-for="FullName" class="stf-err"></span>
+            </div>
+            <div class="stf-field">
+                <label asp-for="Email"></label>
+                <input asp-for="Email" type="email" />
+                <span asp-validation-for="Email" class="stf-err"></span>
             </div>
         </div>
 
-        <div class="col-12 mt-4">
-            <button type="submit" class="btn btn-primary">Save Changes</button>
-            <a asp-controller="Employees" asp-action="Index" class="btn btn-outline-secondary">Cancel</a>
+        <h2 class="stf-form-section">Role &amp; employment</h2>
+        <div class="stf-form-grid">
+            <div class="stf-field">
+                <label asp-for="JobPosition"></label>
+                <input asp-for="JobPosition" type="text" />
+            </div>
+            <div class="stf-field">
+                <label asp-for="EmploymentStatus"></label>
+                <select asp-for="EmploymentStatus">
+                    @foreach (var status in EmployeeEditViewModel.EmploymentStatuses)
+                    {
+                        <option value="@status" selected="@(Model.EmploymentStatus == status)">@status</option>
+                    }
+                </select>
+            </div>
+            <div class="stf-field">
+                <label asp-for="Role"></label>
+                <select asp-for="Role">
+                    @foreach (var role in roles)
+                    {
+                        <option value="@role" selected="@(Model.Role == role)">@role</option>
+                    }
+                </select>
+            </div>
+            <div class="stf-field">
+                <label class="stf-switch" style="text-transform:none;letter-spacing:0;font-weight:500;">
+                    <input asp-for="IsActive" type="checkbox" /> Account is active
+                </label>
+            </div>
+        </div>
+
+        <div class="stf-form-actions">
+            <button type="submit" class="stf-btn stf-btn-primary">Save changes</button>
+            <a class="stf-btn stf-btn-outline" asp-controller="Employees" asp-action="Index">Cancel</a>
         </div>
     </form>
 </div>

@@ -25,7 +25,7 @@
                 </div>
             </div>
             <div class="ffs-hero-image">
-                <img src="@(settings.HeroImageUrl ?? Ph("Fashion Fix Editorial", 900, 700))" alt="Fashion Fix editorial" />
+                <img src="@((settings.HeroImageUrl ?? Ph("Fashion Fix Editorial", 900, 700)).Sized(1200))" alt="Fashion Fix editorial" />
             </div>
         </div>
 
@@ -66,7 +66,7 @@
                 var dept = Model.Departments[i];
                 <div class="ffs-dept-card">
                     <div class="ffs-dept-img">
-                        <img src="@(dept.TileImageUrl ?? Ph(dept.Name, 500, 620))" alt="@dept.Name" />
+                        <img src="@((dept.TileImageUrl ?? Ph(dept.Name, 500, 620)).Sized(700))" loading="lazy" alt="@dept.Name" />
                     </div>
                     <div class="ffs-dept-body">
                         <h3>@dept.Name</h3>
@@ -102,7 +102,7 @@
                     var product = card.Product;
                     <div class="ffs-product-card">
                         <a asp-controller="Shop" asp-action="Product" asp-route-id="@product.ProductId" class="ffs-product-img-wrap" style="display:block;">
-                            <img src="@(card.DisplayImageUrl ?? Ph(card.DisplayTitle, 500, 650))" alt="@card.DisplayTitle" />
+                            <img src="@((card.DisplayImageUrl ?? Ph(card.DisplayTitle, 500, 650)).Sized(600))" loading="lazy" alt="@card.DisplayTitle" />
                             @if (!string.IsNullOrWhiteSpace(card.DisplayBadge))
                             {
                                 <span class="ffs-product-badge @(product.IsOnSale ? "ffs-badge-clay" : "")">@card.DisplayBadge</span>

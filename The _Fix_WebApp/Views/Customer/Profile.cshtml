@@ -1,7 +1,7 @@
 @model CustomerProfileViewModel
 @{
     ViewData["Title"] = "My Profile";
-    Layout = "_StorefrontLayout";
+    Layout = "_AccountLayout";
     var addresses = (List<CustomerAddress>)(ViewBag.Addresses ?? new List<CustomerAddress>());
     var paymentMethods = (List<CustomerPaymentMethod>)(ViewBag.PaymentMethods ?? new List<CustomerPaymentMethod>());
 }

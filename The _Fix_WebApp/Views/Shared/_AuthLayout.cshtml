@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>@(ViewData["Title"] != null ? $"{ViewData["Title"]} - Fashion Fix" : "Fashion Fix")</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..24,400,0..1,0&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="~/css/auth.css" asp-append-version="true" />
+    <link rel="alternate icon" type="image/x-icon" href="~/favicon.svg" />
+</head>
+<body class="au-page">
+    <div class="au-shell">
+        <header class="au-top">
+            <a class="au-brand" asp-controller="Home" asp-action="Index">Fashion Fix <small>Atelier</small></a>
+            <span class="au-secure"><span class="material-symbols-outlined">verified_user</span> Secure sign-in &bull; Encrypted connection</span>
+        </header>
+
+        @RenderBody()
+
+        <footer class="au-foot">
+            <span>&copy; @DateTime.Now.Year Fashion Fix House of Design.</span>
+            <nav>
+                <a asp-controller="Support" asp-action="Faq">Help &amp; FAQ</a>
+            </nav>
+        </footer>
+    </div>
+
+    <script>
+        // Show / hide password buttons.
+        document.querySelectorAll('.au-eye').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var input = document.getElementById(btn.getAttribute('data-target'));
+                if (!input) return;
+                var show = input.type === 'password';
+                input.type = show ? 'text' : 'password';
+                btn.querySelector('.material-symbols-outlined').textContent = show ? 'visibility_off' : 'visibility';
+                btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+            });
+        });
+    </script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

@@ -1,0 +1,24 @@
+@{
+    // Customer account area: the storefront chrome (header, footer) plus the collapsible account sidebar.
+    Layout = "_StorefrontLayout";
+}
+@section Styles {
+    @await RenderSectionAsync("Styles", required: false)
+}
+@section Scripts {
+    @await RenderSectionAsync("Scripts", required: false)
+}
+
+<div class="acct-shell">
+    @await Component.InvokeAsync("SideNav", new { mode = "account" })
+
+    <div class="acct-content">
+        <div class="acct-mobilebar">
+            <button type="button" class="sn-open-btn" aria-label="Open account menu">
+                <span class="material-symbols-outlined">menu</span>
+            </button>
+            <span style="font-size:.85rem;color:var(--ffs-ink-muted);">Account menu</span>
+        </div>
+        @RenderBody()
+    </div>
+</div>

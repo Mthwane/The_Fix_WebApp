@@ -1,4 +1,5 @@
 using FashionFix.Web.Models.Entities;
+using FashionFix.Web.Services.Audit;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
@@ -10,6 +11,82 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         : base(options)
     {
     }
+
+    // ---- Tamper-evident audit ledger ----
+    // Serialises writes that contain audit rows so each new row can chain to the one before it.
+    // (Single app instance: if you scale out to several instances, rows written at the same
+    // moment on different instances could fork the chain - see INTEGRATION-STEPS-AUDIT.md.)
+    private static readonly SemaphoreSlim AuditChainLock = new(1, 1);
+
+    private List<AuditLog> PendingAuditRows() =>
+        ChangeTracker.Entries<AuditLog>()
+            .Where(e => e.State == EntityState.Added)
+            .Select(e => e.Entity)
+            .ToList();
+
+    private void SealAuditRows(List<AuditLog> rows, string? previousHash)
+    {
+        var prev = previousHash;
+        foreach (var row in rows)
+        {
+            row.IpAddress ??= Truncate(AuditRequestContext.IpAddress, 45);
+            row.PreviousHash = prev;
+            row.Hash = AuditHasher.Compute(row, prev);
+            prev = row.Hash;
+        }
+    }
+
+    private static string? Truncate(string? value, int max) =>
+        value is null ? null : (value.Length <= max ? value : value[..max]);
+
+    public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        var rows = PendingAuditRows();
+        if (rows.Count == 0)
+            return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+
+        await AuditChainLock.WaitAsync(cancellationToken);
+        try
+        {
+            var last = await AuditLogs.AsNoTracking()
+                .Where(a => a.Hash != null)
+                .OrderByDescending(a => a.AuditLogId)
+                .Select(a => a.Hash)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            SealAuditRows(rows, last);
+            return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        }
+        finally
+        {
+            AuditChainLock.Release();
+        }
+    }
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        var rows = PendingAuditRows();
+        if (rows.Count == 0)
+            return base.SaveChanges(acceptAllChangesOnSuccess);
+
+        AuditChainLock.Wait();
+        try
+        {
+            var last = AuditLogs.AsNoTracking()
+                .Where(a => a.Hash != null)
+                .OrderByDescending(a => a.AuditLogId)
+                .Select(a => a.Hash)
+                .FirstOrDefault();
+
+            SealAuditRows(rows, last);
+            return base.SaveChanges(acceptAllChangesOnSuccess);
+        }
+        finally
+        {
+            AuditChainLock.Release();
+        }
+    }
+
     public DbSet<PaymentIncident> PaymentIncidents => Set<PaymentIncident>();
     public DbSet<Product> Products => Set<Product>();
     public DbSet<ProductVariant> ProductVariants => Set<ProductVariant>();
@@ -65,6 +142,9 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         builder.Entity<Order>()
             .HasIndex(o => o.OrderNumber)
             .IsUnique();
+
+        // Audit Logs screen sorts and filters by time.
+        builder.Entity<AuditLog>().HasIndex(a => a.Timestamp);
         // One incident per payment reference.
         builder.Entity<PaymentIncident>().HasIndex(i => i.Reference).IsUnique();
         builder.Entity<PaymentIncident>().Property(i => i.CardAmount).HasPrecision(18, 2);

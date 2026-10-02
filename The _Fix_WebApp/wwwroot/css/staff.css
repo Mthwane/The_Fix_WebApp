@@ -1,3 +1,6 @@
+/* Without this, width:100% inputs with padding overflow their grid cell and overlap the next field. */
+*, *::before, *::after { box-sizing: border-box; }
+
 /* =====================================================================
    FashionFix Staff Portal - design tokens + shared chrome, matching the
    "Botanical Bio-Sciences" design system (same palette as storefront.css,
@@ -67,6 +70,13 @@
 .stf-btn-outline { background: var(--stf-surface); border-color: var(--stf-outline-variant); color: var(--stf-on-surface); }
 .stf-btn-danger-outline { background: var(--stf-surface); border-color: var(--stf-error); color: var(--stf-error); }
 .stf-btn:hover { opacity: .9; }
+
+/* Same problem as the storefront: `.stf-page a { color: inherit }` outranks the single-class button
+   colours, so anchor-style buttons showed dark text on dark green. */
+.stf-page a.stf-btn-primary { color: #fff; }
+.stf-page a.stf-btn-outline { color: var(--stf-on-surface); }
+.stf-page a.stf-btn-danger-outline { color: var(--stf-error); }
+.stf-page .stf-save-bar a.stf-btn-outline { color: #fff; }
 .stf-btn:disabled { opacity: .5; cursor: not-allowed; }
 
 /* ---------- Cards / stats ---------- */
@@ -142,3 +152,27 @@
 .toast .btn-close::before { transform: translate(-50%, -50%) rotate(45deg); }
 .toast .btn-close::after { transform: translate(-50%, -50%) rotate(-45deg); }
 .toast .btn-close:hover { opacity: 1; }
+
+/* ---------- Staff forms (Add / Edit Employee, and any new staff form) ---------- */
+.stf-form-card { background: #fff; border: 1px solid var(--stf-outline-variant); border-radius: var(--stf-radius-lg); padding: 30px 32px; max-width: 820px; }
+.stf-form-section { font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; color: var(--stf-secondary); font-weight: 600; margin: 0 0 14px; }
+.stf-form-section:not(:first-child) { margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--stf-surface-container); }
+.stf-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 20px; }
+.stf-form-grid .full { grid-column: 1 / -1; }
+.stf-field label { display: block; font-size: .66rem; letter-spacing: .08em; text-transform: uppercase; font-weight: 600; color: var(--stf-on-surface); margin-bottom: 7px; }
+.stf-field input[type="text"], .stf-field input[type="email"], .stf-field input[type="password"], .stf-field select {
+    width: 100%; background: var(--stf-surface-container-low); border: 1px solid transparent; border-radius: 999px;
+    padding: 12px 18px; font-family: inherit; font-size: .9rem; color: var(--stf-on-surface); outline: none; transition: background .15s, border-color .15s;
+}
+.stf-field select { appearance: none; -webkit-appearance: none; padding-right: 40px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23727973' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 16px center; }
+.stf-field input:focus, .stf-field select:focus { background-color: #fff; border-color: var(--stf-primary-container); }
+.stf-field .stf-hint { display: block; margin-top: 6px; padding-left: 10px; font-size: .74rem; color: var(--stf-outline); }
+.stf-field .stf-err { display: block; margin-top: 6px; padding-left: 10px; font-size: .76rem; color: var(--stf-error); }
+.stf-form-alert { background: var(--stf-error-container); color: #93000a; border-radius: 14px; padding: 12px 16px; font-size: .85rem; margin-bottom: 18px; }
+.stf-form-alert:empty, .stf-form-alert.validation-summary-valid { display: none; }
+.stf-form-actions { display: flex; gap: 10px; margin-top: 28px; flex-wrap: wrap; }
+.stf-switch { display: inline-flex; align-items: center; gap: 10px; font-size: .88rem; cursor: pointer; padding-top: 28px; }
+.stf-switch input { width: 18px; height: 18px; accent-color: var(--stf-primary); }
+@media (max-width: 700px) { .stf-form-grid { grid-template-columns: 1fr; } .stf-form-card { padding: 22px 18px; } }

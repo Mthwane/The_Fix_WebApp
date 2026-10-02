@@ -53,7 +53,7 @@
                     var variants = product.Variants.Where(v => v.IsActive && v.StockQuantity > 0).ToList();
                     <div class="ffs-product-card">
                         <a asp-controller="Shop" asp-action="Product" asp-route-id="@product.ProductId" class="ffs-product-img-wrap" style="display:block;">
-                            <img src="@(product.ImageUrl ?? Ph(product.Name))" alt="@product.Name" />
+                            <img src="@((product.ImageUrl ?? Ph(product.Name)).Sized(600))" loading="lazy" alt="@product.Name" />
                             @if (!string.IsNullOrWhiteSpace(product.Badge))
                             {
                                 <span class="ffs-product-badge @(product.IsOnSale ? "ffs-badge-clay" : "")">@product.Badge</span>

@@ -1,19 +1,224 @@
-@model List<AuditLog>
+@using FashionFix.Web.Services.Audit
+@model AuditLogsPageViewModel
 @{
     ViewData["Title"] = "Audit Logs";
+    Layout = "_StaffLayout";
+
+    var s = Model.Stats;
+    int sealedPct = s.Total == 0 ? 100 : (int)Math.Round(s.Sealed * 100.0 / s.Total);
+    string Short(string? h) => string.IsNullOrEmpty(h) || h.Length < 12 ? (h ?? "") : $"{h[..4]}…{h[^4..]}";
+    var firstRow = Model.TotalFiltered == 0 ? 0 : (Model.Page - 1) * Model.PageSize + 1;
+    var lastRow = Math.Min(Model.Page * Model.PageSize, Model.TotalFiltered);
+
+    var cats = new List<(string Key, string Label)> { ("all", "All events") };
+    cats.AddRange(AuditCategories.All.Select(c => (c.Key, c.Label)));
+    cats.Add((AuditCategories.Other.Key, AuditCategories.Other.Label));
+
+    // Pager window: first, last, and two either side of the current page.
+    var pageNumbers = Enumerable.Range(1, Model.TotalPages)
+        .Where(p => p == 1 || p == Model.TotalPages || Math.Abs(p - Model.Page) <= 1).ToList();
 }
-<h1>Audit Logs</h1>
-<table class="table table-sm">
-    <thead><tr><th>Timestamp</th><th>User</th><th>Action</th><th>Details</th></tr></thead>
-    <tbody>
-    @foreach (var log in Model)
-    {
-        <tr>
-            <td>@log.Timestamp.ToLocalTime()</td>
-            <td>@log.User?.FullName</td>
-            <td>@log.Action</td>
-            <td>@log.Details</td>
-        </tr>
-    }
-    </tbody>
-</table>
+@section Styles {
+    <link rel="stylesheet" href="~/css/audit.css" asp-append-version="true" />
+}
+
+<div class="aud-wrap">
+    <span class="aud-eyebrow"><span class="material-symbols-outlined">lock</span> Security audit &amp; governance</span>
+
+    <div class="aud-head">
+        <h1>System &amp; Security Audit Logs</h1>
+        <div class="aud-actions">
+            <a class="stf-btn stf-btn-outline" asp-action="ExportAuditLogs" asp-route-q="@Model.Q" asp-route-category="@(Model.Category == "all" ? null : Model.Category)" asp-route-from="@Model.From?.ToString("yyyy-MM-dd")" asp-route-to="@Model.To?.ToString("yyyy-MM-dd")">
+                <span class="material-symbols-outlined">download</span> Export (.CSV)
+            </a>
+            <button type="button" class="stf-btn aud-btn-dark" id="verifyBtn">
+                <span class="material-symbols-outlined">verified</span> Verify SHA-256 ledger
+            </button>
+        </div>
+    </div>
+
+    <div class="aud-stats">
+        <div class="aud-stat">
+            <div class="aud-stat-top"><span class="aud-stat-label">Total recorded events</span><span class="aud-stat-ico"><span class="material-symbols-outlined">receipt_long</span></span></div>
+            <div class="aud-stat-val">@s.Total.ToString("N0") <span class="aud-pill">+@s.Last24Hours.ToString("N0") last 24h</span></div>
+            <div class="aud-bar"><i style="width:@(sealedPct)%"></i></div>
+            <div class="aud-stat-sub">@sealedPct% hash-sealed in the ledger</div>
+        </div>
+        <div class="aud-stat">
+            <div class="aud-stat-top"><span class="aud-stat-label">Shipments &amp; logistics</span><span class="aud-stat-ico"><span class="material-symbols-outlined">local_shipping</span></span></div>
+            <div class="aud-stat-val">@s.Logistics.ToString("N0")</div>
+            <div class="aud-stat-sub">@s.AutoBooked.ToString("N0") booked automatically by the courier integration</div>
+        </div>
+        <div class="aud-stat">
+            <div class="aud-stat-top"><span class="aud-stat-label">Auth &amp; session events</span><span class="aud-stat-ico"><span class="material-symbols-outlined">fingerprint</span></span></div>
+            <div class="aud-stat-val">@s.AuthEvents.ToString("N0") <span class="aud-pill @(s.FailedSignIns > 0 ? "warn" : "")">@s.FailedSignIns.ToString("N0") failed sign-ins</span></div>
+            <div class="aud-stat-sub">Logins, logouts, profile and account activity</div>
+        </div>
+        <div class="aud-stat dark" id="ledgerCard">
+            <div class="aud-stat-top"><span class="aud-stat-label">Ledger cryptography</span><span class="aud-stat-ico"><span class="material-symbols-outlined">shield</span></span></div>
+            <div class="aud-stat-val"><span id="ledgerPct">@sealedPct%</span> <span class="aud-pill" id="ledgerPill">NOT YET VERIFIED</span></div>
+            <div class="aud-stat-sub" id="ledgerNote">
+                @s.Sealed.ToString("N0") sealed
+                @if (s.Legacy > 0) { <text>&bull; @s.Legacy.ToString("N0") earlier entries predate the ledger and aren't hash-protected.</text> }
+                else { <text>&bull; Press verify to re-check the whole chain.</text> }
+            </div>
+            @if (!string.IsNullOrEmpty(s.HeadHash))
+            {
+                <div class="aud-head-hash" title="Latest ledger hash - note it down or store it elsewhere to prove nothing before it changed">Head: @s.HeadHash</div>
+            }
+            <ul class="aud-issues" id="ledgerIssues" hidden></ul>
+        </div>
+    </div>
+
+    <form method="get" asp-action="AuditLogs" class="aud-filter">
+        <input type="hidden" name="category" value="@(Model.Category == "all" ? "" : Model.Category)" />
+        <label class="aud-search">
+            <span class="material-symbols-outlined">search</span>
+            <input type="search" name="q" value="@Model.Q" placeholder="Search by actor, action, order ID (e.g. WEB-2026…), SKU, waybill or IP…" />
+        </label>
+        <div class="aud-period">
+            <span class="material-symbols-outlined" style="font-size:18px;">calendar_today</span>
+            Period
+            <input type="date" name="from" value="@Model.From?.ToString("yyyy-MM-dd")" aria-label="From date" />
+            &ndash;
+            <input type="date" name="to" value="@Model.To?.ToString("yyyy-MM-dd")" aria-label="To date" />
+        </div>
+        <button type="submit" class="stf-btn stf-btn-primary">Apply</button>
+        @if (!string.IsNullOrWhiteSpace(Model.Q) || Model.From.HasValue || Model.To.HasValue || Model.Category != "all")
+        {
+            <a class="stf-btn stf-btn-outline" asp-action="AuditLogs">Clear</a>
+        }
+    </form>
+
+    <div class="aud-chips">
+        @foreach (var c in cats)
+        {
+            var on = Model.Category == c.Key;
+            Model.CategoryCounts.TryGetValue(c.Key, out var n);
+            if (c.Key == "other" && n == 0) { continue; }
+            <a class="aud-chip@(on ? " on" : "")" asp-action="AuditLogs" asp-route-category="@(c.Key == "all" ? null : c.Key)" asp-route-q="@Model.Q" asp-route-from="@Model.From?.ToString("yyyy-MM-dd")" asp-route-to="@Model.To?.ToString("yyyy-MM-dd")">@c.Label (@n.ToString("N0"))</a>
+        }
+    </div>
+
+    <div class="aud-table-wrap">
+        @if (Model.Rows.Count == 0)
+        {
+            <div class="aud-empty">No audit entries match these filters.</div>
+        }
+        else
+        {
+            <div class="aud-scroll">
+                <table class="aud-table">
+                    <thead>
+                        <tr>
+                            <th>Timestamp (SAST)</th>
+                            <th>User / Actor</th>
+                            <th>Action event</th>
+                            <th>Details &amp; audit payload</th>
+                            <th>SHA-256 ledger stamp</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in Model.Rows)
+                        {
+                            <tr>
+                                <td class="aud-time">@r.Date<small>@r.Time</small></td>
+                                <td>
+                                    <div class="aud-actor">
+                                        <span class="aud-avatar @(r.ActorIsSystem ? "sys" : "")">@r.ActorInitials</span>
+                                        <div>
+                                            <b>@r.ActorName</b>
+                                            @if (!string.IsNullOrEmpty(r.ActorRole))
+                                            {
+                                                <span class="aud-role @(r.ActorRole == "Administrator" ? "admin" : (r.ActorIsSystem ? "sys" : ""))">@r.ActorRole</span>
+                                            }
+                                        </div>
+                                    </div>
+                                </td>
+                                <td><span class="aud-action @r.CategoryCss" title="@r.CategoryLabel">@r.Action</span></td>
+                                <td>
+                                    <div class="aud-details">@r.Details</div>
+                                    <span class="aud-meta">#@r.Id@(string.IsNullOrEmpty(r.IpAddress) ? "" : $" • IP {r.IpAddress}")</span>
+                                </td>
+                                <td>
+                                    @if (r.Hash is not null)
+                                    {
+                                        <span class="aud-stamp" title="@r.Hash"><span class="material-symbols-outlined">task_alt</span>@Short(r.Hash)</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="aud-stamp legacy" title="Written before the audit ledger existed"><span class="material-symbols-outlined">history</span>pre-ledger</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        <div class="aud-pager">
+            <span>Showing <b>@firstRow.ToString("N0")–@lastRow.ToString("N0")</b> of <b>@Model.TotalFiltered.ToString("N0")</b> entries</span>
+            <div class="aud-pages">
+                @{
+                    string CatRoute() => Model.Category == "all" ? "" : Model.Category;
+                }
+                <a class="aud-pg@(Model.Page <= 1 ? " off" : "")" asp-action="AuditLogs" asp-route-page="@(Model.Page - 1)" asp-route-q="@Model.Q" asp-route-category="@CatRoute()" asp-route-from="@Model.From?.ToString("yyyy-MM-dd")" asp-route-to="@Model.To?.ToString("yyyy-MM-dd")">Previous</a>
+                @{ var prev = 0; }
+                @foreach (var p in pageNumbers)
+                {
+                    if (p - prev > 1) { <span class="aud-pg-gap">…</span> }
+                    <a class="aud-pg@(p == Model.Page ? " on" : "")" asp-action="AuditLogs" asp-route-page="@p" asp-route-q="@Model.Q" asp-route-category="@CatRoute()" asp-route-from="@Model.From?.ToString("yyyy-MM-dd")" asp-route-to="@Model.To?.ToString("yyyy-MM-dd")">@p</a>
+                    prev = p;
+                }
+                <a class="aud-pg@(Model.Page >= Model.TotalPages ? " off" : "")" asp-action="AuditLogs" asp-route-page="@(Model.Page + 1)" asp-route-q="@Model.Q" asp-route-category="@CatRoute()" asp-route-from="@Model.From?.ToString("yyyy-MM-dd")" asp-route-to="@Model.To?.ToString("yyyy-MM-dd")">Next</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="aud-foot">
+        <span><span class="material-symbols-outlined" style="font-size:15px;vertical-align:-3px;">shield</span>
+            Entries are append-only and hash-chained: each stamp covers the entry's contents plus the stamp before it, so editing or deleting a past entry is detectable.</span>
+        <span id="verifiedAt">Ledger not yet verified this session</span>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        (function () {
+            var btn = document.getElementById('verifyBtn');
+            if (!btn) return;
+            var pill = document.getElementById('ledgerPill'),
+                pct = document.getElementById('ledgerPct'),
+                note = document.getElementById('ledgerNote'),
+                issues = document.getElementById('ledgerIssues'),
+                at = document.getElementById('verifiedAt');
+
+            btn.addEventListener('click', function () {
+                btn.disabled = true;
+                pill.textContent = 'VERIFYING…';
+                pill.className = 'aud-pill';
+                fetch('@Url.Action("VerifyAuditLedger", "Employees")', { credentials: 'same-origin' })
+                    .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+                    .then(function (d) {
+                        var total = d.sealedCount;
+                        pct.textContent = total === 0 ? '100%' : Math.round(d.validCount * 100 / total) + '%';
+                        pill.textContent = d.valid ? 'SHA-256 VALID' : d.issues.length + ' ISSUE(S)';
+                        pill.className = 'aud-pill ' + (d.valid ? 'ok' : 'warn');
+                        note.textContent = d.validCount.toLocaleString() + ' of ' + total.toLocaleString() + ' sealed entries verified' +
+                            (d.legacyCount > 0 ? ' • ' + d.legacyCount.toLocaleString() + ' pre-ledger entries not covered.' : '.');
+                        issues.innerHTML = '';
+                        issues.hidden = d.valid;
+                        d.issues.forEach(function (i) {
+                            var li = document.createElement('li');
+                            li.textContent = '#' + i.id + ': ' + i.problem;
+                            issues.appendChild(li);
+                        });
+                        at.textContent = 'Verified ' + d.verifiedAt + ' SAST';
+                    })
+                    .catch(function () { pill.textContent = 'CHECK FAILED'; pill.className = 'aud-pill warn'; })
+                    .finally(function () { btn.disabled = false; });
+            });
+        })();
+    </script>
+}

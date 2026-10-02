@@ -1,47 +1,94 @@
 @model RegisterViewModel
 @{
-    ViewData["Title"] = "Register";
-    ViewData["HideNav"] = true;
+    ViewData["Title"] = "Create Account";
+    Layout = "_AuthLayout";
 }
-<div class="container py-5" style="max-width:380px;">
-    <h2 class="mb-1">Create your account</h2>
-    <p class="text-muted mb-4">Register as a customer to shop and track orders</p>
 
-    <form asp-controller="Account" asp-action="Register" method="post">
-        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+<main class="au-main">
+    <partial name="_AuthCollage" />
 
-        <div class="mb-3">
-            <label asp-for="FullName" class="form-label"></label>
-            <input asp-for="FullName" class="form-control" />
-            <span asp-validation-for="FullName" class="text-danger"></span>
+    <section class="au-card">
+        <div class="au-logo"><b>Fashion</b><i>Fix</i></div>
+        <span class="au-kicker">Private Client Access</span>
+
+        <h1>Create account</h1>
+        <p class="au-lead">Join to shop the atelier, track every order and earn FixRewards.</p>
+
+        <form asp-controller="Account" asp-action="Register" method="post" novalidate>
+            <div asp-validation-summary="ModelOnly" class="au-alert"></div>
+
+            <div class="au-field">
+                <div class="au-label-row"><label asp-for="FullName">Full name</label></div>
+                <div class="au-input-wrap">
+                    <input asp-for="FullName" type="text" placeholder="e.g. Okuhle Malishe" autocomplete="name" autofocus />
+                    <span class="ico material-symbols-outlined">person</span>
+                </div>
+                <span asp-validation-for="FullName" class="au-field-error"></span>
+            </div>
+
+            <div class="au-field">
+                <div class="au-label-row"><label asp-for="Username">Username</label><span>Used to sign in</span></div>
+                <div class="au-input-wrap">
+                    <input asp-for="Username" type="text" placeholder="Choose a username" autocomplete="username" />
+                    <span class="ico material-symbols-outlined">alternate_email</span>
+                </div>
+                <span asp-validation-for="Username" class="au-field-error"></span>
+            </div>
+
+            <div class="au-field">
+                <div class="au-label-row"><label asp-for="Email">Email</label></div>
+                <div class="au-input-wrap">
+                    <input asp-for="Email" type="email" placeholder="you@example.com" autocomplete="email" />
+                    <span class="ico material-symbols-outlined">mail</span>
+                </div>
+                <span asp-validation-for="Email" class="au-field-error"></span>
+            </div>
+
+            <div class="au-field">
+                <div class="au-label-row"><label asp-for="Password">Password</label></div>
+                <div class="au-input-wrap">
+                    <input asp-for="Password" type="password" placeholder="Create a password" autocomplete="new-password" />
+                    <button type="button" class="au-eye" data-target="Password" aria-label="Show password"><span class="material-symbols-outlined">visibility</span></button>
+                </div>
+                <div class="au-meter"><i id="pwMeter"></i></div>
+                <span asp-validation-for="Password" class="au-field-error"></span>
+            </div>
+
+            <div class="au-field">
+                <div class="au-label-row"><label asp-for="ConfirmPassword">Confirm password</label></div>
+                <div class="au-input-wrap">
+                    <input asp-for="ConfirmPassword" type="password" placeholder="Repeat your password" autocomplete="new-password" />
+                    <button type="button" class="au-eye" data-target="ConfirmPassword" aria-label="Show password"><span class="material-symbols-outlined">visibility</span></button>
+                </div>
+                <span asp-validation-for="ConfirmPassword" class="au-field-error"></span>
+            </div>
+
+            <button type="submit" class="au-btn au-btn-primary">Create account <span class="material-symbols-outlined">arrow_forward</span></button>
+        </form>
+
+        <div class="au-aside">
+            Already have an account? <a asp-controller="Account" asp-action="Login">Login</a>
         </div>
+    </section>
+</main>
 
-        <div class="mb-3">
-            <label asp-for="Username" class="form-label"></label>
-            <input asp-for="Username" class="form-control" />
-            <span asp-validation-for="Username" class="text-danger"></span>
-        </div>
-
-        <div class="mb-3">
-            <label asp-for="Email" class="form-label"></label>
-            <input asp-for="Email" class="form-control" type="email" />
-            <span asp-validation-for="Email" class="text-danger"></span>
-        </div>
-
-        <div class="mb-3">
-            <label asp-for="Password" class="form-label"></label>
-            <input asp-for="Password" class="form-control" type="password" />
-            <span asp-validation-for="Password" class="text-danger"></span>
-        </div>
-
-        <div class="mb-3">
-            <label asp-for="ConfirmPassword" class="form-label"></label>
-            <input asp-for="ConfirmPassword" class="form-control" type="password" />
-            <span asp-validation-for="ConfirmPassword" class="text-danger"></span>
-        </div>
-
-        <button type="submit" class="btn btn-danger w-100 mb-3">Create Account</button>
-    </form>
-
-    <a asp-controller="Account" asp-action="Login" class="btn btn-link">&larr; Back to login</a>
-</div>
+@section Scripts {
+    <script>
+        // Cosmetic strength meter only - the server enforces the real password rules.
+        (function () {
+            var pw = document.getElementById('Password'), bar = document.getElementById('pwMeter');
+            if (!pw || !bar) return;
+            pw.addEventListener('input', function () {
+                var v = pw.value, score = 0;
+                if (v.length >= 8) score++;
+                if (v.length >= 12) score++;
+                if (/[a-z]/.test(v) && /[A-Z]/.test(v)) score++;
+                if (/\d/.test(v)) score++;
+                if (/[^A-Za-z0-9]/.test(v)) score++;
+                var pct = Math.min(100, score * 20);
+                bar.style.width = pct + '%';
+                bar.style.background = pct < 40 ? '#ba1a1a' : (pct < 80 ? '#c58f4e' : '#2d4a3e');
+            });
+        })();
+    </script>
+}
