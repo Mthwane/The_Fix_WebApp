@@ -26,6 +26,7 @@ public class EmployeeViewModel
 
     [Required(ErrorMessage = "Job position is required")]
     [Display(Name = "Job Position")]
+    [RegularExpression(InputRules.JobPositionPattern, ErrorMessage = InputRules.JobPositionMessage)]
     public string JobPosition { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Role is required")]
@@ -54,6 +55,7 @@ public class EmployeeEditViewModel
     public string Email { get; set; } = string.Empty;
 
     [Display(Name = "Job Position")]
+    [RegularExpression(InputRules.JobPositionPattern, ErrorMessage = InputRules.JobPositionMessage)]
     public string? JobPosition { get; set; }
 
     [Display(Name = "Employment Status")]

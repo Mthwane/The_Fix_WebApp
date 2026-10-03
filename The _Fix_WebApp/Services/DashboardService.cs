@@ -35,6 +35,8 @@ public class DashboardService : IDashboardService
 
         if (sections.HasFlag(DashboardSections.Inventory))
             await PopulateInventoryAsync(model);
+        else if (sections.HasFlag(DashboardSections.LowStock))
+            await PopulateLowStockAsync(model);
 
         if (sections.HasFlag(DashboardSections.Orders))
             await PopulateOrdersAsync(model, weekStart);
@@ -110,10 +112,9 @@ public class DashboardService : IDashboardService
             .ToListAsync();
     }
 
-    private async Task PopulateInventoryAsync(DashboardViewModel model)
+    /// <summary>Just the low/out-of-stock numbers and watchlist - shared by the full inventory section and the narrower employee view (no stock valuation).</summary>
+    private async Task PopulateLowStockAsync(DashboardViewModel model)
     {
-        model.TotalActiveProducts = await _context.Products.CountAsync(p => p.IsActive);
-
         model.LowStockVariants = await _context.ProductVariants.AsNoTracking()
             .Include(v => v.Product)
             .Where(v => v.IsActive && v.Product.IsActive && v.StockQuantity <= v.Product.LowStockThreshold)
@@ -125,6 +126,13 @@ public class DashboardService : IDashboardService
 
         model.OutOfStockCount = await _context.ProductVariants.AsNoTracking()
             .CountAsync(v => v.IsActive && v.Product.IsActive && v.StockQuantity == 0);
+    }
+
+    private async Task PopulateInventoryAsync(DashboardViewModel model)
+    {
+        model.TotalActiveProducts = await _context.Products.CountAsync(p => p.IsActive);
+
+        await PopulateLowStockAsync(model);
 
         model.TotalInventoryValue = await _context.ProductVariants.AsNoTracking()
             .Where(v => v.IsActive)
@@ -358,8 +366,15 @@ public class DashboardService : IDashboardService
         if (sections.HasFlag(DashboardSections.Approvals) && model.PendingApprovalCount > 0)
             items.Add(new AttentionItem { Label = "Purchase orders awaiting your approval", Count = model.PendingApprovalCount, Url = "/PurchaseOrders?status=AwaitingApproval", Severity = "warning" });
 
-        if (sections.HasFlag(DashboardSections.Inventory) && model.LowStockCount > 0)
-            items.Add(new AttentionItem { Label = "Items low or out of stock", Count = model.LowStockCount, Url = "/Products/LowStock", Severity = model.OutOfStockCount > 0 ? "danger" : "warning" });
+        if ((sections.HasFlag(DashboardSections.Inventory) || sections.HasFlag(DashboardSections.LowStock)) && model.LowStockCount > 0)
+            items.Add(new AttentionItem
+            {
+                Label = "Items low or out of stock",
+                Count = model.LowStockCount,
+                // Catalogue managers go to the restock queue; employees (who raise restock requests) go to Purchase Orders.
+                Url = sections.HasFlag(DashboardSections.Inventory) ? "/Products/LowStock" : "/PurchaseOrders",
+                Severity = model.OutOfStockCount > 0 ? "danger" : "warning"
+            });
 
         if (sections.HasFlag(DashboardSections.SupplyChain) && model.SuppliersWithIncompleteAddress > 0)
             items.Add(new AttentionItem { Label = "Suppliers with an incomplete collection address", Count = model.SuppliersWithIncompleteAddress, Url = "/Suppliers", Severity = "warning" });

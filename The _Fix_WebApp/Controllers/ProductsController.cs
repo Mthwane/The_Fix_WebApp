@@ -188,6 +188,8 @@ public class ProductsController : Controller
             model.ImageUrl = upload.Url;
         }
 
+        await LinkBrandToSupplierAsync(model);
+
         var styleCode = await GenerateUniqueStyleCodeAsync(model.Category);
 
         var product = new Product
@@ -324,6 +326,8 @@ public class ProductsController : Controller
             await PopulateDropdownsAsync();
             return View(model);
         }
+
+        await LinkBrandToSupplierAsync(model);
 
         var oldImageUrl = product.ImageUrl;
         var uploadedNew = false;
@@ -487,6 +491,20 @@ public class ProductsController : Controller
         }
     }
 
+    /// <summary>If a brand was typed/picked that is exactly an active supplier's name and no supplier was chosen, link that supplier so the product shows up in that supplier's purchase orders.</summary>
+    private async Task LinkBrandToSupplierAsync(ProductViewModel model)
+    {
+        if (model.SupplierId is not null || string.IsNullOrWhiteSpace(model.Brand)) return;
+
+        var brand = model.Brand.Trim();
+        var supplierId = await _context.Suppliers.AsNoTracking()
+            .Where(s => s.IsActive && s.Name == brand)
+            .Select(s => (int?)s.SupplierId)
+            .FirstOrDefaultAsync();
+
+        if (supplierId is not null) model.SupplierId = supplierId;
+    }
+
     /// <summary>
     /// Builds the attribute dropdowns. Category and Colour are a closed list - always
     /// exactly ProductViewModel.Categories / .Colors, picked from a real &lt;select&gt;, so no
@@ -508,11 +526,16 @@ public class ProductsController : Controller
 
         ViewBag.Sizes = ProductViewModel.Sizes.Union(dbSizes, StringComparer.OrdinalIgnoreCase)
             .OrderBy(s => s, StringComparer.OrdinalIgnoreCase).ToList();
-        ViewBag.Brands = ProductViewModel.Brands.Union(dbBrands, StringComparer.OrdinalIgnoreCase)
-            .OrderBy(b => b, StringComparer.OrdinalIgnoreCase).ToList();
-
-        ViewBag.Suppliers = await _context.Suppliers.AsNoTracking()
+        var suppliers = await _context.Suppliers.AsNoTracking()
             .Where(s => s.IsActive).OrderBy(s => s.Name).ToListAsync();
+        ViewBag.Suppliers = suppliers;
+
+        // Brand is linked to Supplier: every active supplier's name is offered as a brand, on top
+        // of brands already used on products (a supplier can still stock several brands).
+        ViewBag.Brands = ProductViewModel.Brands
+            .Union(suppliers.Select(s => s.Name), StringComparer.OrdinalIgnoreCase)
+            .Union(dbBrands, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(b => b, StringComparer.OrdinalIgnoreCase).ToList();
         ViewBag.Departments = await _context.Departments.AsNoTracking()
             .Where(d => d.IsActive).OrderBy(d => d.DisplayOrder).ToListAsync();
 

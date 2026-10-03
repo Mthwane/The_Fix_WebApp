@@ -37,7 +37,9 @@
         <div class="stf-form-grid">
             <div class="stf-field">
                 <label asp-for="JobPosition"></label>
-                <input asp-for="JobPosition" type="text" />
+                <input asp-for="JobPosition" type="text" list="jobPositionOptions" autocomplete="off" placeholder="Choose or type a position" />
+                <datalist id="jobPositionOptions">@foreach (var jp in (List<string>)(ViewBag.JobPositions ?? new List<string>())) { <option value="@jp"></option> }</datalist>
+                <span asp-validation-for="JobPosition" class="stf-err"></span>
             </div>
             <div class="stf-field">
                 <label asp-for="EmploymentStatus"></label>

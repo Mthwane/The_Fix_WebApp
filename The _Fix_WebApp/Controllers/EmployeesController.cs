@@ -91,6 +91,20 @@ public class EmployeesController : Controller
         return File(bytes, "text/csv", $"staff-roster-{DateTime.UtcNow:yyyyMMdd}.csv");
     }
 
+    /// <summary>Suggestions for the Job Position combo box: a seed list plus whatever titles are already in use, so a new title typed once is offered next time.</summary>
+    private async Task<List<string>> GetJobPositionOptionsAsync()
+    {
+        var seed = new[] { "Store Manager", "Assistant Manager", "Floor Manager", "Sales Associate", "Cashier", "Stock Controller", "Visual Merchandiser", "Customer Support Agent" };
+        var used = await _userManager.Users.AsNoTracking()
+            .Where(u => u.JobPosition != null && u.JobPosition != "")
+            .Select(u => u.JobPosition!)
+            .Distinct()
+            .ToListAsync();
+        return seed.Union(used, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
     /// <summary>All roles except "Customer" - customers self-register and are never assigned via this screen.</summary>
     private async Task<List<string>> GetAssignableRoleNamesAsync()
     {
@@ -107,6 +121,7 @@ public class EmployeesController : Controller
     public async Task<IActionResult> CreateEmployee()
     {
         ViewBag.AssignableRoles = await GetAssignableRoleNamesAsync();
+        ViewBag.JobPositions = await GetJobPositionOptionsAsync();
         return View(new EmployeeViewModel());
     }
 
@@ -119,6 +134,7 @@ public class EmployeesController : Controller
         if (!ModelState.IsValid)
         {
             ViewBag.AssignableRoles = await GetAssignableRoleNamesAsync();
+            ViewBag.JobPositions = await GetJobPositionOptionsAsync();
             return View(model);
         }
 
@@ -127,6 +143,7 @@ public class EmployeesController : Controller
         {
             ModelState.AddModelError(nameof(model.Username), "That username is already taken.");
             ViewBag.AssignableRoles = await GetAssignableRoleNamesAsync();
+            ViewBag.JobPositions = await GetJobPositionOptionsAsync();
             return View(model);
         }
 
@@ -135,6 +152,7 @@ public class EmployeesController : Controller
         {
             ModelState.AddModelError(nameof(model.Email), "That email is already registered.");
             ViewBag.AssignableRoles = await GetAssignableRoleNamesAsync();
+            ViewBag.JobPositions = await GetJobPositionOptionsAsync();
             return View(model);
         }
 
@@ -156,6 +174,7 @@ public class EmployeesController : Controller
             foreach (var error in createResult.Errors)
                 ModelState.AddModelError(string.Empty, error.Description);
             ViewBag.AssignableRoles = await GetAssignableRoleNamesAsync();
+            ViewBag.JobPositions = await GetJobPositionOptionsAsync();
             return View(model);
         }
 
@@ -226,6 +245,7 @@ public class EmployeesController : Controller
         };
 
         ViewBag.AssignableRoles = await GetAssignableRoleNamesAsync();
+        ViewBag.JobPositions = await GetJobPositionOptionsAsync();
         return View(model);
     }
     // POST: /Employees/Edit/{id}
@@ -238,6 +258,7 @@ public class EmployeesController : Controller
         if (!ModelState.IsValid)
         {
             ViewBag.AssignableRoles = await GetAssignableRoleNamesAsync();
+            ViewBag.JobPositions = await GetJobPositionOptionsAsync();
             return View(model);
         }
 
@@ -251,6 +272,7 @@ public class EmployeesController : Controller
             {
                 ModelState.AddModelError(nameof(model.Email), "That email is already registered to another account.");
                 ViewBag.AssignableRoles = await GetAssignableRoleNamesAsync();
+                ViewBag.JobPositions = await GetJobPositionOptionsAsync();
                 return View(model);
             }
             await _userManager.SetEmailAsync(user, model.Email);
@@ -267,6 +289,7 @@ public class EmployeesController : Controller
             foreach (var error in updateResult.Errors)
                 ModelState.AddModelError(string.Empty, error.Description);
             ViewBag.AssignableRoles = await GetAssignableRoleNamesAsync();
+            ViewBag.JobPositions = await GetJobPositionOptionsAsync();
             return View(model);
         }
 

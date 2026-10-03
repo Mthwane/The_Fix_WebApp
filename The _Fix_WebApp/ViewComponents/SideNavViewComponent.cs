@@ -101,7 +101,7 @@ public class SideNavViewComponent : ViewComponent
             new("FixRewards",        "redeem",                "Rewards",  "Index",    null, "Customer"),
             new("Wishlist",          "favorite",              "Customer", "Wishlist", null, "Customer", "wishlist", new[] { "Wishlist", "ToggleWishlist" }),
             new("Support Tickets",   "support_agent",         "Support",  "Tickets",  null, "Customer", null, new[] { "Tickets", "NewTicket", "TicketDetails" }),
-            new("Help & FAQ",        "help",                  "Support",  "Faq"),
+            new("Help & FAQ",        "help",                  "Support",  "Faq",      null, null, null, new[] { "Faq" }),
         }),
         // Staff who also use the storefront get a way back to their portal.
         new SideNavSection("Staff", new List<SideNavItem>

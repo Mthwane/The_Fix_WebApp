@@ -1,7 +1,8 @@
 @model List<IGrouping<string, Faq>>
 @{
     ViewData["Title"] = "Help & FAQ";
-    Layout = "_StorefrontLayout";
+    // Signed-in customers keep their account sidebar; guests get the plain storefront page.
+    Layout = User.IsInRole("Customer") ? "_AccountLayout" : "_StorefrontLayout";
 }
 
 <section class="ffs-section" style="padding-top:32px;">

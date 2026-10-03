@@ -132,7 +132,7 @@ public class HomeController : Controller
 
         // Low-stock notification (US-03): surfaces as a toast every time a staff member
         // lands on the dashboard while items are below threshold, on top of the table below.
-        if (sections.HasFlag(DashboardSections.Inventory) && model.LowStockCount > 0)
+        if ((sections.HasFlag(DashboardSections.Inventory) || sections.HasFlag(DashboardSections.LowStock)) && model.LowStockCount > 0)
         {
             var names = string.Join(", ", model.LowStockVariants.Take(3).Select(v => $"{v.Product.Name} ({v.Size}/{v.Color})"));
             var suffix = model.LowStockCount > 3 ? $" and {model.LowStockCount - 3} more" : "";
@@ -170,6 +170,7 @@ public class HomeController : Controller
         var sections = DashboardSections.CoreKpis; // everyone who can reach this page gets the base KPIs
 
         if (Can(Permissions.ProductsManage)) sections |= DashboardSections.Inventory;
+        else if (Can(Permissions.PurchaseOrdersManage)) sections |= DashboardSections.LowStock; // employees: low-stock alerts, restock via Purchase Orders
         if (Can(Permissions.OrdersManage)) sections |= DashboardSections.Orders;
         if (Can(Permissions.ReturnsProcess)) sections |= DashboardSections.Returns;
         if (Can(Permissions.SuppliersManage) || Can(Permissions.PurchaseOrdersManage)) sections |= DashboardSections.SupplyChain;

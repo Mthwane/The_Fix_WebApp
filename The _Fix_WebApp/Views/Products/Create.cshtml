@@ -46,6 +46,7 @@
                 <input asp-for="Brand" style="@F" list="brandOptions" autocomplete="off" placeholder="Choose or type a new brand" />
                 <datalist id="brandOptions">@foreach (var b in brands) { <option value="@b"></option> }</datalist>
                 <span asp-validation-for="Brand" style="@EV"></span>
+                <div style="font-size:0.75rem;color:var(--stf-on-surface-variant);margin-top:-8px;margin-bottom:10px;">Linked to Supplier: pick a supplier below to fill this in, or type a supplier's name to select them.</div>
             </div>
             <div>
                 <label asp-for="CostPrice" style="@L"></label>
@@ -156,6 +157,42 @@
 </div>
 
 @section Scripts {
+    <script>
+        // Brand <-> Supplier link: choosing a supplier fills the brand with the supplier's name
+        // (unless the user has typed a different brand); typing a brand that matches a supplier selects them.
+        (function () {
+            var brand = document.getElementById('Brand');
+            var sup = document.getElementById('SupplierId');
+            if (!brand || !sup) return;
+
+            function nameOf(select) {
+                return select.value ? select.options[select.selectedIndex].text.trim() : '';
+            }
+            var previous = nameOf(sup);
+
+            sup.addEventListener('change', function () {
+                var current = nameOf(sup);
+                var typed = brand.value.trim().toLowerCase();
+                if (current && (typed === '' || typed === previous.toLowerCase())) {
+                    brand.value = current;
+                }
+                previous = current;
+            });
+
+            brand.addEventListener('input', function () {
+                var typed = brand.value.trim().toLowerCase();
+                if (!typed) return;
+                for (var i = 0; i < sup.options.length; i++) {
+                    var o = sup.options[i];
+                    if (o.value && o.text.trim().toLowerCase() === typed) {
+                        sup.value = o.value;
+                        previous = o.text.trim();
+                        break;
+                    }
+                }
+            });
+        })();
+    </script>
     <script>
         (function () {
             var markupByCategory = @Html.Raw(Json.Serialize(ViewBag.MarkupByCategory));
