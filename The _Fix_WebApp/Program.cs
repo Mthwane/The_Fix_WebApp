@@ -1,4 +1,3 @@
-
 using FashionFix.Web.Data;
 using FashionFix.Web.Models.Entities;
 using FashionFix.Web.Security;
@@ -157,12 +156,10 @@ builder.Services.AddHostedService(sp =>
 builder.Services.Configure<FashionFix.Web.Services.Courier.CourierGuyOptions>(
     builder.Configuration.GetSection("CourierGuy"));
 
-// The simulated courier is the only courier this deployment uses, in EVERY environment (Azure
-// runs as "Production", where the old code ignored the Provider setting and fell back to the
-// real Courier Guy client - which has no API key, so fulfilment never ran). Defaults to Fake;
-// set CourierGuy:Provider to "EasyPost" or "Live" explicitly to use a real provider instead.
-var courierProvider = builder.Configuration["CourierGuy:Provider"];
-if (string.IsNullOrWhiteSpace(courierProvider)) courierProvider = "Fake";
+var courierProvider =
+    builder.Environment.IsDevelopment()
+        ? builder.Configuration["CourierGuy:Provider"]
+        : null;
 
 if (string.Equals(
         courierProvider,
@@ -235,11 +232,13 @@ using (var migrationScope = app.Services.CreateScope())
             app.Logger.LogInformation("Database '{Database}' on '{Server}' is up to date.", target.InitialCatalog, target.DataSource);
             break;
         }
-        catch (Microsoft.Data.SqlClient.SqlException ex) when (attempt < 5)
+        // EF wraps transient SQL errors (e.g. 40613 'database not currently available' while a serverless
+        // database resumes) in an InvalidOperationException, so match on the inner SqlException too.
+        catch (Exception ex) when (attempt < 8 && (ex is Microsoft.Data.SqlClient.SqlException || ex.InnerException is Microsoft.Data.SqlClient.SqlException))
         {
-            app.Logger.LogWarning(ex, "Database not reachable yet (attempt {Attempt}/5) - '{Database}' on '{Server}'. Retrying in 10s.",
+            app.Logger.LogWarning(ex, "Database not reachable yet (attempt {Attempt}/8) - '{Database}' on '{Server}'. Retrying in 15s.",
                 attempt, target.InitialCatalog, target.DataSource);
-            Thread.Sleep(TimeSpan.FromSeconds(10));
+            Thread.Sleep(TimeSpan.FromSeconds(15));
         }
         catch (Exception ex)
         {
