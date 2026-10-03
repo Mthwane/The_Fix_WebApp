@@ -4,6 +4,7 @@ using FashionFix.Web.Models.Entities;
 using FashionFix.Web.Security;
 using FashionFix.Web.Services;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Localization;
 using Microsoft.EntityFrameworkCore;
@@ -16,16 +17,46 @@ var builder = WebApplication.CreateBuilder(args);
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
 
+// Fail fast with a message you can act on: outside Development, a database on "localhost" can never be
+// reached from Azure. (appsettings.json ships with a localhost string for local work; production must
+// override it with the ConnectionStrings__DefaultConnection setting.)
+{
+    var csb = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(connectionString);
+    var dataSource = csb.DataSource.Replace("tcp:", "", StringComparison.OrdinalIgnoreCase);
+    var isLocalServer = dataSource.StartsWith("localhost", StringComparison.OrdinalIgnoreCase)
+        || dataSource.StartsWith("(local", StringComparison.OrdinalIgnoreCase)
+        || dataSource.StartsWith(".", StringComparison.Ordinal)
+        || dataSource.StartsWith("127.0.0.1", StringComparison.Ordinal);
+    if (!builder.Environment.IsDevelopment() && isLocalServer)
+        throw new InvalidOperationException(
+            $"The database connection string points at '{csb.DataSource}', which is not reachable from a hosted server. " +
+            "Set the ConnectionStrings__DefaultConnection setting (App Service > Environment variables) to your Azure SQL connection string.");
+}
+
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(connectionString));
 builder.Services.AddScoped<FashionFix.Web.Services.Audit.AuditLedgerService>();
 
 // --- Data Protection ---
+// On Azure App Service the deployed folder can be read-only (run-from-package) and is replaced on every
+// deploy, so keys live under %HOME% (persistent, writable). Locally they stay in ./keys.
+var azureHome = Environment.GetEnvironmentVariable("HOME");
+var dataProtectionKeyPath = (builder.Environment.IsDevelopment() || string.IsNullOrEmpty(azureHome))
+    ? Path.Combine(builder.Environment.ContentRootPath, "keys")
+    : Path.Combine(azureHome, "ASP.NET", "DataProtection-Keys");
+
 builder.Services.AddDataProtection()
-    .PersistKeysToFileSystem(
-        new DirectoryInfo(
-            Path.Combine(builder.Environment.ContentRootPath, "keys")))
+    .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeyPath))
     .SetApplicationName("FashionFix");
+
+// Behind Azure's front end the app sees the proxy, not the visitor: trust X-Forwarded-* so cookies,
+// https redirects, Paystack callback URLs and the audit-log IP use the real client details.
+builder.Services.Configure<ForwardedHeadersOptions>(o =>
+{
+    o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    o.KnownNetworks.Clear();
+    o.KnownProxies.Clear();
+});
 
 // --- Identity / Authentication ---
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
@@ -190,7 +221,29 @@ using (var migrationScope = app.Services.CreateScope())
         migrationScope.ServiceProvider
             .GetRequiredService<ApplicationDbContext>();
 
-    dbContext.Database.Migrate();
+    // A paused serverless Azure SQL database can take a minute to wake: retry before giving up, and say
+    // clearly what failed (server and database name only - never the password).
+    var target = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(connectionString);
+    for (var attempt = 1; ; attempt++)
+    {
+        try
+        {
+            dbContext.Database.Migrate();
+            app.Logger.LogInformation("Database '{Database}' on '{Server}' is up to date.", target.InitialCatalog, target.DataSource);
+            break;
+        }
+        catch (Microsoft.Data.SqlClient.SqlException ex) when (attempt < 5)
+        {
+            app.Logger.LogWarning(ex, "Database not reachable yet (attempt {Attempt}/5) - '{Database}' on '{Server}'. Retrying in 10s.",
+                attempt, target.InitialCatalog, target.DataSource);
+            Thread.Sleep(TimeSpan.FromSeconds(10));
+        }
+        catch (Exception ex)
+        {
+            app.Logger.LogCritical(ex, "STARTUP FAILED applying migrations to '{Database}' on '{Server}'.", target.InitialCatalog, target.DataSource);
+            throw;
+        }
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -276,7 +329,19 @@ using (var scope = app.Services.CreateScope())
     // -------------------------------------------------------------------------
     const string seedAdminUsername = "admin";
 
-    if (await userManager.FindByNameAsync(seedAdminUsername) is null)
+    // Development keeps the well-known password for convenience. Anywhere else the password MUST come from
+    // configuration (App Service setting Seed__AdminPassword) - a published site must never ship a default login.
+    var seedAdminPassword = app.Configuration["Seed:AdminPassword"];
+    if (string.IsNullOrWhiteSpace(seedAdminPassword) && app.Environment.IsDevelopment())
+        seedAdminPassword = "Ch4ngeMe!Now";
+
+    if (await userManager.FindByNameAsync(seedAdminUsername) is null && string.IsNullOrWhiteSpace(seedAdminPassword))
+    {
+        app.Logger.LogError(
+            "No administrator account exists and Seed:AdminPassword is not set, so none was created. " +
+            "Set the Seed__AdminPassword setting (12+ characters with upper, lower, digit and symbol) and restart the app.");
+    }
+    else if (await userManager.FindByNameAsync(seedAdminUsername) is null)
     {
         var admin = new ApplicationUser
         {
@@ -293,7 +358,7 @@ using (var scope = app.Services.CreateScope())
         var createResult =
             await userManager.CreateAsync(
                 admin,
-                "Ch4ngeMe!Now");
+                seedAdminPassword!);
 
         if (createResult.Succeeded)
         {
@@ -304,8 +369,8 @@ using (var scope = app.Services.CreateScope())
             if (app.Environment.IsDevelopment())
             {
                 app.Logger.LogWarning(
-                    "Seeded default Administrator account - username: '{Username}', password: 'Ch4ngeMe!Now'. " +
-                    "Log in via Employee Login and change this password immediately (My Profile > Change Password).",
+                    "Seeded Administrator account - username: '{Username}'. " +
+                    "Log in via Employee Login and change the password immediately (My Profile > Change Password).",
                     seedAdminUsername);
             }
         }
@@ -493,6 +558,8 @@ using (var scope = app.Services.CreateScope())
 // -----------------------------------------------------------------------------
 // HTTP pipeline
 // -----------------------------------------------------------------------------
+app.UseForwardedHeaders();
+
 if (app.Environment.IsDevelopment())
 {
     app.UseDeveloperExceptionPage();
