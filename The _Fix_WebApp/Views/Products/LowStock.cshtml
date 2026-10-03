@@ -2,13 +2,34 @@
 @{
     ViewData["Title"] = "Low Stock";
     Layout = "_StaffLayout";
+    bool canRaise = ViewBag.CanRaise == true;
+    var outCount = Model.Count(v => v.StockQuantity == 0);
 }
 <div class="stf-content">
-    <a asp-controller="Home" asp-action="Dashboard" class="stf-btn stf-btn-outline" style="margin-bottom:16px;display:inline-flex;">&larr; Dashboard</a>
+    <a asp-action="Index" class="stf-btn stf-btn-outline" style="margin-bottom:16px;display:inline-flex;">&larr; Purchase Orders</a>
 
-    <span class="stf-eyebrow">Catalogue</span>
-    <h1 style="margin-bottom:6px;">Low Stock</h1>
-    <p style="color:var(--stf-on-surface-variant);margin-bottom:20px;">Every active size/colour currently at or below its style's restock threshold, most urgent first. Click Restock to jump straight to that product's Edit page.</p>
+    <div class="stf-page-head">
+        <div>
+            <span class="stf-eyebrow">Supply Chain</span>
+            <h1>Low Stock</h1>
+            <p>Every active size/colour at or below its restock threshold, most urgent first. These are the items to put on the next purchase order.</p>
+        </div>
+        @if (canRaise)
+        {
+            <a asp-action="Create" class="stf-btn stf-btn-primary">+ New Purchase Order</a>
+        }
+    </div>
+
+    @if (Model.Any())
+    {
+        <div class="stf-card" style="background:var(--stf-secondary-container);border:none;margin-bottom:16px;font-size:0.88rem;">
+            <strong>@Model.Count item@(Model.Count == 1 ? "" : "s")</strong> need restocking@(outCount > 0 ? $", {outCount} already out of stock" : "").
+            @if (!canRaise)
+            {
+                <span> A manager raises and approves purchase orders - let them know what's on this list.</span>
+            }
+        </div>
+    }
 
     @if (!Model.Any())
     {
@@ -17,27 +38,21 @@
     else
     {
         <table class="stf-table">
-            <thead><tr><th>Product</th><th>Size/Colour</th><th>SKU</th><th>Category</th><th>Current Stock</th><th>Threshold</th><th></th></tr></thead>
+            <thead><tr><th>Product</th><th>Size/Colour</th><th>SKU</th><th>Supplier</th><th>Current Stock</th><th>Threshold</th></tr></thead>
             <tbody>
                 @foreach (var v in Model)
                 {
-                    var isOutOfStock = v.StockQuantity == 0;
-                    <tr style="@(isOutOfStock ? "background:var(--stf-error-container);" : "background:var(--stf-secondary-container);")">
+                    var isOut = v.StockQuantity == 0;
+                    <tr style="@(isOut ? "background:var(--stf-error-container);" : "background:var(--stf-secondary-container);")">
                         <td style="font-weight:600;">@v.Product.Name</td>
                         <td>@v.Size / @v.Color</td>
                         <td><code>@v.SKU</code></td>
-                        <td>@v.Product.Category</td>
+                        <td>@(v.Product.Supplier?.Name ?? "-")</td>
                         <td>
                             <strong>@v.StockQuantity</strong>
-                            @if (isOutOfStock)
-                            {
-                                <span class="stf-badge stf-badge-danger" style="margin-left:4px;">Out of stock</span>
-                            }
+                            @if (isOut) { <span class="stf-badge stf-badge-danger" style="margin-left:4px;">Out of stock</span> }
                         </td>
                         <td>@v.Product.LowStockThreshold</td>
-                        <td style="text-align:right;">
-                            <a asp-controller="Products" asp-action="Edit" asp-route-id="@v.ProductId" class="stf-btn stf-btn-danger-outline" style="padding:6px 14px;font-size:0.78rem;">Restock</a>
-                        </td>
                     </tr>
                 }
             </tbody>

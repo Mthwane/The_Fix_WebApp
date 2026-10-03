@@ -70,7 +70,7 @@
                 <div><span class="muted">Subtotal</span><span>@Model.SubTotal.ToString("C")</span></div>
                 @if (Model.DiscountTotal > 0)
                 {
-                    <div><span class="muted">Discount</span><span>-@Model.DiscountTotal.ToString("C")</span></div>
+                    <div><span class="muted">Discount@(string.IsNullOrEmpty(Model.DiscountCode) ? "" : " (" + Model.DiscountCode + ")")</span><span>-@Model.DiscountTotal.ToString("C")</span></div>
                 }
                 <div><span class="muted">VAT included</span><span>@Model.TaxTotal.ToString("C")</span></div>
             </div>

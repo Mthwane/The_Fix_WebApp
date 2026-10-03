@@ -30,6 +30,7 @@ public class PaymentsController : Controller
     private readonly IOrderFulfillmentService _orderFulfillment;
     private readonly IWalletService _wallet;
     private readonly IRewardsService _rewards;
+    private readonly IDiscountService _discounts;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly ILogger<PaymentsController> _logger;
 
@@ -38,6 +39,7 @@ public class PaymentsController : Controller
         IOrderFulfillmentService orderFulfillment,
         IWalletService wallet,
         IRewardsService rewards,
+        IDiscountService discounts,
         UserManager<ApplicationUser> userManager,
         ILogger<PaymentsController> logger)
     {
@@ -45,6 +47,7 @@ public class PaymentsController : Controller
         _orderFulfillment = orderFulfillment;
         _wallet = wallet;
         _rewards = rewards;
+        _discounts = discounts;
         _userManager = userManager;
         _logger = logger;
     }
@@ -137,8 +140,36 @@ public class PaymentsController : Controller
             decimal.TryParse(HttpContext.Session.GetString("PendingPointsDiscount"), NumberStyles.Number, CultureInfo.InvariantCulture, out pendingPointsDiscount);
         decimal.TryParse(HttpContext.Session.GetString("PendingWalletAmount"), NumberStyles.Number, CultureInfo.InvariantCulture, out var pendingWallet);
 
-        var expectedVat = TaxSettings.CalculateVat(cart.SubTotal, pendingPointsDiscount);
-        var expectedOrderTotal = cart.SubTotal - pendingPointsDiscount + expectedVat;
+        // The discount code was validated when checkout started. Re-validate it now against the snapshot basket: if it
+        // can't be honoured any more (switched off / ran out while the customer was on Paystack) the card has already
+        // been charged the discounted amount, so hand the money back rather than create a mispriced order.
+        var pendingDiscountCode = HttpContext.Session.GetString("PendingDiscountCode");
+        var pendingDiscountAmount = 0m;
+        if (!string.IsNullOrWhiteSpace(pendingDiscountCode))
+        {
+            decimal.TryParse(HttpContext.Session.GetString("PendingDiscountAmount"), NumberStyles.Number, CultureInfo.InvariantCulture, out pendingDiscountAmount);
+
+            var variantIdsInCart = cart.Lines.Select(l => l.VariantId).Distinct().ToList();
+            var productByVariant = await _context.ProductVariants.AsNoTracking()
+                .Where(v => variantIdsInCart.Contains(v.ProductVariantId))
+                .ToDictionaryAsync(v => v.ProductVariantId, v => v.ProductId);
+            var discountLines = cart.Lines
+                .Where(l => productByVariant.ContainsKey(l.VariantId))
+                .Select(l => new DiscountLine(productByVariant[l.VariantId], l.Quantity, l.UnitPrice))
+                .ToList();
+
+            // Nothing is redeemed until the order exists, so a plain re-evaluation is correct here.
+            var recheck = await _discounts.EvaluateAsync(pendingDiscountCode, discountLines, DiscountChannel.Online, user.Id);
+            if (!recheck.IsValid || Math.Abs(recheck.Amount - pendingDiscountAmount) > 0.01m)
+                return await FailAsync($"Discount code {pendingDiscountCode} could no longer be honoured after payment ({recheck.Error ?? "amount changed"}).", 0m, 0);
+        }
+        else
+        {
+            pendingDiscountCode = null;
+        }
+
+        var expectedVat = TaxSettings.CalculateVat(cart.SubTotal, pendingPointsDiscount + pendingDiscountAmount);
+        var expectedOrderTotal = cart.SubTotal - pendingPointsDiscount - pendingDiscountAmount + expectedVat;
         var expectedCardTotal = expectedOrderTotal - pendingWallet; // what Paystack should have charged: the CARD portion only
 
         if (Math.Abs(expectedCardTotal - cardCharged) > 0.01m)
@@ -196,7 +227,8 @@ public class PaymentsController : Controller
         try
         {
             order = await _orderFulfillment.CreateOnlineOrderAsync(
-                user, cart, paymentMethod, actualReference, deliveryAddress, pendingPointsDiscount, pendingWallet);
+                user, cart, paymentMethod, actualReference, deliveryAddress, pendingPointsDiscount, pendingWallet,
+                pendingDiscountCode, pendingDiscountAmount);
         }
         catch (Exception ex)
         {
@@ -247,7 +279,8 @@ public class PaymentsController : Controller
         foreach (var key in new[]
                  {
                      "PendingPaymentReference", "PendingPaymentMethod", "PendingAddressId", "PendingSaveCard",
-                     "PendingPointsRedeemed", "PendingPointsDiscount", "PendingWalletAmount"
+                     "PendingPointsRedeemed", "PendingPointsDiscount", "PendingWalletAmount",
+                     "PendingDiscountCode", "PendingDiscountAmount"
                  })
             HttpContext.Session.Remove(key);
     }

@@ -16,6 +16,7 @@ public class OrderFulfillmentService : IOrderFulfillmentService
     private readonly IInventoryService _inventoryService;
     private readonly IEmailSender _emailSender;
     private readonly IRewardsService _rewards;
+    private readonly IDiscountService _discounts;
     private readonly ILogger<OrderFulfillmentService> _logger;
 
     public OrderFulfillmentService(
@@ -23,12 +24,14 @@ public class OrderFulfillmentService : IOrderFulfillmentService
         IInventoryService inventoryService,
         IEmailSender emailSender,
         IRewardsService rewards,
+        IDiscountService discounts,
         ILogger<OrderFulfillmentService> logger)
     {
         _context = context;
         _inventoryService = inventoryService;
         _emailSender = emailSender;
         _rewards = rewards;
+        _discounts = discounts;
         _logger = logger;
     }
 
@@ -39,21 +42,28 @@ public class OrderFulfillmentService : IOrderFulfillmentService
         string reference,
         CustomerAddress? deliveryAddress,
         decimal pointsDiscount = 0m,
-        decimal walletAmount = 0m)
+        decimal walletAmount = 0m,
+        string? discountCode = null,
+        decimal discountAmount = 0m)
     {
-        var discount = Math.Min(Math.Max(pointsDiscount, 0m), cart.SubTotal);
+        discountCode = string.IsNullOrWhiteSpace(discountCode) ? null : _discounts.NormalizeCode(discountCode);
+        var codeSaving = discountCode is null ? 0m : Math.Max(discountAmount, 0m);
+        var pointsSaving = Math.Max(pointsDiscount, 0m);
+
+        // The two savings stack, but together can never exceed the basket.
+        var discount = Math.Min(codeSaving + pointsSaving, cart.SubTotal);
         var vat = TaxSettings.CalculateVat(cart.SubTotal, discount);
         var grand = cart.SubTotal - discount + vat;
         var walletPart = Math.Round(Math.Min(Math.Max(walletAmount, 0m), grand), 2, MidpointRounding.AwayFromZero);
 
-        var (order, createdNow) = await PersistWithRetryAsync(customer, cart, paymentMethod, reference, deliveryAddress, discount, vat, grand, walletPart);
+        var (order, createdNow) = await PersistWithRetryAsync(customer, cart, paymentMethod, reference, deliveryAddress, discount, vat, grand, walletPart, discountCode, codeSaving);
 
         // Everything below runs AFTER the order is safely committed and must never undo it - the money
         // has already moved, so a failure here is logged for follow-up, not thrown.
         var pointsEarned = 0;
         try
         {
-            if (discount > 0)
+            if (pointsSaving > 0)
                 await _rewards.LinkOrderAsync(reference, order.OrderId);
 
             pointsEarned = (await _rewards.EarnForOrderAsync(order)).Points;
@@ -73,7 +83,8 @@ public class OrderFulfillmentService : IOrderFulfillmentService
 
     private async Task<(Order Order, bool CreatedNow)> PersistWithRetryAsync(
         ApplicationUser customer, CartViewModel cart, PaymentMethod paymentMethod, string reference,
-        CustomerAddress? deliveryAddress, decimal discount, decimal vat, decimal grand, decimal walletPart)
+        CustomerAddress? deliveryAddress, decimal discount, decimal vat, decimal grand, decimal walletPart,
+        string? discountCode, decimal codeSaving)
     {
         for (var attempt = 1; ; attempt++)
         {
@@ -88,7 +99,7 @@ public class OrderFulfillmentService : IOrderFulfillmentService
 
             try
             {
-                var order = await TryCreateOnceAsync(customer, cart, paymentMethod, reference, deliveryAddress, discount, vat, grand, walletPart);
+                var order = await TryCreateOnceAsync(customer, cart, paymentMethod, reference, deliveryAddress, discount, vat, grand, walletPart, discountCode, codeSaving);
                 return (order, true);
             }
             catch (Exception ex) when (attempt < MaxAttempts && IsTransient(ex))
@@ -101,7 +112,8 @@ public class OrderFulfillmentService : IOrderFulfillmentService
 
     private async Task<Order> TryCreateOnceAsync(
         ApplicationUser customer, CartViewModel cart, PaymentMethod paymentMethod, string reference,
-        CustomerAddress? deliveryAddress, decimal discount, decimal vat, decimal grand, decimal walletPart)
+        CustomerAddress? deliveryAddress, decimal discount, decimal vat, decimal grand, decimal walletPart,
+        string? discountCode, decimal codeSaving)
     {
         var order = new Order
         {
@@ -112,6 +124,7 @@ public class OrderFulfillmentService : IOrderFulfillmentService
             CustomerId = customer.Id,
             SubTotal = cart.SubTotal,
             DiscountTotal = discount,
+            DiscountCode = discountCode,
             TaxTotal = vat,
             GrandTotal = grand,
             WalletAmountApplied = walletPart,
@@ -146,6 +159,11 @@ public class OrderFulfillmentService : IOrderFulfillmentService
             _context.Orders.Add(order);
             await _context.SaveChangesAsync();
 
+            // Spend one redemption of the code in this same transaction - atomic and limit-checked, so the last
+            // use of a limited code can't be taken twice. Throws DiscountUnavailableException (not retried) if it ran out.
+            if (discountCode is not null)
+                await _discounts.RedeemAsync(discountCode, order.OrderId, customer.Id, codeSaving);
+
             // Atomic, conditional UPDATE per variant (see InventoryService) - joins this transaction.
             var updatedVariants = await _inventoryService.DecrementStockBatchAsync(
                 cart.Lines.Select(l => (l.VariantId, l.Quantity)));
@@ -160,7 +178,8 @@ public class OrderFulfillmentService : IOrderFulfillmentService
                 UserId = customer.Id,
                 Action = "OnlineOrderPlaced",
                 Details = $"Placed order {order.OrderNumber} for {order.GrandTotal:C} ({cart.Lines.Count} line item(s))." +
-                          (discount > 0 ? $" Points discount {discount:C}." : "") +
+                          (discountCode is not null ? $" Discount code {discountCode} -{codeSaving:C}." : "") +
+                          (discount - codeSaving > 0 ? $" Points discount {(discount - codeSaving):C}." : "") +
                           (walletPart > 0 ? $" FixCash {walletPart:C}." : "")
             });
             await _context.SaveChangesAsync();
@@ -180,7 +199,7 @@ public class OrderFulfillmentService : IOrderFulfillmentService
     private void DetachRolledBackEntities()
     {
         foreach (var entry in _context.ChangeTracker.Entries()
-                     .Where(e => e.Entity is Order or OrderItem or InventoryTransaction or AuditLog)
+                     .Where(e => e.Entity is Order or OrderItem or InventoryTransaction or AuditLog or DiscountRedemption)
                      .ToList())
         {
             entry.State = EntityState.Detached;
@@ -211,7 +230,7 @@ public class OrderFulfillmentService : IOrderFulfillmentService
                     {(string.IsNullOrWhiteSpace(order.DeliveryAddressLine2) ? "" : "<br/>" + E(order.DeliveryAddressLine2))}<br/>
                     {E(order.DeliveryCity)}, {E(order.DeliveryProvince)} {E(order.DeliveryPostalCode)}</p>";
 
-            var discountLine = order.DiscountTotal > 0 ? $"Points discount: -{order.DiscountTotal:C}<br/>" : "";
+            var discountLine = order.DiscountTotal > 0 ? $"Discount{(order.DiscountCode is null ? "" : $" ({E(order.DiscountCode)})")}: -{order.DiscountTotal:C}<br/>" : "";
             var splitLine = order.WalletAmountApplied > 0 && order.WalletAmountApplied < order.GrandTotal
                 ? $"Paid from FixCash: {order.WalletAmountApplied:C}<br/>Paid by card: {(order.GrandTotal - order.WalletAmountApplied):C}<br/>"
                 : "";

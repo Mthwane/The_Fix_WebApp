@@ -153,7 +153,7 @@
         @if (Can(FashionFix.Web.Security.Permissions.ProductsManage) || Can(FashionFix.Web.Security.Permissions.PurchaseOrdersManage))
         {
             @* Catalogue managers open the restock queue; employees go to Purchase Orders. *@
-            <a asp-controller="@(Can(FashionFix.Web.Security.Permissions.ProductsManage) ? "Products" : "PurchaseOrders")" asp-action="@(Can(FashionFix.Web.Security.Permissions.ProductsManage) ? "LowStock" : "Index")" class="stf-card" style="@(Model.LowStockCount > 0 ? "background:var(--stf-secondary-container);" : "") display:block;">
+            <a asp-controller="@(Can(FashionFix.Web.Security.Permissions.ProductsManage) ? "Products" : "PurchaseOrders")" asp-action="LowStock" class="stf-card" style="@(Model.LowStockCount > 0 ? "background:var(--stf-secondary-container);" : "") display:block;">
                 <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--stf-secondary);font-weight:600;">Low Stock Items</div>
                 <div id="kpi-lowStock" style="font-family:'Newsreader',serif;font-size:1.7rem;margin-top:6px;">@Model.LowStockCount</div>
                 <div style="font-size:0.75rem;color:var(--stf-on-surface-variant);margin-top:4px;">@Model.OutOfStockCount out of stock &rarr;</div>
@@ -281,7 +281,7 @@
                     <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:0;">Restock Watchlist</h5>
                     @if (Model.LowStockVariants.Any())
                     {
-                        <a asp-controller="@(Can(FashionFix.Web.Security.Permissions.ProductsManage) ? "Products" : "PurchaseOrders")" asp-action="@(Can(FashionFix.Web.Security.Permissions.ProductsManage) ? "LowStock" : "Index")" style="font-size:0.78rem;color:var(--stf-secondary);">View all &rarr;</a>
+                        <a asp-controller="@(Can(FashionFix.Web.Security.Permissions.ProductsManage) ? "Products" : "PurchaseOrders")" asp-action="LowStock" style="font-size:0.78rem;color:var(--stf-secondary);">View all &rarr;</a>
                     }
                 </div>
                 @if (!Model.LowStockVariants.Any())

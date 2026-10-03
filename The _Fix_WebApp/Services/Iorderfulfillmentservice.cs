@@ -19,6 +19,9 @@ namespace FashionFix.Web.Services;
 public interface IOrderFulfillmentService
 {
     /// <param name="pointsDiscount">Rand value of reward points already redeemed for this order (0 if none).</param>
+    /// <param name="discountCode">A discount code already validated for this basket (null if none). It is redeemed
+    /// atomically inside the order transaction; if it ran out meanwhile a DiscountUnavailableException is thrown.</param>
+    /// <param name="discountAmount">The rand saving that code was validated for.</param>
     /// <param name="walletAmount">Rand amount already debited from the customer's FixCash wallet for this order
     /// (0 if none; equals the grand total for a full FixCash payment).</param>
     Task<Order> CreateOnlineOrderAsync(
@@ -28,5 +31,7 @@ public interface IOrderFulfillmentService
         string reference,
         CustomerAddress? deliveryAddress,
         decimal pointsDiscount = 0m,
-        decimal walletAmount = 0m);
+        decimal walletAmount = 0m,
+        string? discountCode = null,
+        decimal discountAmount = 0m);
 }

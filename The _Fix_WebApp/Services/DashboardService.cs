@@ -372,7 +372,7 @@ public class DashboardService : IDashboardService
                 Label = "Items low or out of stock",
                 Count = model.LowStockCount,
                 // Catalogue managers go to the restock queue; employees (who raise restock requests) go to Purchase Orders.
-                Url = sections.HasFlag(DashboardSections.Inventory) ? "/Products/LowStock" : "/PurchaseOrders",
+                Url = sections.HasFlag(DashboardSections.Inventory) ? "/Products/LowStock" : "/PurchaseOrders/LowStock",
                 Severity = model.OutOfStockCount > 0 ? "danger" : "warning"
             });
 

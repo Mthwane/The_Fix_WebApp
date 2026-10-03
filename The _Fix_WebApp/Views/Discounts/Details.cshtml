@@ -1,0 +1,106 @@
+@model DiscountDetailsViewModel
+@using FashionFix.Web.Models.Entities
+@{
+    var d = Model.Discount;
+    ViewData["Title"] = "Discount " + d.Code;
+    Layout = "_StaffLayout";
+    bool canManage = ViewBag.CanManage == true;
+    string ChannelLabel(DiscountChannel c) => c switch { DiscountChannel.Online => "Online checkout only", DiscountChannel.InStore => "In store (till) only", _ => "Online & in store" };
+    string Row = "display:flex;justify-content:space-between;gap:16px;padding:9px 0;border-bottom:1px solid var(--stf-surface-container);font-size:0.88rem;";
+}
+<div class="stf-content" style="max-width:1000px;">
+    <a asp-action="Index" class="stf-btn stf-btn-outline" style="margin-bottom:16px;display:inline-flex;">&larr; Discounts</a>
+
+    <div class="stf-page-head">
+        <div>
+            <span class="stf-eyebrow">Promotions</span>
+            <h1><code style="font-size:1.6rem;">@d.Code</code></h1>
+            <p>@(d.Name + (string.IsNullOrWhiteSpace(d.Description) ? "" : " - " + d.Description))</p>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <span class="stf-badge @(Model.Status == "Active" ? "stf-badge-active" : Model.Status == "Disabled" ? "stf-badge-muted" : "stf-badge-danger")">@Model.Status</span>
+            @if (canManage)
+            {
+                <a asp-action="Edit" asp-route-id="@d.DiscountId" class="stf-btn stf-btn-outline">Edit</a>
+                <form asp-action="Toggle" asp-route-id="@d.DiscountId" asp-route-returnTo="details" method="post" style="display:inline;">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="stf-btn stf-btn-outline">@(d.IsActive ? "Disable" : "Enable")</button>
+                </form>
+                <form asp-action="ToggleBanner" asp-route-id="@d.DiscountId" asp-route-returnTo="details" method="post" style="display:inline;">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="stf-btn @(d.ShowBanner ? "stf-btn-primary" : "stf-btn-outline")">Banner: @(d.ShowBanner ? "On" : "Off")</button>
+                </form>
+                @if (d.RedemptionCount == 0)
+                {
+                    <form asp-action="Delete" asp-route-id="@d.DiscountId" method="post" style="display:inline;">
+                        @Html.AntiForgeryToken()
+                        <button type="submit" class="stf-btn stf-btn-danger-outline" onclick="return confirm('Delete @d.Code? This cannot be undone.');">Delete</button>
+                    </form>
+                }
+            }
+        </div>
+    </div>
+
+    <div class="stf-stat-grid" style="grid-template-columns:repeat(3,1fr);">
+        <div class="stf-stat"><div class="stf-stat-label">Offer</div><div class="stf-stat-value">@d.ValueLabel()</div></div>
+        <div class="stf-stat"><div class="stf-stat-label">Times used</div><div class="stf-stat-value">@(d.RedemptionCount + (d.MaxRedemptions.HasValue ? " / " + d.MaxRedemptions.Value : ""))</div></div>
+        <div class="stf-stat"><div class="stf-stat-label">Total discounted</div><div class="stf-stat-value">@Model.TotalDiscounted.ToString("C")</div></div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;margin-bottom:24px;">
+        <div class="stf-card">
+            <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:0 0 8px;">Rules</h5>
+            <div style="@Row"><span>Where it works</span><strong>@ChannelLabel(d.Channel)</strong></div>
+            <div style="@Row"><span>Max saving per order</span><strong>@(d.MaxDiscountAmount.HasValue ? "R" + d.MaxDiscountAmount.Value.ToString("0.##") : "No cap")</strong></div>
+            <div style="@Row"><span>Minimum spend</span><strong>@(d.MinimumSpend.HasValue ? "R" + d.MinimumSpend.Value.ToString("0.##") : "None")</strong></div>
+            <div style="@Row"><span>Total uses allowed</span><strong>@(d.MaxRedemptions.HasValue ? d.MaxRedemptions.Value.ToString() : "Unlimited")</strong></div>
+            <div style="@Row"><span>Uses per customer</span><strong>@(d.MaxUsesPerCustomer.HasValue ? d.MaxUsesPerCustomer.Value.ToString() : "Unlimited")</strong></div>
+            <div style="@Row"><span>Starts</span><strong>@d.StartsAt.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</strong></div>
+            <div style="@Row"><span>Expires</span><strong>@(d.ExpiresAt.HasValue ? d.ExpiresAt.Value.ToLocalTime().ToString("dd MMM yyyy, HH:mm") : "Never")</strong></div>
+            <div style="@Row border-bottom:none;"><span>Storefront banner</span><strong>@(d.ShowBanner ? "On" : "Off")</strong></div>
+            @if (d.ShowBanner)
+            {
+                <div style="margin-top:8px;background:var(--stf-secondary-container);border-radius:10px;padding:10px 14px;font-size:0.84rem;">@(string.IsNullOrWhiteSpace(d.BannerText) ? d.ValueLabel() + " - use code " + d.Code : d.BannerText)</div>
+            }
+        </div>
+
+        <div class="stf-card">
+            <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:0 0 8px;">Applies to</h5>
+            @if (!Model.TargetLabels.Any())
+            {
+                <p style="margin:0;font-size:0.88rem;color:var(--stf-on-surface-variant);">The whole basket - not linked to any particular product, category, brand or supplier.</p>
+            }
+            else
+            {
+                <ul style="margin:0;padding-left:18px;font-size:0.88rem;line-height:1.7;">
+                    @foreach (var label in Model.TargetLabels)
+                    {
+                        <li>@label</li>
+                    }
+                </ul>
+            }
+        </div>
+    </div>
+
+    <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:0 0 12px;">Recent redemptions</h5>
+    @if (!Model.RecentRedemptions.Any())
+    {
+        <div class="stf-card" style="color:var(--stf-on-surface-variant);">This code hasn't been used yet.</div>
+    }
+    else
+    {
+        <table class="stf-table">
+            <thead><tr><th>Date</th><th>Order</th><th>Saved</th></tr></thead>
+            <tbody>
+                @foreach (var r in Model.RecentRedemptions)
+                {
+                    <tr>
+                        <td>@r.DateRedeemed.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</td>
+                        <td>@(Model.OrderNumbers.TryGetValue(r.OrderId, out var num) ? num : "#" + r.OrderId)</td>
+                        <td>@r.AmountDiscounted.ToString("C")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>

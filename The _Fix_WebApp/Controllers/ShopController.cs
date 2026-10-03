@@ -27,16 +27,95 @@ public class ShopController : Controller
 {
     private readonly ApplicationDbContext _context;
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly IDiscountService _discounts;
     private readonly ILogger<ShopController> _logger;
 
     public ShopController(
         ApplicationDbContext context,
         UserManager<ApplicationUser> userManager,
+        IDiscountService discounts,
         ILogger<ShopController> logger)
     {
         _context = context;
         _userManager = userManager;
+        _discounts = discounts;
         _logger = logger;
+    }
+
+    // ------------------------------------------------------------------ discount codes (online)
+
+    /// <summary>The signed-in customer's id for per-customer limits (null for anonymous visitors and staff).</summary>
+    private string? CurrentCustomerId() =>
+        User.Identity?.IsAuthenticated == true && User.IsInRole("Customer") ? _userManager.GetUserId(User) : null;
+
+    private async Task<DiscountLine[]> CartLinesAsync(CartViewModel cart)
+    {
+        // Line prices are the server-side session cart's own (the same figures the order total is built from), so the
+        // saving always matches what the customer is charged. The product id is read from the database, not trusted.
+        var ids = cart.Lines.Select(l => l.VariantId).Distinct().ToList();
+        var productIds = await _context.ProductVariants.AsNoTracking()
+            .Where(v => ids.Contains(v.ProductVariantId))
+            .ToDictionaryAsync(v => v.ProductVariantId, v => v.ProductId);
+
+        return cart.Lines
+            .Where(l => productIds.ContainsKey(l.VariantId))
+            .Select(l => new DiscountLine(productIds[l.VariantId], l.Quantity, l.UnitPrice))
+            .ToArray();
+    }
+
+    /// <summary>Re-checks the code in the session against the current cart. Drops it from the session if it no longer works.</summary>
+    private async Task<(string? Code, decimal Amount, string? Error)> ResolveAppliedDiscountAsync(CartViewModel cart)
+    {
+        var code = SessionCart.GetDiscountCode(HttpContext.Session);
+        if (string.IsNullOrWhiteSpace(code) || cart.Lines.Count == 0) return (null, 0m, null);
+
+        var result = await _discounts.EvaluateAsync(code, await CartLinesAsync(cart), DiscountChannel.Online, CurrentCustomerId());
+        if (!result.IsValid)
+        {
+            SessionCart.ClearDiscountCode(HttpContext.Session);
+            return (null, 0m, result.Error);
+        }
+
+        return (result.Discount!.Code, result.Amount, null);
+    }
+
+    private async Task LoadDiscountViewDataAsync(CartViewModel cart)
+    {
+        var (code, amount, error) = await ResolveAppliedDiscountAsync(cart);
+        ViewBag.DiscountCode = code;
+        ViewBag.DiscountAmount = amount;
+        if (error is not null) this.ToastWarning($"Your discount code was removed: {error}");
+    }
+
+    // POST: /Shop/ApplyDiscountCode - works for visitors too (the per-customer limit is re-checked at checkout).
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ApplyDiscountCode(string? code, string? returnTo)
+    {
+        var cart = SessionCart.Get(HttpContext.Session);
+        var result = await _discounts.EvaluateAsync(code, await CartLinesAsync(cart), DiscountChannel.Online, CurrentCustomerId());
+
+        if (result.IsValid)
+        {
+            SessionCart.SetDiscountCode(HttpContext.Session, result.Discount!.Code);
+            this.ToastSuccess($"{result.Discount.Code} applied - you save {result.Amount:C} (before VAT).");
+        }
+        else
+        {
+            this.ToastError(result.Error ?? "That code can't be used.");
+        }
+
+        return returnTo == "checkout" ? RedirectToAction(nameof(Checkout)) : RedirectToAction(nameof(Cart));
+    }
+
+    // POST: /Shop/RemoveDiscountCode
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public IActionResult RemoveDiscountCode(string? returnTo)
+    {
+        SessionCart.ClearDiscountCode(HttpContext.Session);
+        this.ToastSuccess("Discount code removed.");
+        return returnTo == "checkout" ? RedirectToAction(nameof(Checkout)) : RedirectToAction(nameof(Cart));
     }
 
     // GET: /Shop/Department/{slug} - a single department's landing page (Women/Men/Footwear/
@@ -181,9 +260,11 @@ public class ShopController : Controller
 
     // GET: /Shop/Cart
     [HttpGet]
-    public IActionResult Cart()
+    public async Task<IActionResult> Cart()
     {
-        return View(SessionCart.Get(HttpContext.Session));
+        var cart = SessionCart.Get(HttpContext.Session);
+        await LoadDiscountViewDataAsync(cart);
+        return View(cart);
     }
 
     // POST: /Shop/UpdateCartLine
@@ -236,6 +317,7 @@ public class ShopController : Controller
         var model = await BuildCheckoutViewModelAsync(userId!, cart);
         ViewBag.WalletBalance = await wallet.GetBalanceAsync(userId!);
         await LoadRewardsForViewAsync(rewards, userId!, cart);
+        await LoadDiscountViewDataAsync(cart);
         return View(model);
     }
 
@@ -310,6 +392,7 @@ public class ShopController : Controller
         var walletBalance = await wallet.GetBalanceAsync(userId);
         ViewBag.WalletBalance = walletBalance;
         var (rewardsSettings, rewardsQuote) = await LoadRewardsForViewAsync(rewards, userId, cart);
+        await LoadDiscountViewDataAsync(cart);
 
         if (!ModelState.IsValid)
             return await CheckoutViewWithErrorAsync(model, userId, cart, "Please choose a delivery address and payment method to complete your order.");
@@ -354,8 +437,26 @@ public class ShopController : Controller
             pointsDiscount = rewards.PointsToRands(rewardsSettings, pointsToRedeem);
         }
 
-        var vat = TaxSettings.CalculateVat(cart.SubTotal, pointsDiscount);
-        var grandTotal = cart.SubTotal - pointsDiscount + vat;
+        // --- Discount code: re-validated right now (limits, dates, caps, linked products), amount from the server ---
+        var discountCode = (string?)ViewBag.DiscountCode;
+        var codeDiscount = discountCode is null ? 0m : (decimal)ViewBag.DiscountAmount;
+        if (discountCode is not null)
+        {
+            var codeCheck = await _discounts.EvaluateAsync(discountCode, await CartLinesAsync(cart), DiscountChannel.Online, userId);
+            if (!codeCheck.IsValid)
+            {
+                SessionCart.ClearDiscountCode(HttpContext.Session);
+                return await CheckoutViewWithErrorAsync(model, userId, cart, $"Your discount code can't be used: {codeCheck.Error}");
+            }
+            codeDiscount = codeCheck.Amount;
+        }
+
+        if (codeDiscount + pointsDiscount > cart.SubTotal)
+            return await CheckoutViewWithErrorAsync(model, userId, cart, "Your discount code and reward points together are worth more than your basket. Untick the points or remove the code.");
+
+        var totalDiscount = codeDiscount + pointsDiscount;
+        var vat = TaxSettings.CalculateVat(cart.SubTotal, totalDiscount);
+        var grandTotal = cart.SubTotal - totalDiscount + vat;
         var reference = $"WEB-{DateTime.UtcNow:yyyyMMddHHmmssfff}";
 
         // --- FixCash wallet: covers as much of the total as the balance allows, the card pays the rest ---
@@ -427,7 +528,7 @@ public class ShopController : Controller
             Order order;
             try
             {
-                order = await orderFulfillment.CreateOnlineOrderAsync(user, cart, PaymentMethod.FixCash, reference, deliveryAddress, pointsDiscount, walletPortion);
+                order = await orderFulfillment.CreateOnlineOrderAsync(user, cart, PaymentMethod.FixCash, reference, deliveryAddress, pointsDiscount, walletPortion, discountCode, codeDiscount);
             }
             catch (Exception ex)
             {
@@ -473,7 +574,7 @@ public class ShopController : Controller
             Order order;
             try
             {
-                order = await orderFulfillment.CreateOnlineOrderAsync(user, cart, cardMethod, reference, deliveryAddress, pointsDiscount, walletPortion);
+                order = await orderFulfillment.CreateOnlineOrderAsync(user, cart, cardMethod, reference, deliveryAddress, pointsDiscount, walletPortion, discountCode, codeDiscount);
             }
             catch (Exception ex)
             {
@@ -502,6 +603,8 @@ public class ShopController : Controller
         HttpContext.Session.SetString("PendingSaveCard", model.SaveCard ? "true" : "false");
         HttpContext.Session.SetInt32("PendingPointsRedeemed", pointsToRedeem);
         HttpContext.Session.SetString("PendingPointsDiscount", pointsDiscount.ToString("F2", CultureInfo.InvariantCulture));
+        HttpContext.Session.SetString("PendingDiscountCode", discountCode ?? string.Empty);
+        HttpContext.Session.SetString("PendingDiscountAmount", codeDiscount.ToString("F2", CultureInfo.InvariantCulture));
         HttpContext.Session.SetString("PendingWalletAmount", walletPortion.ToString("F2", CultureInfo.InvariantCulture));
 
         return Redirect(initResult.AuthorizationUrl!);
@@ -557,9 +660,12 @@ public class ShopController : Controller
             canReview = !reviews.Any(r => r.CustomerId == userId);
         }
 
+        var linkedDiscounts = await _discounts.GetLinkedBannerDiscountsAsync(product.ProductId, product.Category, product.Brand, product.SupplierId);
+
         return View(new ProductDetailViewModel
         {
             Product = product,
+            LinkedDiscounts = linkedDiscounts,
             Images = images,
             Reviews = reviews,
             IsWishlisted = isWishlisted,

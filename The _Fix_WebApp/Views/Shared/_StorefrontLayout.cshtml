@@ -1,7 +1,11 @@
 @using FashionFix.Web.Services
 @using Microsoft.EntityFrameworkCore
 @inject FashionFix.Web.Data.ApplicationDbContext DbContext
+@inject IDiscountService DiscountService
 @{
+    // The seasonal promo banner: shown only while a discount with its banner switched ON is live (started, not expired,
+    // not used up). Staff turn it on/off from the Discounts screen - nothing to edit here.
+    var promoDiscount = await DiscountService.GetActiveBannerAsync();
     // Department nav links + cart badge are shared by every storefront page, so they live
     // here in the layout instead of being re-queried/re-populated by every controller action.
     var navDepartments = DbContext.Departments.AsNoTracking().Where(d => d.IsActive).OrderBy(d => d.DisplayOrder).ToList();
@@ -24,6 +28,26 @@
     @await RenderSectionAsync("Styles", required: false)
 </head>
 <body class="ffs-page">
+
+    @if (promoDiscount is not null)
+    {
+        <div class="ffs-promo-banner" role="region" aria-label="Promotion">
+            @if (!string.IsNullOrWhiteSpace(promoDiscount.BannerText))
+            {
+                <strong>@promoDiscount.BannerText</strong>
+            }
+            else
+            {
+                <strong>@promoDiscount.ValueLabel()</strong>
+                <span> - use code</span> <code>@promoDiscount.Code</code>
+            }
+            @if (promoDiscount.ExpiresAt.HasValue)
+            {
+                <span style="opacity:.75;margin-left:8px;">Ends @promoDiscount.ExpiresAt.Value.ToLocalTime().ToString("dd MMM")</span>
+            }
+            <a asp-controller="Shop" asp-action="Index">Shop now</a>
+        </div>
+    }
 
     <div class="ffs-utility-bar">
         <div class="ffs-container">

@@ -18,6 +18,7 @@ public class PosController : Controller
     private readonly IInventoryService _inventoryService;
     private readonly IEmailSender _emailSender;
     private readonly IRewardsService _rewardsService;
+    private readonly IDiscountService _discountService;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly ILogger<PosController> _logger;
 
@@ -26,6 +27,7 @@ public class PosController : Controller
         IInventoryService inventoryService,
         IEmailSender emailSender,
         IRewardsService rewardsService,
+        IDiscountService discountService,
         UserManager<ApplicationUser> userManager,
         ILogger<PosController> logger)
     {
@@ -33,6 +35,7 @@ public class PosController : Controller
         _inventoryService = inventoryService;
         _emailSender = emailSender;
         _rewardsService = rewardsService;
+        _discountService = discountService;
         _userManager = userManager;
         _logger = logger;
     }
@@ -54,7 +57,54 @@ public class PosController : Controller
         ViewBag.CurrentShift = await _context.ShiftSessions.AsNoTracking()
             .FirstOrDefaultAsync(s => s.UserId == userId && s.Status == ShiftStatus.Open);
 
+        await LoadDiscountsForTillAsync();
         return View(new POSCheckoutViewModel());
+    }
+
+    private bool CanUseDiscounts => User.HasClaim(Permissions.ClaimType, Permissions.DiscountsView);
+
+    /// <summary>Discounts only exist at the till for roles granted discounts.view - everyone else sees no discount UI at all.</summary>
+    private async Task LoadDiscountsForTillAsync()
+    {
+        ViewBag.CanUseDiscounts = CanUseDiscounts;
+        ViewBag.LiveDiscounts = CanUseDiscounts
+            ? await _discountService.GetLiveForChannelAsync(DiscountChannel.InStore)
+            : new List<Discount>();
+    }
+
+    // POST: /Pos/ApplyDiscount - AJAX preview used by the "Apply" button. The cart lines are used only to learn WHICH
+    // variants and HOW MANY; every price comes from the database. Nothing is consumed here - the real, atomic redemption
+    // happens inside Checkout.
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ApplyDiscount([FromForm] string? code, [FromForm] string? customerId, [FromForm] List<int> variantIds, [FromForm] List<int> quantities)
+    {
+        if (!CanUseDiscounts)
+            return Json(new { valid = false, message = "Your role isn't allowed to apply discounts." });
+
+        variantIds ??= new(); quantities ??= new();
+        if (variantIds.Count == 0 || variantIds.Count != quantities.Count)
+            return Json(new { valid = false, message = "Scan at least one item first." });
+
+        var ids = variantIds.Distinct().ToList();
+        var variants = await _context.ProductVariants.AsNoTracking()
+            .Include(v => v.Product)
+            .Where(v => ids.Contains(v.ProductVariantId))
+            .ToDictionaryAsync(v => v.ProductVariantId);
+
+        var lines = new List<DiscountLine>();
+        for (var i = 0; i < variantIds.Count; i++)
+        {
+            if (!variants.TryGetValue(variantIds[i], out var v) || quantities[i] < 1) continue;
+            lines.Add(new DiscountLine(v.ProductId, quantities[i], Math.Round(v.EffectivePrice, 2, MidpointRounding.AwayFromZero)));
+        }
+
+        var result = await _discountService.EvaluateAsync(code, lines, DiscountChannel.InStore,
+            string.IsNullOrWhiteSpace(customerId) ? null : customerId.Trim());
+
+        return result.IsValid
+            ? Json(new { valid = true, amount = result.Amount, code = result.Discount!.Code, label = result.Discount.ValueLabel(), name = result.Discount.Name })
+            : Json(new { valid = false, message = result.Error });
     }
 
     // GET: /Pos/StartShift - opening float entry. Not a hard gate on using the till (POS
@@ -77,7 +127,7 @@ public class PosController : Controller
     // POST: /Pos/StartShift
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> StartShift(decimal openingFloat)
+    public async Task<IActionResult> StartShift(decimal openingFloat, string? returnUrl = null)
     {
         var userId = _userManager.GetUserId(User)!;
         var existing = await _context.ShiftSessions.FirstOrDefaultAsync(s => s.UserId == userId && s.Status == ShiftStatus.Open);
@@ -97,6 +147,23 @@ public class PosController : Controller
         await _context.SaveChangesAsync();
 
         this.ToastSuccess($"Shift started with an opening float of {openingFloat:C}.");
+
+        // Clocking on: if stock is running low and this person can raise restock requests, take them straight to
+        // Purchase Orders (the low-stock queue) so the day starts with what needs ordering.
+        if (User.HasClaim(Permissions.ClaimType, Permissions.PurchaseOrdersManage))
+        {
+            var lowCount = await _context.ProductVariants.AsNoTracking()
+                .CountAsync(v => v.IsActive && v.Product.IsActive && v.StockQuantity <= v.Product.LowStockThreshold);
+            if (lowCount > 0)
+            {
+                this.ToastWarning($"{lowCount} item{(lowCount == 1 ? " is" : "s are")} low on stock - review and raise a restock request below.");
+                return RedirectToAction("LowStock", "PurchaseOrders");
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl))
+            return LocalRedirect(returnUrl);
+
         return RedirectToAction(nameof(Index));
     }
 
@@ -178,6 +245,9 @@ public class PosController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Checkout(POSCheckoutViewModel model)
     {
+        await LoadDiscountsForTillAsync(); // so every "return View(Index)" below still shows the discount section
+        model.DiscountTotal = 0m;          // never trust a posted amount - it's recomputed from the code below
+
         if (model.CartItems.Count == 0)
         {
             this.ToastError("The till is empty - scan at least one item before completing the sale.");
@@ -252,14 +322,6 @@ public class PosController : Controller
             }
         }
 
-        // --- Discount: a real amount, never negative, never more than the sale ---
-        model.DiscountTotal = Math.Round(model.DiscountTotal, 2, MidpointRounding.AwayFromZero);
-        if (model.DiscountTotal < 0 || model.DiscountTotal > model.SubTotal)
-        {
-            this.ToastError($"The discount must be between R0.00 and the sale subtotal ({model.SubTotal:C}).");
-            return View(nameof(Index), model);
-        }
-
         // --- Linked customer must be a real Customer account (it earns reward points) ---
         if (!string.IsNullOrWhiteSpace(model.CustomerId))
         {
@@ -273,6 +335,33 @@ public class PosController : Controller
         else
         {
             model.CustomerId = null;
+        }
+
+        // --- Discount: free-typed amounts are gone. Only a real, rule-checked code can reduce the sale, and only for
+        // roles granted discounts.view. The amount is computed here from database prices - never from the browser. ---
+        var discountCode = _discountService.NormalizeCode(model.DiscountCode);
+        model.DiscountCode = discountCode.Length == 0 ? null : discountCode;
+        if (model.DiscountCode is not null)
+        {
+            if (!CanUseDiscounts)
+            {
+                this.ToastError("Your role isn't allowed to apply discounts. Remove the code and try again.");
+                return View(nameof(Index), model);
+            }
+
+            var evaluation = await _discountService.EvaluateAsync(
+                model.DiscountCode,
+                model.CartItems.Select(l => new DiscountLine(l.ProductId, l.Quantity, l.UnitPrice)).ToList(),
+                DiscountChannel.InStore,
+                model.CustomerId);
+
+            if (!evaluation.IsValid)
+            {
+                this.ToastError($"Discount not applied: {evaluation.Error}");
+                return View(nameof(Index), model);
+            }
+
+            model.DiscountTotal = evaluation.Amount;
         }
 
         // VAT is always recomputed here from the fixed rate - never trusted from the client.
@@ -294,6 +383,7 @@ public class PosController : Controller
                 ProcessedByUserId = cashierId,
                 SubTotal = model.SubTotal,
                 DiscountTotal = model.DiscountTotal,
+                DiscountCode = model.DiscountCode,
                 TaxTotal = model.TaxTotal,
                 GrandTotal = model.GrandTotal,
                 DateFulfilled = DateTime.UtcNow
@@ -317,6 +407,11 @@ public class PosController : Controller
                 _context.Orders.Add(order);
                 await _context.SaveChangesAsync();
 
+                // Consume one redemption of the code in the SAME transaction (atomic, limit-checked). If the code ran
+                // out or was switched off a moment ago this throws and the whole sale rolls back.
+                if (model.DiscountCode is not null)
+                    await _discountService.RedeemAsync(model.DiscountCode, order.OrderId, model.CustomerId, model.DiscountTotal);
+
                 // Atomic, conditional stock UPDATEs - joins this transaction. If another till or an online
                 // order took the last unit a moment ago, this throws and the whole sale rolls back.
                 updatedVariants = await _inventoryService.DecrementStockBatchAsync(
@@ -327,7 +422,7 @@ public class PosController : Controller
                     UserId = cashierId,
                     Action = "SaleProcessed",
                     Details = $"Processed sale {order.OrderNumber} for {order.GrandTotal:C} ({model.CartItems.Count} line item(s))." +
-                              (order.DiscountTotal > 0 ? $" Discount applied: {order.DiscountTotal:C}." : "")
+                              (order.DiscountTotal > 0 ? $" Discount {order.DiscountCode} applied: {order.DiscountTotal:C}." : "")
                 });
                 await _context.SaveChangesAsync();
 
@@ -337,11 +432,16 @@ public class PosController : Controller
             {
                 await tx.RollbackAsync();
                 foreach (var entry in _context.ChangeTracker.Entries()
-                             .Where(e => e.Entity is Order or OrderItem or InventoryTransaction or AuditLog)
+                             .Where(e => e.Entity is Order or OrderItem or InventoryTransaction or AuditLog or DiscountRedemption)
                              .ToList())
                     entry.State = EntityState.Detached;
                 throw;
             }
+        }
+        catch (DiscountUnavailableException ex)
+        {
+            this.ToastError($"The discount code {ex.Code} just ran out or was switched off, so the sale wasn't completed. Remove the code (or use another) and try again.");
+            return View(nameof(Index), model);
         }
         catch (InsufficientStockException ex)
         {
@@ -392,7 +492,7 @@ public class PosController : Controller
                 var itemsHtml = string.Join("", model.CartItems.Select(l =>
                     $"<tr><td>{WebUtility.HtmlEncode(l.ProductName)}</td><td>{l.Quantity}</td><td>{l.UnitPrice:C}</td><td>{l.LineTotal:C}</td></tr>"));
 
-                var discountLine = order.DiscountTotal > 0 ? $"Discount: -{order.DiscountTotal:C}<br/>" : "";
+                var discountLine = order.DiscountTotal > 0 ? $"Discount{(order.DiscountCode is null ? "" : $" ({WebUtility.HtmlEncode(order.DiscountCode)})")}: -{order.DiscountTotal:C}<br/>" : "";
                 var body = $@"
                     <h2>Thanks for shopping with us, {WebUtility.HtmlEncode(recipientName)}!</h2>
                     <p>Receipt for order <strong>{order.OrderNumber}</strong> ({order.DateCreated:dd MMM yyyy, HH:mm}).</p>

@@ -6,6 +6,9 @@ namespace FashionFix.Web.Models.ViewModels;
 public class ProductDetailViewModel
 {
     public Product Product { get; set; } = null!;
+
+    /// <summary>Live, banner-enabled discounts linked to this product (directly or via its category/brand/supplier).</summary>
+    public List<Discount> LinkedDiscounts { get; set; } = new();
     public List<ProductImage> Images { get; set; } = new();
     public List<ProductReview> Reviews { get; set; } = new();
     public bool IsWishlisted { get; set; }

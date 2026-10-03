@@ -18,6 +18,9 @@ public class AccountController : Controller
 {
     private static readonly string[] StaffRoles = { "Administrator", "Manager", "Employee", "Owner" };
 
+    /// <summary>Session flag read (and cleared) by the ShiftPrompt view component.</summary>
+    public const string ShiftPromptKey = "ShiftPrompt";
+
     private readonly SignInManager<ApplicationUser> _signInManager;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly ApplicationDbContext _context;
@@ -90,7 +93,13 @@ public class AccountController : Controller
             }
 
             await LogAuditAsync(user.Id, "Login", $"'{user.UserName}' signed in ({string.Join(", ", roles)}).");
-            return RedirectAfterLogin(model.ReturnUrl, roles);
+
+            // Staff get the "start your shift" pop-up on the first screen after logging in (see ShiftPrompt view
+            // component). Cleared once shown, so it appears once per login - not on every page.
+            if (isStaff) HttpContext.Session.SetString(ShiftPromptKey, "1");
+
+            var principal = await _signInManager.CreateUserPrincipalAsync(user);
+            return RedirectAfterLogin(model.ReturnUrl, roles, principal);
         }
 
         // Failed attempts go in the audit trail (user id is null when the username doesn't exist).
@@ -115,7 +124,10 @@ public class AccountController : Controller
     public IActionResult EmployeeLogin(string? returnUrl = null)
     {
         if (User.Identity?.IsAuthenticated == true)
-            return RedirectToAction("Dashboard", "Home");
+        {
+            var (c, a) = FashionFix.Web.Security.StaffLanding.For(User);
+            return RedirectToAction(a, c);
+        }
 
         return View(new LoginViewModel { IsEmployeeLogin = true, ReturnUrl = returnUrl });
     }
@@ -222,7 +234,7 @@ public class AccountController : Controller
         return RedirectToAction(nameof(ChangePassword));
     }
 
-    private IActionResult RedirectAfterLogin(string? returnUrl, IList<string> roles)
+    private IActionResult RedirectAfterLogin(string? returnUrl, IList<string> roles, System.Security.Claims.ClaimsPrincipal principal)
     {
         if (Url.IsLocalUrl(returnUrl))
             return Redirect(returnUrl!);
@@ -231,7 +243,8 @@ public class AccountController : Controller
         if (roles.Contains("Customer") && !roles.Any(r => StaffRoles.Contains(r)))
             return RedirectToAction("Orders", "Customer");
 
-        return RedirectToAction("Dashboard", "Home");
+        var (controller, action) = FashionFix.Web.Security.StaffLanding.For(principal);
+        return RedirectToAction(action, controller);
     }
 
     private async Task LogAuditAsync(string? userId, string action, string? details)

@@ -21,13 +21,20 @@
             Model.Cart.SubTotal);
     }
 
+    var appliedDiscountCode = ViewBag.DiscountCode as string;
+    var appliedDiscountAmount = appliedDiscountCode is null ? 0m : (decimal)ViewBag.DiscountAmount;
+
+    // Reward points can't push the combined savings past the basket value.
+    pointsDiscount = Math.Min(pointsDiscount, Math.Max(0m, Model.Cart.SubTotal - appliedDiscountAmount));
+
     var vat = TaxSettings.CalculateVat(
         Model.Cart.SubTotal,
-        pointsDiscount);
+        pointsDiscount + appliedDiscountAmount);
 
     var total =
         Model.Cart.SubTotal -
-        pointsDiscount +
+        pointsDiscount -
+        appliedDiscountAmount +
         vat;
 }
 
@@ -55,8 +62,32 @@
 
         <div style="background:var(--ffs-cream-alt);border-radius:var(--ffs-radius);padding:16px 20px;margin-bottom:28px;">
             <div style="display:flex;justify-content:space-between;font-size:0.88rem;margin-bottom:6px;"><span>Subtotal</span><span>@Model.Cart.SubTotal.ToString("C")</span></div>
+            @if (appliedDiscountCode is not null)
+            {
+                <div style="display:flex;justify-content:space-between;font-size:0.88rem;margin-bottom:6px;color:var(--ffs-forest);"><span>Discount (@appliedDiscountCode)</span><span>-@appliedDiscountAmount.ToString("C")</span></div>
+            }
             <div style="display:flex;justify-content:space-between;font-size:0.85rem;color:var(--ffs-ink-muted);margin-bottom:10px;"><span>VAT (15%)</span><span>@vat.ToString("C")</span></div>
             <div style="display:flex;justify-content:space-between;border-top:1px solid var(--ffs-border);padding-top:10px;font-size:1.05rem;font-weight:600;font-family:'Fraunces',serif;"><span>Total</span><span>@total.ToString("C")</span></div>
+        </div>
+
+        <div style="margin-bottom:28px;">
+            @if (appliedDiscountCode is null)
+            {
+                <form asp-controller="Shop" asp-action="ApplyDiscountCode" asp-route-returnTo="checkout" method="post" style="display:flex;gap:8px;">
+                    @Html.AntiForgeryToken()
+                    <input type="text" name="code" placeholder="Have a discount code?" autocomplete="off" maxlength="30"
+                           style="box-sizing:border-box;flex:1;min-width:0;border:1px solid var(--ffs-border);border-radius:8px;padding:9px 14px;font-size:0.88rem;text-transform:uppercase;" />
+                    <button type="submit" class="ffs-btn ffs-btn-outline" style="padding:9px 18px;font-size:0.82rem;">Apply</button>
+                </form>
+            }
+            else
+            {
+                <form asp-controller="Shop" asp-action="RemoveDiscountCode" asp-route-returnTo="checkout" method="post">
+                    @Html.AntiForgeryToken()
+                    <span style="font-size:0.85rem;">Code <strong>@appliedDiscountCode</strong> applied.</span>
+                    <button type="submit" style="background:none;border:none;padding:0;margin-left:8px;font-size:0.82rem;color:var(--ffs-clay);cursor:pointer;text-decoration:underline;">Remove</button>
+                </form>
+            }
         </div>
 
         <form asp-controller="Shop" asp-action="Checkout" method="post">
@@ -107,9 +138,9 @@
         }
         @if (rewardsQuote is { CanRedeem: true })
         {
-            var pointsOff = Math.Min(rewardsQuote.MaxDiscount, Model.Cart.SubTotal);
-            var vatAfterPoints = TaxSettings.CalculateVat(Model.Cart.SubTotal, pointsOff);
-            var totalAfterPoints = Model.Cart.SubTotal - pointsOff + vatAfterPoints;
+            var pointsOff = Math.Min(rewardsQuote.MaxDiscount, Math.Max(0m, Model.Cart.SubTotal - appliedDiscountAmount));
+            var vatAfterPoints = TaxSettings.CalculateVat(Model.Cart.SubTotal, pointsOff + appliedDiscountAmount);
+            var totalAfterPoints = Model.Cart.SubTotal - pointsOff - appliedDiscountAmount + vatAfterPoints;
             <h5 style="font-family:'Fraunces',serif;font-size:1.1rem;margin-bottom:12px;">FixRewards</h5>
             <label style="display:flex;gap:10px;align-items:flex-start;border:1px solid var(--ffs-border);border-radius:var(--ffs-radius);padding:12px 14px;cursor:pointer;margin-bottom:20px;">
                 <input type="checkbox" asp-for="UsePoints" style="margin-top:3px;" />

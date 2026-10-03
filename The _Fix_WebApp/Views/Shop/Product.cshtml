@@ -67,6 +67,15 @@
                     }
                 </div>
 
+                @foreach (var linked in Model.LinkedDiscounts)
+                {
+                    <div class="ffs-linked-discount">
+                        <span class="ffs-product-badge ffs-badge-clay" style="position:static;">@linked.ValueLabel()</span>
+                        <span>@(string.IsNullOrWhiteSpace(linked.BannerText) ? linked.Name : linked.BannerText) - use code</span>
+                        <code>@linked.Code</code>
+                    </div>
+                }
+
                 @if (!string.IsNullOrWhiteSpace(product.Description))
                 {
                     <p style="color:var(--ffs-ink-muted);font-size:0.92rem;margin-bottom:20px;">@product.Description</p>

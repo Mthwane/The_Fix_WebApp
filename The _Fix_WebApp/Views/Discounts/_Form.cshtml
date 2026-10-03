@@ -1,0 +1,225 @@
+@model DiscountFormViewModel
+@using FashionFix.Web.Models.Entities
+@{
+    var isEdit = Model.DiscountId.HasValue;
+    string L = "font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;";
+    string F = "width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:9px 14px;font-size:0.9rem;background:#fff;";
+    string EV = "color:var(--stf-error);font-size:0.8rem;";
+    string HINT = "font-size:0.75rem;color:var(--stf-on-surface-variant);margin-top:4px;";
+    string SECTION = "font-family:'Newsreader',serif;font-size:1.15rem;margin:26px 0 12px;padding-top:18px;border-top:1px solid var(--stf-outline-variant);";
+}
+
+<div asp-validation-summary="ModelOnly" style="color:var(--stf-error);margin-bottom:10px;"></div>
+<input type="hidden" asp-for="DiscountId" />
+
+<h5 style="font-family:'Newsreader',serif;font-size:1.15rem;margin:0 0 12px;">The code</h5>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+    <div>
+        <label asp-for="Name" style="@L"></label>
+        <input asp-for="Name" style="@F" placeholder="e.g. Summer Sale 2026" />
+        <span asp-validation-for="Name" style="@EV"></span>
+    </div>
+    <div>
+        <label asp-for="Code" style="@L"></label>
+        @if (isEdit && Model.RedemptionCount > 0)
+        {
+            <input asp-for="Code" style="@F background:var(--stf-surface-container);" readonly />
+            <div style="@HINT">This code has been used @Model.RedemptionCount time(s), so it can't be renamed.</div>
+        }
+        else
+        {
+            <div style="display:flex;gap:8px;">
+                <input asp-for="Code" id="codeInput" style="@F text-transform:uppercase;" placeholder="@(isEdit ? "" : "Type your own, or press Generate")" autocomplete="off" />
+                <button type="button" id="generateCodeBtn" class="stf-btn stf-btn-outline" style="white-space:nowrap;">Generate</button>
+            </div>
+            @if (!isEdit)
+            {
+                <div style="@HINT">Leave blank and one is generated for you. Letters, numbers and dashes only.</div>
+            }
+        }
+        <span asp-validation-for="Code" style="@EV"></span>
+    </div>
+</div>
+
+<label asp-for="Description" style="@L"></label>
+<input asp-for="Description" style="@F margin-bottom:6px;" placeholder="Optional internal note" />
+<span asp-validation-for="Description" style="@EV"></span>
+
+<h5 style="@SECTION">The offer</h5>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:14px;margin-bottom:14px;">
+    <div>
+        <label asp-for="Type" style="@L">Discount type</label>
+        <select asp-for="Type" id="typeSelect" style="@F">
+            <option value="Percentage">Percentage off (%)</option>
+            <option value="FixedAmount">Fixed amount off (R)</option>
+        </select>
+    </div>
+    <div>
+        <label asp-for="Value" style="@L"><span id="valueLabel">Value</span></label>
+        <input asp-for="Value" type="number" step="0.01" min="0" style="@F" />
+        <span asp-validation-for="Value" style="@EV"></span>
+    </div>
+    <div>
+        <label asp-for="MaxDiscountAmount" style="@L"></label>
+        <input asp-for="MaxDiscountAmount" type="number" step="0.01" min="0" style="@F" placeholder="No cap" />
+        <span asp-validation-for="MaxDiscountAmount" style="@EV"></span>
+        <div style="@HINT">Most one order can save.</div>
+    </div>
+    <div>
+        <label asp-for="MinimumSpend" style="@L"></label>
+        <input asp-for="MinimumSpend" type="number" step="0.01" min="0" style="@F" placeholder="None" />
+        <span asp-validation-for="MinimumSpend" style="@EV"></span>
+    </div>
+</div>
+
+<h5 style="@SECTION">Limits &amp; validity</h5>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:14px;margin-bottom:14px;">
+    <div>
+        <label asp-for="MaxRedemptions" style="@L"></label>
+        <input asp-for="MaxRedemptions" type="number" min="1" style="@F" placeholder="Unlimited" />
+        <span asp-validation-for="MaxRedemptions" style="@EV"></span>
+        <div style="@HINT">How many people can use it in total.</div>
+    </div>
+    <div>
+        <label asp-for="MaxUsesPerCustomer" style="@L"></label>
+        <input asp-for="MaxUsesPerCustomer" type="number" min="1" style="@F" placeholder="Unlimited" />
+        <span asp-validation-for="MaxUsesPerCustomer" style="@EV"></span>
+        <div style="@HINT">Per signed-in customer.</div>
+    </div>
+    <div>
+        <label asp-for="StartsOn" style="@L">Starts on</label>
+        <input asp-for="StartsOn" type="date" asp-format="{0:yyyy-MM-dd}" style="@F" />
+        <div style="@HINT">Blank = starts now.</div>
+    </div>
+    <div>
+        <label asp-for="Channel" style="@L">Where it works</label>
+        <select asp-for="Channel" style="@F">
+            <option value="Both">Online &amp; in store</option>
+            <option value="Online">Online checkout only</option>
+            <option value="InStore">In store (till) only</option>
+        </select>
+    </div>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr 2fr;gap:14px;margin-bottom:14px;align-items:start;">
+    <div>
+        <label asp-for="ValidForDays" style="@L"></label>
+        <input asp-for="ValidForDays" type="number" min="1" style="@F" placeholder="e.g. 14" />
+        <span asp-validation-for="ValidForDays" style="@EV"></span>
+    </div>
+    <div>
+        <label asp-for="ExpiresOn" style="@L">Or expires on</label>
+        <input asp-for="ExpiresOn" type="date" asp-format="{0:yyyy-MM-dd}" style="@F" />
+        <span asp-validation-for="ExpiresOn" style="@EV"></span>
+    </div>
+    <div style="@HINT padding-top:30px;">"Valid for" counts from the start date and wins over an expiry date. Leave both blank for a code that never expires.</div>
+</div>
+<label style="display:flex;gap:8px;align-items:center;font-size:0.88rem;">
+    <input type="checkbox" asp-for="IsActive" /> Enabled (untick to switch the code off without deleting it)
+</label>
+
+<h5 style="@SECTION">What it applies to</h5>
+<p style="font-size:0.82rem;color:var(--stf-on-surface-variant);margin:0 0 12px;">
+    Leave everything below empty and the discount covers the whole basket. Pick products, categories, brands or suppliers and it only discounts matching items.
+</p>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+    <div>
+        <label style="@L">Products (catalogue)</label>
+        <select name="ProductIds" multiple size="7" style="@F">
+            @foreach (var p in Model.ProductChoices)
+            {
+                <option value="@p.ProductId" selected="@Model.ProductIds.Contains(p.ProductId)">@p.Name (@p.Sku)</option>
+            }
+        </select>
+    </div>
+    <div>
+        <label style="@L">Suppliers</label>
+        <select name="SupplierIds" multiple size="7" style="@F">
+            @foreach (var s in Model.SupplierChoices)
+            {
+                <option value="@s.SupplierId" selected="@Model.SupplierIds.Contains(s.SupplierId)">@s.Name</option>
+            }
+        </select>
+    </div>
+    <div>
+        <label style="@L">Categories</label>
+        <select name="Categories" multiple size="5" style="@F">
+            @foreach (var c in Model.CategoryChoices)
+            {
+                <option value="@c" selected="@Model.Categories.Contains(c, StringComparer.OrdinalIgnoreCase)">@c</option>
+            }
+        </select>
+    </div>
+    <div>
+        <label style="@L">Brands</label>
+        <select name="Brands" multiple size="5" style="@F">
+            @foreach (var b in Model.BrandChoices)
+            {
+                <option value="@b" selected="@Model.Brands.Contains(b, StringComparer.OrdinalIgnoreCase)">@b</option>
+            }
+        </select>
+    </div>
+</div>
+<div style="@HINT margin-top:-6px;">Hold Ctrl (or Cmd) to pick several. Selected items are highlighted.</div>
+
+<h5 style="@SECTION">Storefront banner</h5>
+<label style="display:flex;gap:8px;align-items:center;font-size:0.88rem;margin-bottom:10px;">
+    <input type="checkbox" asp-for="ShowBanner" id="showBanner" /> Show a promotional banner on the storefront while this discount is live
+</label>
+<span asp-validation-for="ShowBanner" style="@EV"></span>
+<div id="bannerTextWrap">
+    <label asp-for="BannerText" style="@L">Banner text</label>
+    <input asp-for="BannerText" style="@F" placeholder="e.g. Summer Sale - 20% off everything with code SUMMER20" />
+    <span asp-validation-for="BannerText" style="@EV"></span>
+    <div style="@HINT">Leave blank to use "15% off - use code ABC". Switch the banner on and off here (or from the discount list) as promotions come and go.</div>
+</div>
+
+@if (!isEdit)
+{
+    <h5 style="@SECTION">Generate a batch (optional)</h5>
+    <div style="display:grid;grid-template-columns:1fr 1fr 2fr;gap:14px;align-items:start;">
+        <div>
+            <label asp-for="BulkCount" style="@L">How many codes</label>
+            <input asp-for="BulkCount" type="number" min="1" max="200" style="@F" />
+            <span asp-validation-for="BulkCount" style="@EV"></span>
+        </div>
+        <div>
+            <label asp-for="CodePrefix" style="@L">Code prefix</label>
+            <input asp-for="CodePrefix" style="@F text-transform:uppercase;" placeholder="FIX" />
+            <span asp-validation-for="CodePrefix" style="@EV"></span>
+        </div>
+        <div style="@HINT padding-top:30px;">Set above 1 to create that many unique <strong>single-use</strong> codes (handy for gift cards or one-per-customer campaigns), all with the settings above. The code box is ignored for batches.</div>
+    </div>
+}
+
+<script>
+    (function () {
+        var typeSelect = document.getElementById('typeSelect');
+        var valueLabel = document.getElementById('valueLabel');
+        function syncType() {
+            valueLabel.textContent = typeSelect.value === 'Percentage' ? 'Percentage off (%)' : 'Amount off (R)';
+        }
+        typeSelect.addEventListener('change', syncType);
+        syncType();
+
+        var showBanner = document.getElementById('showBanner');
+        var bannerWrap = document.getElementById('bannerTextWrap');
+        function syncBanner() { bannerWrap.style.display = showBanner.checked ? 'block' : 'none'; }
+        showBanner.addEventListener('change', syncBanner);
+        syncBanner();
+
+        var genBtn = document.getElementById('generateCodeBtn');
+        var codeInput = document.getElementById('codeInput');
+        if (genBtn && codeInput) {
+            genBtn.addEventListener('click', function () {
+                var prefixEl = document.getElementById('CodePrefix');
+                var prefix = prefixEl ? prefixEl.value : '';
+                genBtn.disabled = true;
+                fetch('@Url.Action("NewCode", "Discounts")?prefix=' + encodeURIComponent(prefix))
+                    .then(function (r) { if (!r.ok) throw new Error(); return r.json(); })
+                    .then(function (j) { codeInput.value = j.code; })
+                    .catch(function () { alert('Could not generate a code - please type one instead.'); })
+                    .then(function () { genBtn.disabled = false; });
+            });
+        }
+    })();
+</script>

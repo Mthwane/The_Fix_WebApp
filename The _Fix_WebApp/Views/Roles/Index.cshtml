@@ -53,6 +53,28 @@
         }
     </div>
 
+    @{
+        var adminRole = Model.Roles.FirstOrDefault(r => r.Name == "Administrator");
+        var adminMissing = adminRole is null ? 0 : totalPermissions - adminRole.GrantedPermissions.Count;
+    }
+    <div class="stf-card" style="display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:20px;background:var(--stf-secondary-container);border:none;">
+        <div style="font-size:0.86rem;max-width:720px;">
+            <strong>You can trim your own Administrator permissions</strong> - untick any box in the Administrator column and save.
+            <em>Roles &amp; Permissions</em> always stays on so you can come straight back here and tick things again, or restore everything in one click.
+            @if (adminMissing > 0)
+            {
+                <span style="display:block;margin-top:4px;color:var(--stf-secondary);">Currently removed from Administrator: @adminMissing permission@(adminMissing == 1 ? "" : "s").</span>
+            }
+        </div>
+        @if (adminMissing > 0)
+        {
+            <form asp-action="RestoreAdministrator" method="post">
+                @Html.AntiForgeryToken()
+                <button type="submit" class="stf-btn stf-btn-primary">Restore all Administrator permissions</button>
+            </form>
+        }
+    </div>
+
     <span class="stf-eyebrow">Permission Assembly Grid</span>
     <h2 style="font-size:1.3rem;margin-bottom:16px;">Claim Key Granularity &amp; Inheritance</h2>
 
@@ -70,7 +92,7 @@
                         <th>Permission</th>
                         @foreach (var role in Model.Roles)
                         {
-                            <th>@role.Name @if (role.IsProtected) {
+                            <th>@role.Name @if (role.Name == "Customer") {
                                 <span class="stf-lock-icon">&#128274;</span>
                             }
                         </th>
@@ -87,15 +109,22 @@
                         </td>
                         @foreach (var role in Model.Roles)
                         {
-                            var locked = role.Name == "Administrator" || role.Name == "Customer";
-                            var isChecked = role.Name == "Administrator" || role.GrantedPermissions.Contains(perm.Key);
-                            if (role.Name == "Customer") { isChecked = false; }
+                            // Customer is always empty. Administrator is editable, except the permissions in
+                            // AdministratorLocked (Roles & Permissions) - the way back in must always exist.
+                            var isAdmin = role.Name == "Administrator";
+                            var locked = role.Name == "Customer" || (isAdmin && FashionFix.Web.Security.Permissions.AdministratorLocked.Contains(perm.Key));
+                            var isChecked = role.Name != "Customer" && (locked && isAdmin ? true : role.GrantedPermissions.Contains(perm.Key));
                             <td>
                                 <input type="checkbox" class="matrix-checkbox"
                                        name="@(locked ? null : "selections")"
                                        value="@role.Id:@perm.Key"
                                        checked="@isChecked"
-                                       disabled="@locked" />
+                                       disabled="@locked"
+                                       title="@(locked && isAdmin ? "Always on - this is how you get back in to restore anything you remove" : null)" />
+                                @if (locked && isAdmin)
+                                {
+                                    <input type="hidden" name="selections" value="@role.Id:@perm.Key" />
+                                }
                             </td>
                         }
                     </tr>

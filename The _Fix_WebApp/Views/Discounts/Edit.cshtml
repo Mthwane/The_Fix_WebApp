@@ -1,0 +1,19 @@
+@model DiscountFormViewModel
+@{
+    ViewData["Title"] = "Edit Discount";
+    Layout = "_StaffLayout";
+}
+<div class="stf-content" style="max-width:1000px;">
+    <a asp-action="Details" asp-route-id="@Model.DiscountId" class="stf-btn stf-btn-outline" style="margin-bottom:16px;display:inline-flex;">&larr; Back</a>
+    <span class="stf-eyebrow">Promotions</span>
+    <h1 style="margin-bottom:20px;">Edit Discount</h1>
+
+    <form asp-action="Edit" asp-route-id="@Model.DiscountId" method="post" class="stf-card">
+        <partial name="_Form" model="Model" />
+        <div style="display:flex;gap:10px;margin-top:24px;">
+            <button type="submit" class="stf-btn stf-btn-primary">Save Changes</button>
+            <a asp-action="Details" asp-route-id="@Model.DiscountId" style="font-size:0.85rem;color:var(--stf-on-surface-variant);align-self:center;">Cancel</a>
+        </div>
+    </form>
+</div>
+

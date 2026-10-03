@@ -61,7 +61,31 @@ public class PurchaseOrdersController : Controller
         ViewBag.SelectedStatus = status;
         ViewBag.CanApprove = User.HasClaim(Permissions.ClaimType, Permissions.PurchaseOrdersApprove);
 
+        // Low-stock alert for everyone who can reach Purchase Orders (employees included): this is where an employee
+        // sees what needs restocking, and the banner links to the full queue.
+        ViewBag.LowStockCount = await _context.ProductVariants.AsNoTracking()
+            .CountAsync(v => v.IsActive && v.Product.IsActive && v.StockQuantity <= v.Product.LowStockThreshold);
+        ViewBag.OutOfStockCount = await _context.ProductVariants.AsNoTracking()
+            .CountAsync(v => v.IsActive && v.Product.IsActive && v.StockQuantity == 0);
+
         return View(orders);
+    }
+
+    // GET: /PurchaseOrders/LowStock - the low-stock queue on the employee side. One row per low size/colour, most urgent
+    // first, with its supplier so whoever raises the purchase order knows who to order from.
+    [HttpGet]
+    public async Task<IActionResult> LowStock()
+    {
+        var variants = await _context.ProductVariants
+            .AsNoTracking()
+            .Include(v => v.Product).ThenInclude(p => p.Supplier)
+            .Where(v => v.IsActive && v.Product.IsActive && v.StockQuantity <= v.Product.LowStockThreshold)
+            .OrderBy(v => v.StockQuantity)
+            .ThenBy(v => v.Product.Name)
+            .ToListAsync();
+
+        ViewBag.CanRaise = User.IsInRole("Manager") || User.IsInRole("Administrator");
+        return View(variants);
     }
 
     // GET: /PurchaseOrders/Details/5

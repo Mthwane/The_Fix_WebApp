@@ -28,15 +28,27 @@ public class RolesController : Controller
     private readonly RoleManager<IdentityRole> _roleManager;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly ApplicationDbContext _context;
+    private readonly SignInManager<ApplicationUser> _signInManager;
 
     public RolesController(
         RoleManager<IdentityRole> roleManager,
         UserManager<ApplicationUser> userManager,
-        ApplicationDbContext context)
+        ApplicationDbContext context,
+        SignInManager<ApplicationUser> signInManager)
     {
         _roleManager = roleManager;
         _userManager = userManager;
         _context = context;
+        _signInManager = signInManager;
+    }
+
+    /// <summary>The signed-in user's cookie carries their permission claims, so after the Administrator role changes the
+    /// current admin is re-signed-in straight away and sees the change immediately (everyone else picks it up within
+    /// the 5-minute security-stamp check).</summary>
+    private async Task RefreshCurrentUserAsync()
+    {
+        var me = await _userManager.GetUserAsync(User);
+        if (me is not null) await _signInManager.RefreshSignInAsync(me);
     }
 
     // GET: /Roles - the full permission matrix (every role x every permission, edited and
@@ -88,11 +100,15 @@ public class RolesController : Controller
                 .Select(s => s[(roleId.Length + 1)..])
                 .ToHashSet();
 
-            // Administrator always has every permission, and Customer (self-service, not a
-            // staff role) always has none - the matrix shows both as locked, but the rule is
-            // enforced here regardless of what the client actually submitted.
+            // Customer (self-service, not a staff role) always has no staff permissions. The Administrator
+            // can now trim their own permissions - EXCEPT the locked ones (Roles & Permissions), which are
+            // always forced back on so the admin can never lock themselves out of this screen. Both rules
+            // are enforced here regardless of what the browser submitted.
             if (role.Name == "Administrator")
-                desired = Permissions.All.Keys.ToHashSet();
+            {
+                desired.UnionWith(Permissions.AdministratorLocked);
+                desired.IntersectWith(Permissions.All.Keys);
+            }
             else if (role.Name == "Customer")
                 desired = new HashSet<string>();
 
@@ -114,12 +130,47 @@ public class RolesController : Controller
 
         if (changedRoles.Count > 0)
         {
+            if (changedRoles.Contains("Administrator")) await RefreshCurrentUserAsync();
             await LogAuditAsync("RolePermissionsUpdated", $"Updated permissions for: {string.Join(", ", changedRoles)}.");
             this.ToastSuccess($"Permissions updated for {changedRoles.Count} role(s).");
         }
         else
         {
             this.ToastSuccess("No changes to save.");
+        }
+
+        return RedirectToAction(nameof(Index));
+    }
+
+    // POST: /Roles/RestoreAdministrator - the "redo": puts every permission back on the Administrator role in one click.
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> RestoreAdministrator()
+    {
+        var role = await _roleManager.FindByNameAsync("Administrator");
+        if (role is null) return NotFound();
+
+        var existing = (await _roleManager.GetClaimsAsync(role))
+            .Where(c => c.Type == Permissions.ClaimType)
+            .Select(c => c.Value)
+            .ToHashSet();
+
+        var restored = 0;
+        foreach (var permission in Permissions.All.Keys.Where(p => !existing.Contains(p)))
+        {
+            await _roleManager.AddClaimAsync(role, new System.Security.Claims.Claim(Permissions.ClaimType, permission));
+            restored++;
+        }
+
+        if (restored > 0)
+        {
+            await RefreshCurrentUserAsync();
+            await LogAuditAsync("RolePermissionsUpdated", $"Restored {restored} permission(s) to the Administrator role.");
+            this.ToastSuccess($"Administrator permissions restored ({restored} added back).");
+        }
+        else
+        {
+            this.ToastSuccess("Administrator already has every permission.");
         }
 
         return RedirectToAction(nameof(Index));
@@ -204,13 +255,15 @@ public class RolesController : Controller
         var role = await _roleManager.FindByIdAsync(id);
         if (role is null) return NotFound();
 
-        // Administrator is locked to the full permission set (same rule the matrix on
-        // Roles/Index enforces): an admin can't strip permissions from their own role, so
-        // nobody can lock themselves - or the whole system - out of a screen.
+        // Administrator can trim their own permissions, but Roles & Permissions is always kept so
+        // nobody can lock themselves - or the whole system - out of this screen.
+        model.SelectedPermissions ??= new List<string>();
         if (role.Name == "Administrator")
         {
-            model.SelectedPermissions = Permissions.All.Keys.ToList();
+            foreach (var locked in Permissions.AdministratorLocked)
+                if (!model.SelectedPermissions.Contains(locked)) model.SelectedPermissions.Add(locked);
         }
+        model.SelectedPermissions = model.SelectedPermissions.Where(Permissions.All.ContainsKey).Distinct().ToList();
 
         var existingClaims = await _roleManager.GetClaimsAsync(role);
         var existingPermissions = existingClaims.Where(c => c.Type == Permissions.ClaimType).ToList();
@@ -221,6 +274,7 @@ public class RolesController : Controller
         foreach (var permission in model.SelectedPermissions.Where(p => !existingPermissions.Any(c => c.Value == p)))
             await _roleManager.AddClaimAsync(role, new System.Security.Claims.Claim(Permissions.ClaimType, permission));
 
+        if (role.Name == "Administrator") await RefreshCurrentUserAsync();
         await LogAuditAsync("RolePermissionsUpdated", $"Updated permissions for role '{role.Name}' ({model.SelectedPermissions.Count} permission(s)).");
         this.ToastSuccess($"Permissions for '{role.Name}' were updated.");
 

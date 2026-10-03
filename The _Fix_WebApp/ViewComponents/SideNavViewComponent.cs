@@ -57,6 +57,8 @@ public class SideNavViewComponent : ViewComponent
 
         if (mode == "account" && user is not null)
             model.Badges = await AccountBadgesAsync(user.Id);
+        else if (mode != "account")
+            model.Badges = await StaffBadgesAsync(principal);
 
         return View(model);
     }
@@ -66,6 +68,22 @@ public class SideNavViewComponent : ViewComponent
         if (string.IsNullOrWhiteSpace(name)) return "?";
         var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         return string.Concat(parts.Take(2).Select(p => char.ToUpperInvariant(p[0])));
+    }
+
+    // Staff badges: a live low-stock count on Purchase Orders for anyone who can raise restock requests
+    // (that's how the Employee role sees what needs restocking, straight from the sidebar).
+    private async Task<Dictionary<string, string>> StaffBadgesAsync(System.Security.Claims.ClaimsPrincipal principal)
+    {
+        var badges = new Dictionary<string, string>();
+
+        if (principal.HasClaim(Permissions.ClaimType, Permissions.PurchaseOrdersManage))
+        {
+            var low = await _context.ProductVariants.AsNoTracking()
+                .CountAsync(v => v.IsActive && v.Product.IsActive && v.StockQuantity <= v.Product.LowStockThreshold);
+            if (low > 0) badges["lowstock"] = $"{low} low";
+        }
+
+        return badges;
     }
 
     private async Task<Dictionary<string, string>> AccountBadgesAsync(string userId)
@@ -121,6 +139,7 @@ public class SideNavViewComponent : ViewComponent
             new("Audit Logs & Trail",     "policy",               "Employees",        "AuditLogs", Permissions.AuditLogsView, null, null, new[] { "AuditLogs", "ExportAuditLogs" }),
             new("Product Catalogue",      "inventory_2",          "Products",         "Index",     Permissions.ProductsManage),
             new("Pricing",                "sell",                 "Pricing",          "Index",     Permissions.ProductsManage),
+            new("Discounts",              "local_offer",          "Discounts",        "Index",     Permissions.DiscountsView),
             new("POS Till Workstation",   "point_of_sale",        "Pos",              "Index",     Permissions.PosUse),
             new("Orders & Dispatches",    "local_shipping",       "Orders",           "Index",     Permissions.OrdersManage),
             new("Payment Incidents",      "report",               "PaymentIncidents", "Index",     Permissions.OrdersManage),
@@ -136,7 +155,7 @@ public class SideNavViewComponent : ViewComponent
         new SideNavSection("Supply Chain", new List<SideNavItem>
         {
             new("Suppliers",              "warehouse",            "Suppliers",        "Index",     Permissions.SuppliersManage),
-            new("Purchase Orders",        "receipt_long",         "PurchaseOrders",   "Index",     Permissions.PurchaseOrdersManage),
+            new("Purchase Orders",        "receipt_long",         "PurchaseOrders",   "Index",     Permissions.PurchaseOrdersManage, null, "lowstock"),
             new("Restock Bundles",        "inventory",            "RestockBundles",   "Index",     Permissions.PurchaseOrdersManage),
             new("Returns",                "assignment_return",    "Returns",          "Index",     Permissions.ReturnsProcess),
         }),

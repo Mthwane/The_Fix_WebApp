@@ -12,7 +12,7 @@
         <div class="stf-card" style="margin-bottom:16px;background:var(--stf-secondary-container);border:none;">
             <p style="margin:0;font-size:0.85rem;">
                 This is a built-in role.
-                @(Model.Name == "Administrator" ? "Administrator always holds every permission and can't be edited - that guarantees at least one account can always reach every screen, including this one." : "Its permissions can still be adjusted below.")
+                @(Model.Name == "Administrator" ? "You can remove any Administrator permission except Roles & Permissions, which always stays on so you can always come back here and add things back." : "Its permissions can still be adjusted below.")
             </p>
         </div>
     }
@@ -26,7 +26,7 @@
             @foreach (var permission in Model.AllPermissions)
             {
                 var isChecked = Model.SelectedPermissions.Contains(permission.Key);
-                var isLocked = Model.Name == "Administrator";
+                var isLocked = Model.Name == "Administrator" && FashionFix.Web.Security.Permissions.AdministratorLocked.Contains(permission.Key);
                 if (isLocked) { isChecked = true; }
                 <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--stf-surface-container);">
                     <input type="checkbox" name="SelectedPermissions" value="@permission.Key"
@@ -47,7 +47,7 @@
         </div>
 
         <div style="display:flex;gap:10px;">
-            @if (Model.Name != "Administrator") { <button type="submit" class="stf-btn stf-btn-primary">Save Permissions</button> }
+            <button type="submit" class="stf-btn stf-btn-primary">Save Permissions</button>
             <a asp-controller="Roles" asp-action="Index" style="font-size:0.85rem;color:var(--stf-on-surface-variant);align-self:center;">Cancel</a>
         </div>
     </form>

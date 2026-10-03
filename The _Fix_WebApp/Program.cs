@@ -131,6 +131,7 @@ builder.Services.AddAuthorization(options =>
 builder.Services.AddScoped<IInventoryService, InventoryService>();
 builder.Services.AddScoped<IWalletService, WalletService>();
 builder.Services.AddScoped<IRewardsService, RewardsService>();
+builder.Services.AddScoped<IDiscountService, DiscountService>();
 
 builder.Services.Configure<EmailOptions>(
     builder.Configuration.GetSection("Email"));
@@ -282,22 +283,59 @@ using (var scope = app.Services.CreateScope())
             .Select(c => c.Value)
             .ToHashSet();
 
-        var permissionsToGrant =
-            roleName == "Administrator"
-                ? Permissions.All.Keys
-                    .Where(p => !existingPermissions.Contains(p))
-                    .ToArray()
-                : existingPermissions.Count == 0
-                    ? defaultPermissions
-                    : Array.Empty<string>();
+        // Markers record "this newer default permission has already been offered to this role", so a permission an
+        // administrator later removes (e.g. from the Administrator role itself) is NOT silently re-granted on
+        // the next restart. Only a role with no permissions at all receives its full defaults (as before).
+        var seededMarkers = existingClaims
+            .Where(c => c.Type == Permissions.SeededMarkerClaimType)
+            .Select(c => c.Value)
+            .ToHashSet();
 
-        foreach (var permission in permissionsToGrant)
+        var isFreshRole = existingPermissions.Count == 0;
+
+        foreach (var permission in defaultPermissions)
         {
-            await roleManager.AddClaimAsync(
-                role,
-                new System.Security.Claims.Claim(
-                    Permissions.ClaimType,
-                    permission));
+            if (!existingPermissions.Contains(permission))
+            {
+                var grant =
+                    isFreshRole
+                    || (Permissions.IntroducedLater.Contains(permission) && !seededMarkers.Contains(permission));
+
+                if (grant)
+                {
+                    await roleManager.AddClaimAsync(
+                        role,
+                        new System.Security.Claims.Claim(
+                            Permissions.ClaimType,
+                            permission));
+                    existingPermissions.Add(permission);
+                }
+            }
+
+            if (Permissions.IntroducedLater.Contains(permission) && !seededMarkers.Contains(permission))
+            {
+                await roleManager.AddClaimAsync(
+                    role,
+                    new System.Security.Claims.Claim(
+                        Permissions.SeededMarkerClaimType,
+                        permission));
+            }
+        }
+
+        // The Administrator can trim their own permissions, but never "Roles & Permissions" - that's the way back in.
+        if (roleName == "Administrator")
+        {
+            foreach (var locked in Permissions.AdministratorLocked)
+            {
+                if (!existingPermissions.Contains(locked))
+                {
+                    await roleManager.AddClaimAsync(
+                        role,
+                        new System.Security.Claims.Claim(
+                            Permissions.ClaimType,
+                            locked));
+                }
+            }
         }
     }
 

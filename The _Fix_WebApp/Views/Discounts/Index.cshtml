@@ -1,0 +1,124 @@
+@model List<DiscountListItemViewModel>
+@using FashionFix.Web.Models.Entities
+@{
+    ViewData["Title"] = "Discounts";
+    Layout = "_StaffLayout";
+    var status = ViewBag.Status as string ?? "all";
+    var search = ViewBag.Search as string;
+    var counts = ViewBag.Counts as Dictionary<string, int> ?? new();
+    bool canManage = ViewBag.CanManage == true;
+    int C(params string[] keys) => keys.Sum(k => counts.TryGetValue(k, out var n) ? n : 0);
+    string Chip(string key) => status == key ? "background:var(--stf-primary);color:#fff;" : "";
+    (string cls, string? bg, string? fg) Badge(string s) => s switch
+    {
+        "Active" => ("stf-badge stf-badge-active", null, null),
+        "Scheduled" => ("stf-badge", "var(--stf-secondary-container)", "var(--stf-secondary)"),
+        "Disabled" => ("stf-badge stf-badge-muted", null, null),
+        _ => ("stf-badge stf-badge-danger", null, null)
+    };
+    string ChannelLabel(DiscountChannel c) => c switch { DiscountChannel.Online => "Online", DiscountChannel.InStore => "In store", _ => "Online & store" };
+}
+
+<div class="stf-content">
+    <div class="stf-page-head">
+        <div>
+            <span class="stf-eyebrow">Promotions</span>
+            <h1>Discounts</h1>
+            <p>Codes customers use at checkout and cashiers use at the till. Every code is rule-checked on the server - limits, dates, caps and linked products are all enforced automatically.</p>
+        </div>
+        @if (canManage)
+        {
+            <a asp-action="Create" class="stf-btn stf-btn-primary">+ New Discount</a>
+        }
+    </div>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center;">
+        <a asp-action="Index" asp-route-search="@search" class="stf-chip" style="@Chip("all")">All <strong style="margin-left:4px;">@counts.Values.Sum()</strong></a>
+        <a asp-action="Index" asp-route-status="active" asp-route-search="@search" class="stf-chip" style="@Chip("active")">Active <strong style="margin-left:4px;">@C("Active")</strong></a>
+        <a asp-action="Index" asp-route-status="scheduled" asp-route-search="@search" class="stf-chip" style="@Chip("scheduled")">Scheduled <strong style="margin-left:4px;">@C("Scheduled")</strong></a>
+        <a asp-action="Index" asp-route-status="expired" asp-route-search="@search" class="stf-chip" style="@Chip("expired")">Expired / used up <strong style="margin-left:4px;">@C("Expired", "Used up")</strong></a>
+        <a asp-action="Index" asp-route-status="disabled" asp-route-search="@search" class="stf-chip" style="@Chip("disabled")">Disabled <strong style="margin-left:4px;">@C("Disabled")</strong></a>
+
+        <form asp-action="Index" method="get" style="margin-left:auto;display:flex;gap:8px;">
+            <input type="hidden" name="status" value="@status" />
+            <input type="text" name="search" value="@search" placeholder="Search code or name"
+                   style="border:1px solid var(--stf-outline-variant);border-radius:999px;padding:8px 16px;font-size:0.85rem;" />
+            <button type="submit" class="stf-btn stf-btn-outline" style="padding:8px 16px;">Search</button>
+        </form>
+    </div>
+
+    @if (!Model.Any())
+    {
+        <div class="stf-card" style="text-align:center;padding:40px 20px;color:var(--stf-on-surface-variant);">
+            <p style="margin-bottom:16px;">No discounts @(status == "all" && string.IsNullOrWhiteSpace(search) ? "yet" : "match this view").</p>
+            @if (canManage)
+            {
+                <a asp-action="Create" class="stf-btn stf-btn-primary">+ New Discount</a>
+            }
+        </div>
+    }
+    else
+    {
+        <table class="stf-table">
+            <thead>
+                <tr>
+                    <th>Code</th>
+                    <th>Offer</th>
+                    <th>Applies to</th>
+                    <th>Where</th>
+                    <th>Valid</th>
+                    <th>Used</th>
+                    <th>Status</th>
+                    @if (canManage) { <th>Banner</th> }
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in Model)
+                {
+                    var d = row.Discount;
+                    var (cls, bg, fg) = Badge(row.Status);
+                    <tr>
+                        <td>
+                            <a asp-action="Details" asp-route-id="@d.DiscountId" style="font-weight:600;"><code>@d.Code</code></a>
+                            <div style="font-size:0.78rem;color:var(--stf-on-surface-variant);">@d.Name</div>
+                        </td>
+                        <td>
+                            <strong>@d.ValueLabel()</strong>
+                            @if (d.MaxDiscountAmount.HasValue) { <div style="font-size:0.75rem;color:var(--stf-on-surface-variant);">max R@(d.MaxDiscountAmount.Value.ToString("0.##"))</div> }
+                            @if (d.MinimumSpend.HasValue) { <div style="font-size:0.75rem;color:var(--stf-on-surface-variant);">min spend R@(d.MinimumSpend.Value.ToString("0.##"))</div> }
+                        </td>
+                        <td style="font-size:0.8rem;">@row.AppliesTo</td>
+                        <td style="font-size:0.8rem;">@ChannelLabel(d.Channel)</td>
+                        <td style="font-size:0.8rem;white-space:nowrap;">
+                            @d.StartsAt.ToLocalTime().ToString("dd MMM yyyy")
+                            <div style="color:var(--stf-on-surface-variant);">@(d.ExpiresAt.HasValue ? "to " + d.ExpiresAt.Value.ToLocalTime().ToString("dd MMM yyyy") : "no expiry")</div>
+                        </td>
+                        <td style="font-size:0.85rem;">@(d.RedemptionCount + (d.MaxRedemptions.HasValue ? " / " + d.MaxRedemptions.Value : ""))</td>
+                        <td><span class="@cls" style="@(bg is null ? "" : $"background:{bg};color:{fg};")">@row.Status</span></td>
+                        @if (canManage)
+                        {
+                            <td>
+                                <form asp-action="ToggleBanner" asp-route-id="@d.DiscountId" method="post" style="display:inline;">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="stf-btn @(d.ShowBanner ? "stf-btn-primary" : "stf-btn-outline")" style="padding:5px 12px;font-size:0.74rem;"
+                                            title="@(d.ShowBanner ? "Banner is on - click to turn it off" : "Banner is off - click to show it on the storefront")">@(d.ShowBanner ? "On" : "Off")</button>
+                                </form>
+                            </td>
+                        }
+                        <td style="text-align:right;white-space:nowrap;">
+                            <a asp-action="Details" asp-route-id="@d.DiscountId" class="stf-btn stf-btn-outline" style="padding:6px 14px;font-size:0.78rem;">View</a>
+                            @if (canManage)
+                            {
+                                <form asp-action="Toggle" asp-route-id="@d.DiscountId" method="post" style="display:inline;">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="stf-btn stf-btn-outline" style="padding:6px 14px;font-size:0.78rem;">@(d.IsActive ? "Disable" : "Enable")</button>
+                                </form>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>

@@ -58,6 +58,11 @@ public class Order
     [Column(TypeName = "decimal(18,2)")]
     public decimal DiscountTotal { get; set; }
 
+    /// <summary>The discount code redeemed on this order (null if none). DiscountTotal is the combined saving
+    /// from this code plus any reward points; the code itself is recorded here for receipts and reporting.</summary>
+    [MaxLength(30)]
+    public string? DiscountCode { get; set; }
+
     [Column(TypeName = "decimal(18,2)")]
     public decimal TaxTotal { get; set; }
 

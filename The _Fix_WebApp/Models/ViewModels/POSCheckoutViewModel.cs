@@ -10,7 +10,13 @@ public class POSCheckoutViewModel
     [Required]
     public PaymentMethod PaymentMethod { get; set; }
 
-    [Range(0, double.MaxValue)]
+    /// <summary>The discount code typed/selected at the till. This replaces the old free-typed discount amount:
+    /// the till can no longer be given an arbitrary rand figure, only a code that PosController re-validates.</summary>
+    [MaxLength(30)]
+    public string? DiscountCode { get; set; }
+
+    /// <summary>Server-computed from DiscountCode at checkout - never bound from the browser.</summary>
+    [Microsoft.AspNetCore.Mvc.ModelBinding.BindNever]
     public decimal DiscountTotal { get; set; }
 
     public decimal SubTotal => CartItems.Sum(i => i.LineTotal);

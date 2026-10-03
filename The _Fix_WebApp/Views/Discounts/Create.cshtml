@@ -1,0 +1,19 @@
+@model DiscountFormViewModel
+@{
+    ViewData["Title"] = "New Discount";
+    Layout = "_StaffLayout";
+}
+<div class="stf-content" style="max-width:1000px;">
+    <a asp-action="Index" class="stf-btn stf-btn-outline" style="margin-bottom:16px;display:inline-flex;">&larr; Discounts</a>
+    <span class="stf-eyebrow">Promotions</span>
+    <h1 style="margin-bottom:20px;">New Discount</h1>
+
+    <form asp-action="Create" method="post" class="stf-card">
+        <partial name="_Form" model="Model" />
+        <div style="display:flex;gap:10px;margin-top:24px;">
+            <button type="submit" class="stf-btn stf-btn-primary">Create Discount</button>
+            <a asp-action="Index" style="font-size:0.85rem;color:var(--stf-on-surface-variant);align-self:center;">Cancel</a>
+        </div>
+    </form>
+</div>
+

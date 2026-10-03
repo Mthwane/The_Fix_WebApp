@@ -3,7 +3,9 @@
     ViewData["Title"] = "My Cart";
     Layout = "_StorefrontLayout";
     var fallbackImage = "https://placehold.co/160x160/E4DEC9/24211B?text=No+Image";
-    var vat = FashionFix.Web.Security.TaxSettings.CalculateVat(Model.SubTotal);
+    var appliedCode = ViewBag.DiscountCode as string;
+    var codeDiscount = appliedCode is null ? 0m : (decimal)ViewBag.DiscountAmount;
+    var vat = FashionFix.Web.Security.TaxSettings.CalculateVat(Model.SubTotal, codeDiscount);
 }
 
 <section class="ffs-section" style="padding-top:32px;">
@@ -65,12 +67,35 @@
                     <div style="display:flex;justify-content:space-between;font-size:0.9rem;margin-bottom:8px;">
                         <span>Subtotal</span><span>@Model.SubTotal.ToString("C")</span>
                     </div>
+                    @if (appliedCode is not null)
+                    {
+                        <div style="display:flex;justify-content:space-between;font-size:0.9rem;margin-bottom:8px;color:var(--ffs-forest);">
+                            <span>Discount (@appliedCode)</span><span>-@codeDiscount.ToString("C")</span>
+                        </div>
+                    }
                     <div style="display:flex;justify-content:space-between;font-size:0.85rem;color:var(--ffs-ink-muted);margin-bottom:14px;">
                         <span>VAT (15%)</span><span>@vat.ToString("C")</span>
                     </div>
                     <div style="display:flex;justify-content:space-between;border-top:1px solid var(--ffs-border);padding-top:12px;margin-bottom:18px;font-size:1.1rem;font-family:'Fraunces',serif;font-weight:600;">
-                        <span>Total</span><span>@((Model.SubTotal + vat).ToString("C"))</span>
+                        <span>Total</span><span>@((Model.SubTotal - codeDiscount + vat).ToString("C"))</span>
                     </div>
+
+                    @if (appliedCode is null)
+                    {
+                        <form asp-controller="Shop" asp-action="ApplyDiscountCode" method="post" style="display:flex;gap:6px;margin-bottom:16px;">
+                            @Html.AntiForgeryToken()
+                            <input type="text" name="code" placeholder="Discount code" autocomplete="off" maxlength="30"
+                                   style="box-sizing:border-box;flex:1;min-width:0;border:1px solid var(--ffs-border);border-radius:8px;padding:8px 12px;font-size:0.85rem;text-transform:uppercase;" />
+                            <button type="submit" class="ffs-btn ffs-btn-outline" style="padding:8px 14px;font-size:0.8rem;">Apply</button>
+                        </form>
+                    }
+                    else
+                    {
+                        <form asp-controller="Shop" asp-action="RemoveDiscountCode" method="post" style="margin-bottom:16px;">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" style="background:none;border:none;padding:0;font-size:0.8rem;color:var(--ffs-clay);cursor:pointer;text-decoration:underline;">Remove code @appliedCode</button>
+                        </form>
+                    }
                     <a asp-controller="Shop" asp-action="Checkout" class="ffs-btn ffs-btn-forest" style="box-sizing:border-box;display:flex;width:100%;justify-content:center;text-align:center;">Proceed to Checkout &rarr;</a>
                 </div>
             </div>

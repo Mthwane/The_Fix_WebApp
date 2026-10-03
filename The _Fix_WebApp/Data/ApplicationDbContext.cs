@@ -107,7 +107,12 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<CategoryPricingRule> CategoryPricingRules => Set<CategoryPricingRule>();
     public DbSet<EmailSubscriber> EmailSubscribers => Set<EmailSubscriber>();
     public DbSet<ShiftSession> ShiftSessions => Set<ShiftSession>();
-   
+
+    // --- Discounts ---
+    public DbSet<Discount> Discounts => Set<Discount>();
+    public DbSet<DiscountTarget> DiscountTargets => Set<DiscountTarget>();
+    public DbSet<DiscountRedemption> DiscountRedemptions => Set<DiscountRedemption>();
+
 
     // --- Supply chain (returning from V1, now variant-based) ---
     public DbSet<Supplier> Suppliers => Set<Supplier>();
@@ -125,7 +130,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<TicketMessage> TicketMessages => Set<TicketMessage>();
     public DbSet<WalletAccount> WalletAccounts => Set<WalletAccount>();
     public DbSet<WalletTransaction> WalletTransactions => Set<WalletTransaction>();
-    
+
     public DbSet<RewardsSettings> RewardsSettings => Set<RewardsSettings>();
     public DbSet<RewardsAccount> RewardsAccounts => Set<RewardsAccount>();
     public DbSet<RewardsTransaction> RewardsTransactions => Set<RewardsTransaction>();
@@ -280,6 +285,11 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         // Re-subscribing after an unsubscribe reactivates the same row rather than creating a
         // duplicate - enforced here, not just in the controller.
         builder.Entity<EmailSubscriber>().HasIndex(s => s.Email).IsUnique();
+
+        // --- Discounts ---
+        // Codes are stored upper-case and must be unique. Targets and redemptions belong to their discount.
+        builder.Entity<Discount>().HasIndex(d => d.Code).IsUnique();
+        builder.Entity<DiscountRedemption>().HasIndex(r => r.OrderId);
 
         // --- Till shifts ---
         builder.Entity<ShiftSession>()
@@ -561,6 +571,6 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         builder.Entity<Product>().Property(p => p.CostPrice).HasPrecision(18, 2);
         builder.Entity<Product>().Property(p => p.SellingPrice).HasPrecision(18, 2);
         builder.Entity<Product>().Property(p => p.CompareAtPrice).HasPrecision(18, 2);
-       
+
     }
 }

@@ -96,7 +96,7 @@ public class ProductsController : Controller
     // Master catalogue with search/filter (US-02). Size/Colour filters now match styles
     // that have AT LEAST ONE active variant with that size/colour.
     [HttpGet]
-    public async Task<IActionResult> Index(ProductFilterViewModel filter)
+    public async Task<IActionResult> Index(ProductFilterViewModel filter, [FromServices] IDiscountService discounts)
     {
         var query = _context.Products.AsNoTracking().Include(p => p.Variants).Where(p => p.IsActive).AsQueryable();
 
@@ -121,6 +121,12 @@ public class ProductsController : Controller
             query = query.Where(p => p.Variants.Any(v => v.IsActive && v.StockQuantity > 0));
 
         var products = await query.OrderBy(p => p.Name).ToListAsync();
+
+        // Which live discount codes are linked to each product (directly, or via its category / brand / supplier).
+        // Only shown to roles that can see discounts at all.
+        ViewBag.LinkedCodes = User.HasClaim(Permissions.ClaimType, Permissions.DiscountsView)
+            ? await discounts.GetLiveLinkedCodesByProductAsync(products)
+            : new Dictionary<int, List<string>>();
 
         ViewBag.Filter = filter;
         return View(products);

@@ -30,7 +30,17 @@ public static class SessionCart
     public static void Clear(ISession session)
     {
         session.Remove(SessionKey);
+        session.Remove(DiscountKey); // a code belongs to one basket - it's spent or abandoned with it
     }
+
+    // --- Applied discount code ---
+    // Only the CODE is remembered. The rand amount is recomputed from the database every time the cart or checkout
+    // is shown, and again when the order is placed, so nothing stored here can be tampered with to get a bigger saving.
+    private const string DiscountKey = "AppliedDiscountCode";
+
+    public static string? GetDiscountCode(ISession session) => session.GetString(DiscountKey);
+    public static void SetDiscountCode(ISession session, string code) => session.SetString(DiscountKey, code);
+    public static void ClearDiscountCode(ISession session) => session.Remove(DiscountKey);
 
     // --- Checkout snapshot ---
     // A separate, reference-keyed copy of the cart taken the moment a Paystack transaction is

@@ -15,7 +15,17 @@
     var cartInputs = document.getElementById('cartInputs');
     var subtotalDisplay = document.getElementById('subtotalDisplay');
     var grandTotalDisplay = document.getElementById('grandTotalDisplay');
-    var discountInput = document.getElementById('discountInput');
+    // Discounts: the old free-typed amount is gone. The till only ever holds a validated CODE; the server works out
+    // the amount (this value is just a preview) and re-validates everything again at checkout.
+    var discountCodeInput = document.getElementById('discountCodeInput');
+    var discountCodeHidden = document.getElementById('discountCodeHidden');
+    var discountApplyBtn = document.getElementById('discountApplyBtn');
+    var discountMessage = document.getElementById('discountMessage');
+    var discountRow = document.getElementById('discountRow');
+    var discountRowLabel = document.getElementById('discountRowLabel');
+    var discountAmountDisplay = document.getElementById('discountAmountDisplay');
+    var appliedDiscount = null;   // { code, amount, label }
+    var appliedSig = '';
     var vatDisplay = document.getElementById('vatDisplay');
     var checkoutBtn = document.getElementById('checkoutBtn');
     var VAT_RATE = 0.15; // preview only - the server recalculates this authoritatively at checkout
@@ -81,7 +91,24 @@
             });
         });
 
-        var discount = parseFloat(discountInput.value) || 0;
+        var sig = cart.map(function (l) { return l.variantId + 'x' + l.quantity; }).join(',');
+        if (appliedDiscount && cart.length === 0) {
+            appliedDiscount = null; appliedSig = '';
+            setDiscountMessage('', false);
+        } else if (appliedDiscount && sig !== appliedSig) {
+            appliedSig = sig;
+            applyDiscount(true); // basket changed - re-check the code against the new basket
+        }
+
+        var discount = appliedDiscount ? Math.min(appliedDiscount.amount, subtotal) : 0;
+        if (discountCodeHidden) discountCodeHidden.value = appliedDiscount ? appliedDiscount.code : '';
+        if (discountRow) {
+            discountRow.style.display = appliedDiscount ? 'flex' : 'none';
+            if (appliedDiscount) {
+                discountRowLabel.textContent = 'Discount (' + appliedDiscount.code + ')';
+                discountAmountDisplay.textContent = '-' + formatCurrency(discount);
+            }
+        }
         var taxableAmount = Math.max(0, subtotal - discount);
         var vat = Math.round(taxableAmount * VAT_RATE * 100) / 100;
         var grandTotal = taxableAmount + vat;
@@ -207,7 +234,70 @@
             });
     });
 
-    discountInput.addEventListener('input', render);
+    function setDiscountMessage(text, ok) {
+        if (!discountMessage) return;
+        discountMessage.textContent = text || '';
+        discountMessage.style.color = ok ? 'var(--stf-primary)' : 'var(--stf-error)';
+    }
+
+    function clearDiscount(message) {
+        appliedDiscount = null;
+        appliedSig = '';
+        setDiscountMessage(message || '', false);
+        render();
+    }
+
+    function applyDiscount(silent) {
+        if (!discountCodeInput) return;
+        var code = (appliedDiscount && silent ? appliedDiscount.code : discountCodeInput.value).trim();
+        if (!code) { if (!silent) setDiscountMessage('Enter a discount code first.', false); return; }
+        if (cart.length === 0) { setDiscountMessage('Scan at least one item first.', false); return; }
+
+        var form = document.getElementById('checkoutForm');
+        var token = form.querySelector('input[name="__RequestVerificationToken"]');
+        var body = new FormData();
+        if (token) body.append('__RequestVerificationToken', token.value);
+        body.append('code', code);
+        var cust = form.querySelector('input[name="CustomerId"]');
+        if (cust && cust.value.trim()) body.append('customerId', cust.value.trim());
+        cart.forEach(function (l) { body.append('variantIds', l.variantId); body.append('quantities', l.quantity); });
+
+        if (discountApplyBtn) discountApplyBtn.disabled = true;
+        fetch('/Pos/ApplyDiscount', { method: 'POST', body: body, credentials: 'same-origin' })
+            .then(function (r) { if (!r.ok) throw new Error(); return r.json(); })
+            .then(function (res) {
+                if (res.valid) {
+                    appliedDiscount = { code: res.code, amount: res.amount, label: res.label };
+                    appliedSig = cart.map(function (l) { return l.variantId + 'x' + l.quantity; }).join(',');
+                    discountCodeInput.value = res.code;
+                    setDiscountMessage(res.name + ' - ' + res.label + ' applied.', true);
+                    render();
+                } else {
+                    clearDiscount(res.message || 'That code could not be applied.');
+                }
+            })
+            .catch(function () { setDiscountMessage('Could not check the code - please try again.', false); })
+            .then(function () { if (discountApplyBtn) discountApplyBtn.disabled = false; });
+    }
+
+    if (discountApplyBtn) {
+        discountApplyBtn.addEventListener('click', function () { applyDiscount(false); });
+        discountCodeInput.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') { e.preventDefault(); applyDiscount(false); }
+        });
+        discountCodeInput.addEventListener('input', function () {
+            // Editing the code un-applies the previous one so a stale discount can't linger.
+            if (appliedDiscount && discountCodeInput.value.trim().toUpperCase() !== appliedDiscount.code) clearDiscount('');
+        });
+        document.querySelectorAll('.discount-pick').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                discountCodeInput.value = btn.getAttribute('data-code');
+                applyDiscount(false);
+            });
+        });
+        var custField = document.querySelector('#checkoutForm input[name="CustomerId"]');
+        if (custField) custField.addEventListener('change', function () { if (appliedDiscount) applyDiscount(true); });
+    }
 
     document.getElementById('checkoutForm').addEventListener('submit', function (e) {
         if (cart.length === 0) {
@@ -229,4 +319,7 @@
     }
 
     render();
+
+    // A rejected checkout posts the typed code back - re-check it against the restored basket.
+    if (discountCodeInput && discountCodeInput.value.trim() && cart.length > 0) applyDiscount(false);
 })();

@@ -383,3 +383,12 @@
     .ffs-hero-copy h1 { font-size: 1.9rem; }
     .ffs-footer-grid { grid-template-columns: 1fr; }
 }
+
+
+/* ---------- Seasonal discount banner (managed from Staff > Discounts) ---------- */
+.ffs-promo-banner { background: var(--ffs-forest-deep); color: #fff; text-align: center; padding: 10px 16px; font-size: 0.86rem; letter-spacing: .01em; }
+.ffs-promo-banner strong { color: var(--ffs-sage); font-weight: 600; }
+.ffs-promo-banner code { background: rgba(255,255,255,.14); border-radius: 6px; padding: 2px 8px; margin-left: 4px; font-size: 0.82rem; letter-spacing: .06em; color: #fff; }
+.ffs-promo-banner a { color: var(--ffs-sage); margin-left: 10px; text-decoration: underline; }
+.ffs-linked-discount { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: var(--ffs-cream-alt); border: 1px dashed var(--ffs-tan); border-radius: 10px; padding: 10px 14px; font-size: 0.85rem; margin-bottom: 16px; }
+.ffs-linked-discount code { background: #fff; border: 1px solid var(--ffs-border); border-radius: 6px; padding: 2px 8px; letter-spacing: .06em; }

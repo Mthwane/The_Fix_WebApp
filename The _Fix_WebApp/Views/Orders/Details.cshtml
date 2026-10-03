@@ -49,7 +49,7 @@
     <div style="text-align:right;font-size:0.88rem;margin-bottom:20px;">
         <div>Subtotal: @Model.SubTotal.ToString("C")</div>
         <div style="color:var(--stf-on-surface-variant);">VAT: @Model.TaxTotal.ToString("C")</div>
-        @if (Model.DiscountTotal > 0) { <div style="color:var(--stf-on-surface-variant);">Discount: -@Model.DiscountTotal.ToString("C")</div> }
+        @if (Model.DiscountTotal > 0) { <div style="color:var(--stf-on-surface-variant);">Discount@(string.IsNullOrEmpty(Model.DiscountCode) ? "" : " (" + Model.DiscountCode + ")"): -@Model.DiscountTotal.ToString("C")</div> }
         <div style="font-size:1.1rem;font-weight:600;margin-top:4px;">Total: @Model.GrandTotal.ToString("C")</div>
         @if (Model.WalletAmountApplied > 0)
         {

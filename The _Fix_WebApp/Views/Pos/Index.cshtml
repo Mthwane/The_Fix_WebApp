@@ -5,6 +5,8 @@
     decimal todaysTillSales = ViewBag.TodaysTillSales ?? 0m;
     int todaysTillCount = ViewBag.TodaysTillTransactionCount ?? 0;
     var currentShift = ViewBag.CurrentShift as ShiftSession;
+    bool canUseDiscounts = ViewBag.CanUseDiscounts == true;
+    var liveDiscounts = ViewBag.LiveDiscounts as List<Discount> ?? new List<Discount>();
 }
 
 <style>
@@ -106,11 +108,38 @@
                 <div style="display:flex;justify-content:space-between;font-size:0.9rem;margin-bottom:10px;">
                     <span>Subtotal</span><strong id="subtotalDisplay">R0.00</strong>
                 </div>
-                <div style="margin-bottom:10px;">
-                    <label style="font-size:0.82rem;display:block;margin-bottom:4px;">Discount</label>
-                    <input type="number" step="0.01" min="0" name="DiscountTotal" id="discountInput" value="0"
-                           style="width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:8px 12px;font-size:0.9rem;" />
-                </div>
+                @if (canUseDiscounts)
+                {
+                    <div style="margin-bottom:10px;" id="discountSection">
+                        <label style="font-size:0.82rem;display:block;margin-bottom:4px;">Discount code</label>
+                        <div style="display:flex;gap:8px;">
+                            <input type="text" id="discountCodeInput" autocomplete="off" placeholder="Enter or pick a code" value="@Model.DiscountCode"
+                                   style="flex:1;min-width:0;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:8px 12px;font-size:0.9rem;text-transform:uppercase;" />
+                            <button type="button" id="discountApplyBtn" class="stf-btn stf-btn-outline" style="padding:8px 16px;">Apply</button>
+                        </div>
+                        <input type="hidden" name="DiscountCode" id="discountCodeHidden" value="" />
+                        <div id="discountMessage" style="font-size:0.78rem;margin-top:6px;min-height:1em;"></div>
+                        @if (liveDiscounts.Any())
+                        {
+                            <details style="margin-top:6px;">
+                                <summary style="font-size:0.78rem;color:var(--stf-secondary);cursor:pointer;">Live discounts (@liveDiscounts.Count)</summary>
+                                <div style="display:flex;flex-direction:column;gap:4px;margin-top:6px;max-height:160px;overflow:auto;">
+                                    @foreach (var d in liveDiscounts)
+                                    {
+                                        <button type="button" class="discount-pick" data-code="@d.Code"
+                                                style="text-align:left;background:var(--stf-surface-container-low);border:1px solid var(--stf-outline-variant);border-radius:8px;padding:6px 10px;font-size:0.78rem;cursor:pointer;">
+                                            <strong><code>@d.Code</code></strong> &middot; @d.ValueLabel()
+                                            <span style="color:var(--stf-on-surface-variant);display:block;">@(d.Name + (d.MinimumSpend.HasValue ? $" - min spend R{d.MinimumSpend.Value:0.##}" : "") + (d.Targets.Any() ? " - selected products only" : ""))</span>
+                                        </button>
+                                    }
+                                </div>
+                            </details>
+                        }
+                    </div>
+                    <div id="discountRow" style="display:none;justify-content:space-between;font-size:0.9rem;margin-bottom:10px;color:var(--stf-secondary);">
+                        <span id="discountRowLabel">Discount</span><strong id="discountAmountDisplay">-R0.00</strong>
+                    </div>
+                }
                 <div style="display:flex;justify-content:space-between;font-size:0.85rem;color:var(--stf-on-surface-variant);margin-bottom:10px;">
                     <span>VAT (15%)</span><span id="vatDisplay">R0.00</span>
                 </div>

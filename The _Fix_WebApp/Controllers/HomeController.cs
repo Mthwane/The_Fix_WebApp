@@ -46,7 +46,10 @@ public class HomeController : Controller
                 var roles = await _userManager.GetRolesAsync(user);
                 var isStaff = roles.Any(r => r is "Administrator" or "Manager" or "Employee" or "Owner");
                 if (isStaff)
-                    return RedirectToAction(nameof(Dashboard));
+                {
+                    var (landingController, landingAction) = StaffLanding.For(User);
+                    return RedirectToAction(landingAction, landingController);
+                }
             }
         }
 
