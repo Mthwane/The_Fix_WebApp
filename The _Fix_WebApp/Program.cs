@@ -156,10 +156,12 @@ builder.Services.AddHostedService(sp =>
 builder.Services.Configure<FashionFix.Web.Services.Courier.CourierGuyOptions>(
     builder.Configuration.GetSection("CourierGuy"));
 
-var courierProvider =
-    builder.Environment.IsDevelopment()
-        ? builder.Configuration["CourierGuy:Provider"]
-        : null;
+// The simulated courier is the only courier this deployment uses, in EVERY environment (Azure
+// runs as "Production", where the old code ignored the Provider setting and fell back to the
+// real Courier Guy client - which has no API key, so fulfilment never ran). Defaults to Fake;
+// set CourierGuy:Provider to "EasyPost" or "Live" explicitly to use a real provider instead.
+var courierProvider = builder.Configuration["CourierGuy:Provider"];
+if (string.IsNullOrWhiteSpace(courierProvider)) courierProvider = "Fake";
 
 if (string.Equals(
         courierProvider,
