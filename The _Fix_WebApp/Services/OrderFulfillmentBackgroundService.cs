@@ -2,6 +2,7 @@ using FashionFix.Web.Data;
 using FashionFix.Web.Models.Entities;
 using FashionFix.Web.Services.Courier;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 
 namespace FashionFix.Web.Services;
 
@@ -25,7 +26,13 @@ namespace FashionFix.Web.Services;
 /// </summary>
 public class OrderFulfillmentBackgroundService : BackgroundService
 {
-    private static readonly TimeSpan CycleInterval = TimeSpan.FromMinutes(20);
+    // How often a cycle runs. The simulated courier advances a shipment ONE step per cycle
+    // (booked -> collection assigned -> collected -> in transit -> out for delivery -> delivered),
+    // so an order goes from paid to delivered in roughly 5-6 cycles. Defaults: 30s cycle, so
+    // about 3 minutes end to end. Tune with Fulfillment:CycleSeconds (app setting
+    // Fulfillment__CycleSeconds on Azure); never below 5 seconds.
+    private readonly TimeSpan _cycleInterval;
+    private readonly TimeSpan _initialDelay;
 
     // Raw courier statuses that map to a terminal Stage (Delivered/Closed) - see
     // CourierShipment.Stage. Excluded from every refresh cycle so a finished shipment isn't
@@ -39,16 +46,23 @@ public class OrderFulfillmentBackgroundService : BackgroundService
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<OrderFulfillmentBackgroundService> _logger;
 
-    public OrderFulfillmentBackgroundService(IServiceScopeFactory scopeFactory, ILogger<OrderFulfillmentBackgroundService> logger)
+    public OrderFulfillmentBackgroundService(
+        IServiceScopeFactory scopeFactory,
+        ILogger<OrderFulfillmentBackgroundService> logger,
+        IConfiguration configuration)
     {
         _scopeFactory = scopeFactory;
         _logger = logger;
+
+        _cycleInterval = TimeSpan.FromSeconds(Math.Max(5, configuration.GetValue("Fulfillment:CycleSeconds", 30)));
+        _initialDelay = TimeSpan.FromSeconds(Math.Max(0, configuration.GetValue("Fulfillment:InitialDelaySeconds", 5)));
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         // Small initial delay so this doesn't compete with the app's own startup work.
-        try { await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken); } catch (TaskCanceledException) { return; }
+        _logger.LogInformation("Order fulfilment job starting: first cycle in {Initial}s, then every {Cycle}s.", _initialDelay.TotalSeconds, _cycleInterval.TotalSeconds);
+        try { await Task.Delay(_initialDelay, stoppingToken); } catch (TaskCanceledException) { return; }
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -63,7 +77,7 @@ public class OrderFulfillmentBackgroundService : BackgroundService
                 _logger.LogError(ex, "Order fulfillment background cycle failed unexpectedly.");
             }
 
-            try { await Task.Delay(CycleInterval, stoppingToken); } catch (TaskCanceledException) { }
+            try { await Task.Delay(_cycleInterval, stoppingToken); } catch (TaskCanceledException) { }
         }
     }
 
@@ -158,51 +172,90 @@ public class OrderFulfillmentBackgroundService : BackgroundService
 
     private async Task RefreshOrderShipmentsAsync(ApplicationDbContext context, Courier.ICourierService courier, IEmailSender emailSender, CancellationToken ct)
     {
+        // Pick up every shipment that is still moving, PLUS any shipment that has finished but whose
+        // order hasn't caught up yet (still Shipped/Processing). The second group is the important
+        // one: if something else advanced the shipment first (a staff refresh, a page load), a
+        // "did the stage change during THIS refresh?" check would never fire, the shipment would be
+        // filtered out as terminal, and the order would sit on "Shipped" forever with no email.
         var shipments = await context.CourierShipments
             .Include(s => s.Order).ThenInclude(o => o!.Customer)
-            .Where(s => s.OrderId != null && !TerminalRawStatuses.Contains(s.Status))
+            .Where(s => s.OrderId != null && s.Order != null
+                        && s.Order.Status != OrderStatus.Cancelled
+                        && s.Order.Status != OrderStatus.Returned
+                        && (!TerminalRawStatuses.Contains(s.Status) || s.Order.Status != OrderStatus.Delivered))
             .ToListAsync(ct);
 
-        var anyChanged = false;
+        var pendingEmails = new List<(Order Order, CourierShipment Shipment)>();
 
-        foreach (var shipment in shipments)
+        foreach (var original in shipments)
         {
-            var previousStage = shipment.Stage;
-            var result = await courier.RefreshTrackingAsync(shipment.CourierShipmentId);
-            if (!result.Success) continue;
-
-            var updated = result.Data!;
-            if (updated.Stage == previousStage) continue; // nothing changed - no email, no log noise
-
-            anyChanged = true;
-            var order = updated.Order;
+            var order = original.Order;
             if (order is null) continue;
 
-            // The courier's own delivery report IS authoritative for a customer order (unlike
-            // a purchase order, nobody physically re-counts a customer's parcel) - so this is
-            // the one place Status legitimately advances without a staff action.
-            if (updated.Stage == "Delivered" && order.Status != OrderStatus.Delivered)
+            var shipment = original;
+            if (!TerminalRawStatuses.Contains(original.Status))
+            {
+                var result = await courier.RefreshTrackingAsync(original.CourierShipmentId);
+                if (!result.Success) continue;
+                shipment = result.Data!;
+            }
+
+            var stage = shipment.Stage;
+
+            // The courier's own delivery report IS authoritative for a customer order (unlike a
+            // purchase order, nobody physically re-counts a customer's parcel) - so this is the
+            // one place Status legitimately advances without a staff action.
+            if (stage == "Delivered" && order.Status != OrderStatus.Delivered)
             {
                 order.Status = OrderStatus.Delivered;
                 order.DateFulfilled = DateTime.UtcNow;
             }
 
-            context.AuditLogs.Add(new AuditLog
+            // Customer emails + audit rows are driven by the audit log itself ("has this stage
+            // already been recorded for this order?"), not by comparing against the stage seen a
+            // moment ago. That makes it correct no matter who advanced the shipment, and it can
+            // never send the same stage twice. Only the CURRENT stage is announced - if several
+            // steps passed between cycles the customer gets one up-to-date email, not a burst.
+            if (stage is "Collected" or "In Transit" or "Delivered")
             {
-                Action = "ShipmentStageChanged",
-                Details = $"Order {order.OrderNumber}: {previousStage} -> {updated.Stage}."
-            });
+                var prefix = $"Order {order.OrderNumber}:";
+                var suffix = $"-> {stage}.";
+                var alreadyRecorded = await context.AuditLogs.AnyAsync(a =>
+                    a.Action == "ShipmentStageChanged" && a.Details != null
+                    && a.Details.StartsWith(prefix) && a.Details.EndsWith(suffix), ct);
 
-            if (order.Customer is not null && !string.IsNullOrWhiteSpace(order.Customer.Email))
-            {
-                await emailSender.SendAsync(
-                    order.Customer.Email,
-                    $"Order {order.OrderNumber} update: {updated.Stage}",
-                    BuildProgressEmailBody(order, updated));
+                if (!alreadyRecorded)
+                {
+                    context.AuditLogs.Add(new AuditLog
+                    {
+                        Action = "ShipmentStageChanged",
+                        Details = $"Order {order.OrderNumber}: tracking moved on {suffix}"
+                    });
+
+                    if (order.Customer is not null && !string.IsNullOrWhiteSpace(order.Customer.Email))
+                        pendingEmails.Add((order, shipment));
+                }
             }
         }
 
-        if (anyChanged) await context.SaveChangesAsync(ct);
+        // Save the status change FIRST, then send mail: a slow or failing SMTP server must never
+        // hold back (or roll back) the order moving to Delivered.
+        await context.SaveChangesAsync(ct);
+
+        foreach (var (order, shipment) in pendingEmails)
+        {
+            try
+            {
+                await emailSender.SendAsync(
+                    order.Customer!.Email!,
+                    $"Order {order.OrderNumber} update: {shipment.Stage}",
+                    BuildProgressEmailBody(order, shipment));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Progress email for order {OrderNumber} failed.", order.OrderNumber);
+            }
+        }
     }
 
     private async Task RefreshPurchaseOrderShipmentsAsync(ApplicationDbContext context, Courier.ICourierService courier, CancellationToken ct)

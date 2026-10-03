@@ -110,10 +110,8 @@ public class CustomerController : Controller
 
     // GET: /Customer/Orders/5/Track - live delivery tracking for a single online order (US-13).
     // The background service (OrderFulfillmentBackgroundService) already books the shipment and
-    // keeps its status synced every 20 minutes; this page just renders whatever it last knew,
-    // and opportunistically nudges a refresh if the customer happens to load the page and the
-    // cached tracking is stale (RefreshTrackingAsync respects its own cache window, so this can
-    // never turn into the customer hammering the courier's API by refreshing the page a lot).
+    // keeps its status synced on its own short cycle (Fulfillment:CycleSeconds); this page just
+    // renders whatever the job last recorded.
     [HttpGet]
     public async Task<IActionResult> Track(
         int id,
@@ -139,15 +137,11 @@ public class CustomerController : Controller
             .OrderByDescending(s => s.DateCreated)
             .FirstOrDefaultAsync();
 
-        if (shipment is not null && !shipment.IsComplete)
-        {
-            var result = await courier.RefreshTrackingAsync(
-                shipment.CourierShipmentId);
-
-            if (result.Success)
-                shipment = result.Data;
-        }
-
+        // Read-only on purpose. The simulated courier advances one step every time it is refreshed,
+        // so refreshing here let a customer's page loads race ahead of the background job: the page
+        // showed "Delivered" while the order still said "Shipped" and the emails lagged behind. The
+        // background job is now the single thing that moves a shipment, so this page, the order
+        // status and the emails always agree.
         ViewBag.Shipment = shipment;
 
         return View(order);

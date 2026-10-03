@@ -151,23 +151,25 @@ public class RolesController : Controller
             return View(model);
         }
         if (await _roleManager.RoleExistsAsync(model.Name))
-        {  // ...rest of your existing method continues unchanged from here
-
-            var role = new IdentityRole(model.Name);
-            var createResult = await _roleManager.CreateAsync(role);
-            if (!createResult.Succeeded)
-            {
-                foreach (var error in createResult.Errors)
-                    ModelState.AddModelError(string.Empty, error.Description);
-                return View(model);
-            }
-
-            foreach (var permission in model.SelectedPermissions)
-                await _roleManager.AddClaimAsync(role, new System.Security.Claims.Claim(Permissions.ClaimType, permission));
-
-            await LogAuditAsync("RoleCreated", $"Created role '{role.Name}' with {model.SelectedPermissions.Count} permission(s).");
-            this.ToastSuccess($"Role '{role.Name}' was created.");
+        {
+            ModelState.AddModelError(nameof(model.Name), $"A role called '{model.Name}' already exists.");
+            return View(model);
         }
+
+        var role = new IdentityRole(model.Name);
+        var createResult = await _roleManager.CreateAsync(role);
+        if (!createResult.Succeeded)
+        {
+            foreach (var error in createResult.Errors)
+                ModelState.AddModelError(string.Empty, error.Description);
+            return View(model);
+        }
+
+        foreach (var permission in model.SelectedPermissions)
+            await _roleManager.AddClaimAsync(role, new System.Security.Claims.Claim(Permissions.ClaimType, permission));
+
+        await LogAuditAsync("RoleCreated", $"Created role '{role.Name}' with {model.SelectedPermissions.Count} permission(s).");
+        this.ToastSuccess($"Role '{role.Name}' was created.");
 
         return RedirectToAction(nameof(Index));
     }
@@ -202,13 +204,12 @@ public class RolesController : Controller
         var role = await _roleManager.FindByIdAsync(id);
         if (role is null) return NotFound();
 
-        // The Administrator role can have any other permission removed, but RolesManage
-        // itself can never be unchecked - that's the one permission that guarantees an
-        // Administrator can always get back into this screen and grant permissions back,
-        // even after removing everything else from the role.
-        if (role.Name == "Administrator" && !model.SelectedPermissions.Contains(Permissions.RolesManage))
+        // Administrator is locked to the full permission set (same rule the matrix on
+        // Roles/Index enforces): an admin can't strip permissions from their own role, so
+        // nobody can lock themselves - or the whole system - out of a screen.
+        if (role.Name == "Administrator")
         {
-            model.SelectedPermissions.Add(Permissions.RolesManage);
+            model.SelectedPermissions = Permissions.All.Keys.ToList();
         }
 
         var existingClaims = await _roleManager.GetClaimsAsync(role);

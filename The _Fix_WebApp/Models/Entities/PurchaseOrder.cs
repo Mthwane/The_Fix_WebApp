@@ -30,6 +30,7 @@ public class Supplier
     public string? ContactPhone { get; set; }
 
     /// <summary>Typical lead time in days from PO placement to delivery.</summary>
+    [Range(0, 365, ErrorMessage = "Lead time must be between 0 and 365 days.")]
     public int LeadTimeDays { get; set; }
 
     // --- Collection address (used as the courier's collection point for inbound stock) ---
