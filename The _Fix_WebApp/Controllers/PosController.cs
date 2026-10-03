@@ -427,6 +427,7 @@ public class PosController : Controller
     public async Task<IActionResult> Receipt(int id)
     {
         var order = await _context.Orders
+            .Include(o => o.ProcessedByUser)
             .Include(o => o.OrderItems).ThenInclude(oi => oi.Product)
             .Include(o => o.OrderItems).ThenInclude(oi => oi.ProductVariant)
             .FirstOrDefaultAsync(o => o.OrderId == id);

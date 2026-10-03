@@ -57,6 +57,10 @@ public class Product
     public int? DepartmentId { get; set; }
     public Department? Department { get; set; }
 
+    /// <summary>Preferred supplier for this style. Purchase orders only offer a supplier's own products as line items.</summary>
+    public int? SupplierId { get; set; }
+    public Supplier? Supplier { get; set; }
+
     [MaxLength(50)]
     public string? SubCategory { get; set; } // e.g. "Trail & Running", "Studio Active"
 

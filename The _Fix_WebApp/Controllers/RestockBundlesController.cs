@@ -163,6 +163,7 @@ public class RestockBundlesController : Controller
     // to this run only and never write back to the template.
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [Authorize(Roles = "Manager,Administrator")]
     public async Task<IActionResult> Generate(int id, int? supplierId, List<int> itemIds, List<int> quantities)
     {
         var bundle = await _context.RestockBundles

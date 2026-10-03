@@ -1,3 +1,4 @@
+using FashionFix.Web.Infrastructure;
 using System.ComponentModel.DataAnnotations;
 
 namespace FashionFix.Web.Models.ViewModels;
@@ -7,10 +8,12 @@ public class RegisterViewModel
 {
     [Required(ErrorMessage = "Full name is required")]
     [Display(Name = "Full Name")]
+    [RegularExpression(InputRules.NamePattern, ErrorMessage = InputRules.NameMessage)]
     public string FullName { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Username is required")]
     [Display(Name = "Username")]
+    [RegularExpression(InputRules.UsernamePattern, ErrorMessage = InputRules.UsernameMessage)]
     public string Username { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Email is required")]

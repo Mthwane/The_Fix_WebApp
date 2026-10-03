@@ -173,6 +173,13 @@
         (function () {
             var rowIndex = @Model.Variants.Count;
             var colorOptions = @Html.Raw(Json.Serialize(colors));
+            var colorHexMap = @Html.Raw(Json.Serialize(ProductViewModel.ColorHexMap));
+            document.addEventListener('change', function (e) {
+                var sel = e.target;
+                if (!sel.matches || !sel.matches('select[name$=".Color"]')) return;
+                var hex = sel.closest('tr').querySelector('input[name$=".ColorHex"]');
+                if (hex && colorHexMap[sel.value]) hex.value = colorHexMap[sel.value];
+            });
             var fieldStyle = 'width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:9px 14px;font-size:0.9rem;';
 
             document.getElementById('addVariantRow').addEventListener('click', function () {

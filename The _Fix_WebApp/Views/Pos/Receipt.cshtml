@@ -1,28 +1,87 @@
 @model Order
 @{
-    ViewData["Title"] = "Receipt";
+    ViewData["Title"] = $"Receipt {Model.OrderNumber}";
+    Layout = "_StaffLayout";
 }
 
-<div class="mx-auto" style="max-width: 400px;">
-    <h2 class="text-center">FashionFix</h2>
-    <p class="text-center text-muted">Receipt #@Model.OrderNumber</p>
-    <p>Date: @Model.DateCreated.ToLocalTime()</p>
-    <hr />
-    <table class="table table-sm">
-        <tbody>
-        @foreach (var item in Model.OrderItems)
-        {
-            <tr>
-                <td>@item.Product.Name @if (item.ProductVariant != null) { <span class="text-muted small">(@item.ProductVariant.Size/@item.ProductVariant.Color)</span> } (x@(item.Quantity))</td>
-                <td class="text-end">@item.LineTotal.ToString("C")</td>
-            </tr>
-        }
-        </tbody>
-    </table>
-    <hr />
-    <p>Subtotal: @Model.SubTotal.ToString("C")</p>
-    <p>Discount: @Model.DiscountTotal.ToString("C")</p>
-    <p>Tax: @Model.TaxTotal.ToString("C")</p>
-    <h5>Total: @Model.GrandTotal.ToString("C")</h5>
-    <p class="text-muted small text-center mt-3">Thank you for shopping at FashionFix. Items may be returned within 30 days with this receipt.</p>
+<style>
+    .rc-wrap { max-width: 420px; margin: 0 auto; }
+    .rc-card {
+        background: #fff; border: 1px solid var(--stf-outline-variant); border-radius: 12px;
+        padding: 28px 26px; box-shadow: 0 6px 24px rgba(0,0,0,.06); position: relative;
+        font-variant-numeric: tabular-nums;
+    }
+    .rc-brand { text-align: center; font-family: 'Newsreader', serif; font-size: 1.6rem; font-weight: 600; letter-spacing: .02em; margin: 0; }
+    .rc-sub { text-align: center; font-size: .78rem; color: var(--stf-on-surface-variant); margin: 2px 0 0; }
+    .rc-meta { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: .82rem; margin: 18px 0 4px; }
+    .rc-meta dt { color: var(--stf-on-surface-variant); }
+    .rc-meta dd { margin: 0; text-align: right; font-weight: 600; }
+    .rc-rule { border: 0; border-top: 1px dashed var(--stf-outline-variant); margin: 14px 0; }
+    .rc-line { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 7px 0; font-size: .88rem; }
+    .rc-line small { grid-column: 1 / -1; color: var(--stf-on-surface-variant); font-size: .76rem; }
+    .rc-line .amt { text-align: right; font-weight: 600; }
+    .rc-totals { font-size: .88rem; }
+    .rc-totals > div { display: flex; justify-content: space-between; padding: 3px 0; }
+    .rc-totals .muted { color: var(--stf-on-surface-variant); }
+    .rc-grand { display: flex; justify-content: space-between; align-items: baseline; font-size: 1.25rem; font-weight: 700; padding-top: 8px; margin-top: 6px; border-top: 2px solid var(--stf-on-surface); }
+    .rc-foot { text-align: center; font-size: .74rem; color: var(--stf-on-surface-variant); margin: 18px 0 0; line-height: 1.5; }
+    .rc-actions { display: flex; gap: 10px; justify-content: center; margin-top: 18px; flex-wrap: wrap; }
+    @@media print {
+        .stf-sidebar, .stf-topbar, .rc-actions { display: none !important; }
+        .stf-content { padding: 0 !important; margin: 0 !important; }
+        .rc-card { border: 0; box-shadow: none; padding: 0; }
+        body { background: #fff !important; }
+    }
+</style>
+
+<div class="stf-content">
+    <div class="rc-wrap">
+        <div class="rc-card">
+            <h1 class="rc-brand">Fashion Fix</h1>
+            <p class="rc-sub">Tax invoice / receipt</p>
+
+            <dl class="rc-meta">
+                <dt>Receipt no.</dt><dd>@Model.OrderNumber</dd>
+                <dt>Date</dt><dd>@Model.DateCreated.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</dd>
+                @if (Model.ProcessedByUser is not null)
+                {
+                    <dt>Served by</dt><dd>@Model.ProcessedByUser.FullName</dd>
+                }
+                <dt>Paid by</dt><dd>@Model.PaymentMethod</dd>
+            </dl>
+
+            <hr class="rc-rule" />
+
+            @foreach (var item in Model.OrderItems)
+            {
+                <div class="rc-line">
+                    <div>@item.Product?.Name <span style="color:var(--stf-on-surface-variant);">&times; @item.Quantity</span></div>
+                    <div class="amt">@item.LineTotal.ToString("C")</div>
+                    @if (item.ProductVariant != null)
+                    {
+                        <small>@item.ProductVariant.Size / @item.ProductVariant.Color</small>
+                    }
+                </div>
+            }
+
+            <hr class="rc-rule" />
+
+            <div class="rc-totals">
+                <div><span class="muted">Subtotal</span><span>@Model.SubTotal.ToString("C")</span></div>
+                @if (Model.DiscountTotal > 0)
+                {
+                    <div><span class="muted">Discount</span><span>-@Model.DiscountTotal.ToString("C")</span></div>
+                }
+                <div><span class="muted">VAT included</span><span>@Model.TaxTotal.ToString("C")</span></div>
+            </div>
+            <div class="rc-grand"><span>Total</span><span>@Model.GrandTotal.ToString("C")</span></div>
+
+            <p class="rc-foot">Thank you for shopping at Fashion Fix.<br />Items may be returned within 30 days with this receipt.</p>
+        </div>
+
+        <div class="rc-actions">
+            <button type="button" class="stf-btn stf-btn-primary" onclick="window.print()">Print receipt</button>
+            <a asp-controller="Pos" asp-action="Index" class="stf-btn stf-btn-outline">New sale</a>
+        </div>
+    </div>
 </div>

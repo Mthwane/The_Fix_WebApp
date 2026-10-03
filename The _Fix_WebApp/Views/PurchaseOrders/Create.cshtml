@@ -19,7 +19,7 @@
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
             <div>
                 <label style="@L">Supplier</label>
-                <select name="supplierId" style="@F" required>
+                <select name="supplierId" id="supplierSelect" style="@F" required>
                     <option value="">-- Choose a supplier --</option>
                     @foreach (var s in suppliers)
                     {
@@ -36,7 +36,8 @@
         <label style="@L">Notes</label>
         <textarea name="notes" rows="2" style="@F margin-bottom:16px;" placeholder="Optional - visible to whoever approves this request.">@Model.Notes</textarea>
 
-        <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:8px 0 12px;">Line Items</h5>
+        <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:8px 0 6px;">Line Items</h5>
+        <div id="supplierHint" style="font-size:0.8rem;color:var(--stf-on-surface-variant);margin-bottom:10px;">Choose a supplier first - only that supplier's products can be added.</div>
 
         <table class="stf-table" id="lineTable" style="margin-bottom:12px;">
             <thead>
@@ -50,7 +51,7 @@
             <tbody id="lineBody"></tbody>
         </table>
 
-        <button type="button" id="addLine" class="stf-btn stf-btn-outline" style="margin-bottom:20px;">+ Add Line</button>
+        <button type="button" id="addLine" class="stf-btn stf-btn-outline" style="margin-bottom:20px;" disabled>+ Add Line</button>
 
         <div style="display:flex;gap:10px;">
             <button type="submit" class="stf-btn stf-btn-primary">Save as Draft</button>
@@ -59,15 +60,41 @@
     </form>
 </div>
 
-<script id="variantData" type="application/json">@Html.Raw(Json.Serialize(variants.Select(v => new { id = v.ProductVariantId, label = $"{v.Product.Name} - {v.Size}/{v.Color} ({v.SKU})", cost = v.Product.CostPrice })))</script>
+<script id="variantData" type="application/json">@Html.Raw(Json.Serialize(variants.Select(v => new { id = v.ProductVariantId, label = $"{v.Product.Name} - {v.Size}/{v.Color} ({v.SKU})", cost = v.Product.CostPrice, supplierId = v.Product.SupplierId })))</script>
 <script>
     (function () {
-        var variants = JSON.parse(document.getElementById('variantData').textContent);
+        var allVariants = JSON.parse(document.getElementById('variantData').textContent);
+        var variants = [];
         var body = document.getElementById('lineBody');
+        var supplierSelect = document.getElementById('supplierSelect');
+        var addBtn = document.getElementById('addLine');
+        var hint = document.getElementById('supplierHint');
 
         function optionsHtml() {
             return '<option value="">-- Choose a variant --</option>' +
                 variants.map(function (v) { return '<option value="' + v.id + '" data-cost="' + v.cost + '">' + v.label + '</option>'; }).join('');
+        }
+
+        // Only the chosen supplier's products are selectable. Changing supplier clears the lines,
+        // so an order can never mix one supplier's name with another supplier's stock.
+        function applySupplier() {
+            var sid = parseInt(supplierSelect.value, 10);
+            body.innerHTML = '';
+            if (!sid) {
+                variants = [];
+                addBtn.disabled = true;
+                hint.textContent = "Choose a supplier first - only that supplier's products can be added.";
+                return;
+            }
+            variants = allVariants.filter(function (v) { return v.supplierId === sid; });
+            if (variants.length === 0) {
+                addBtn.disabled = true;
+                hint.textContent = "No products are linked to this supplier yet. Open a product, pick this supplier under Supplier, and save - then it will appear here.";
+                return;
+            }
+            addBtn.disabled = false;
+            hint.textContent = variants.length + " variant(s) available from this supplier.";
+            addRow();
         }
 
         function addRow() {
@@ -91,7 +118,8 @@
             });
         }
 
-        document.getElementById('addLine').addEventListener('click', addRow);
-        addRow(); // start with one line
+        addBtn.addEventListener('click', addRow);
+        supplierSelect.addEventListener('change', applySupplier);
+        applySupplier();
     })();
 </script>

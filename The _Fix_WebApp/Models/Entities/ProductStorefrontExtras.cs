@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace FashionFix.Web.Models.Entities;
 
@@ -38,6 +39,16 @@ public class ProductReview
 
     /// <summary>True if the reviewer has a Delivered/Completed order containing this product - shown as a "Verified Purchase" badge.</summary>
     public bool IsVerifiedPurchase { get; set; }
+
+    /// <summary>Up to 3 photo URLs the reviewer attached, separated by '|'. Null when none.</summary>
+    [MaxLength(1500)]
+    public string? PhotoUrls { get; set; }
+
+    [NotMapped]
+    public IReadOnlyList<string> Photos =>
+        string.IsNullOrWhiteSpace(PhotoUrls)
+            ? Array.Empty<string>()
+            : PhotoUrls.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     public DateTime DateCreated { get; set; } = DateTime.UtcNow;
 }

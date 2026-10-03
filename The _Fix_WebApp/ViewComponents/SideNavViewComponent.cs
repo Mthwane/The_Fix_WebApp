@@ -99,7 +99,7 @@ public class SideNavViewComponent : ViewComponent
             new("Orders",            "shopping_bag",          "Customer", "Orders",   null, "Customer", "orders", new[] { "Orders", "Track" }),
             new("Wallet & Rewards",  "account_balance_wallet","Wallet",   "Index",    null, "Customer", "wallet"),
             new("FixRewards",        "redeem",                "Rewards",  "Index",    null, "Customer"),
-            new("Wishlist",          "favorite",              "Customer", "Wishlist", null, "Customer", "wishlist"),
+            new("Wishlist",          "favorite",              "Customer", "Wishlist", null, "Customer", "wishlist", new[] { "Wishlist", "ToggleWishlist" }),
             new("Support Tickets",   "support_agent",         "Support",  "Tickets",  null, "Customer", null, new[] { "Tickets", "NewTicket", "TicketDetails" }),
             new("Help & FAQ",        "help",                  "Support",  "Faq"),
         }),

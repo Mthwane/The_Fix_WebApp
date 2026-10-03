@@ -45,7 +45,9 @@
     margin: 0;
 }
 
-.ffs-page a { text-decoration: none; color: inherit; }
+/* border-box everywhere so width:100% + padding never overflows its column. */
+.ffs-page, .ffs-page *, .ffs-page *::before, .ffs-page *::after { box-sizing: border-box; }
+:where(.ffs-page) a { text-decoration: none; color: inherit; }
 .ffs-page .ffs-container { max-width: 1280px; margin: 0 auto; padding: 0 32px; }
 
 /* ---------- Utility bar ---------- */

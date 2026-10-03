@@ -109,6 +109,13 @@
         </select>
         <div style="@HINT margin-bottom:20px;">Which storefront department (Women/Men/Kids/...) this style appears under. Optional - can be set later from the catalogue.</div>
 
+        <label asp-for="SupplierId" style="@L">Supplier</label>
+        <select asp-for="SupplierId" style="@F">
+            <option value="">-- None --</option>
+            @foreach (var sup in (List<Supplier>)ViewBag.Suppliers) { <option value="@sup.SupplierId">@sup.Name</option> }
+        </select>
+        <div style="@HINT margin-bottom:20px;">Who you buy this style from. Purchase orders only list a supplier's own products, so set this for anything you restock.</div>
+
         <hr style="border-color:var(--stf-outline-variant);margin:16px 0;" />
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
             <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:0;">Sizes &amp; Colours</h5>
@@ -181,6 +188,13 @@
         (function () {
             var rowIndex = @Model.Variants.Count;
             var colorOptions = @Html.Raw(Json.Serialize(colors));
+            var colorHexMap = @Html.Raw(Json.Serialize(ProductViewModel.ColorHexMap));
+            document.addEventListener('change', function (e) {
+                var sel = e.target;
+                if (!sel.matches || !sel.matches('select[name$=".Color"]')) return;
+                var hex = sel.closest('tr').querySelector('input[name$=".ColorHex"]');
+                if (hex && colorHexMap[sel.value]) hex.value = colorHexMap[sel.value];
+            });
             var fieldStyle = 'width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:9px 14px;font-size:0.9rem;';
 
             document.getElementById('addVariantRow').addEventListener('click', function () {

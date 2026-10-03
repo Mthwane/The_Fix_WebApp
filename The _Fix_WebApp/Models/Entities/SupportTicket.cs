@@ -68,5 +68,12 @@ public class SupportTicket
     public DateTime DateCreated { get; set; } = DateTime.UtcNow;
     public DateTime? DateResolved { get; set; }
 
+    /// <summary>When the ticket was closed (conversation locked). Null while still active.</summary>
+    public DateTime? DateClosed { get; set; }
+
+    /// <summary>Plain-text copy of the whole conversation, generated at the moment the ticket is closed.
+    /// Powers the Ticket History tab and the downloadable .txt transcript.</summary>
+    public string? TranscriptText { get; set; }
+
     public ICollection<TicketMessage> Messages { get; set; } = new List<TicketMessage>();
 }

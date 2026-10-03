@@ -176,3 +176,11 @@
 .stf-switch { display: inline-flex; align-items: center; gap: 10px; font-size: .88rem; cursor: pointer; padding-top: 28px; }
 .stf-switch input { width: 18px; height: 18px; accent-color: var(--stf-primary); }
 @media (max-width: 700px) { .stf-form-grid { grid-template-columns: 1fr; } .stf-form-card { padding: 22px 18px; } }
+
+/* ---------- File upload buttons: green "Choose file" so manual upload is obvious ---------- */
+input[type="file"] { cursor: pointer; }
+input[type="file"]::file-selector-button {
+  background: var(--stf-primary); color: #fff; border: 0; border-radius: 8px;
+  padding: 8px 16px; margin-right: 12px; font-weight: 600; font-size: .85rem; cursor: pointer;
+}
+input[type="file"]::file-selector-button:hover { opacity: .9; }

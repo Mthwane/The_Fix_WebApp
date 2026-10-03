@@ -207,6 +207,7 @@ public class ProductsController : Controller
             Fit = model.Fit,
             Badge = model.Badge,
             DepartmentId = model.DepartmentId,
+            SupplierId = model.SupplierId,
             IsActive = true
         };
 
@@ -264,6 +265,7 @@ public class ProductsController : Controller
             Fit = product.Fit,
             Badge = product.Badge,
             DepartmentId = product.DepartmentId,
+            SupplierId = product.SupplierId,
             IsActive = product.IsActive,
             Variants = product.Variants
                 .OrderBy(v => v.Size).ThenBy(v => v.Color)
@@ -353,6 +355,7 @@ public class ProductsController : Controller
         product.Fit = model.Fit;
         product.Badge = model.Badge;
         product.DepartmentId = model.DepartmentId;
+        product.SupplierId = model.SupplierId;
         product.DateUpdated = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
@@ -496,6 +499,7 @@ public class ProductsController : Controller
     {
         ViewBag.Categories = ProductViewModel.Categories.ToList();
         ViewBag.Colors = ProductViewModel.Colors.ToList();
+        ViewBag.ColorHex = ProductViewModel.ColorHexMap;
 
         var dbSizes = await _context.ProductVariants.AsNoTracking()
             .Where(v => v.Size != null && v.Size != "").Select(v => v.Size!).Distinct().ToListAsync();
@@ -507,6 +511,8 @@ public class ProductsController : Controller
         ViewBag.Brands = ProductViewModel.Brands.Union(dbBrands, StringComparer.OrdinalIgnoreCase)
             .OrderBy(b => b, StringComparer.OrdinalIgnoreCase).ToList();
 
+        ViewBag.Suppliers = await _context.Suppliers.AsNoTracking()
+            .Where(s => s.IsActive).OrderBy(s => s.Name).ToListAsync();
         ViewBag.Departments = await _context.Departments.AsNoTracking()
             .Where(d => d.IsActive).OrderBy(d => d.DisplayOrder).ToListAsync();
 

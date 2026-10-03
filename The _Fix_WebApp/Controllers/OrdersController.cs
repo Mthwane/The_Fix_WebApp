@@ -166,6 +166,26 @@ public class OrdersController : Controller
         if (order is null)
             return NotFound();
 
+        // "Processed By": a till sale shows the cashier. An online order shows the customer who
+        // raised a support ticket about it (an escalation), otherwise the courier handling delivery.
+        string processedBy;
+        if (order.OrderType == OrderType.POS && order.ProcessedByUser is not null)
+        {
+            processedBy = order.ProcessedByUser.FullName;
+        }
+        else
+        {
+            var ticket = await _context.SupportTickets.AsNoTracking()
+                .Include(t => t.Customer)
+                .Where(t => t.OrderId == order.OrderId)
+                .OrderByDescending(t => t.DateCreated)
+                .FirstOrDefaultAsync();
+            processedBy = ticket?.Customer is not null
+                ? $"{ticket.Customer.FullName} (raised ticket #{ticket.SupportTicketId})"
+                : "The Courier Guy";
+        }
+        ViewBag.ProcessedByLabel = processedBy;
+
         return View(order);
     }
 

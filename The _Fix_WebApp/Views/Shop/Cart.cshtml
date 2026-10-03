@@ -61,7 +61,7 @@
             </div>
 
             <div style="display:flex;justify-content:flex-end;">
-                <div style="min-width:300px;background:var(--ffs-cream-alt);border-radius:var(--ffs-radius);padding:20px;">
+                <div style="box-sizing:border-box;width:100%;max-width:340px;background:var(--ffs-cream-alt);border-radius:var(--ffs-radius);padding:20px;">
                     <div style="display:flex;justify-content:space-between;font-size:0.9rem;margin-bottom:8px;">
                         <span>Subtotal</span><span>@Model.SubTotal.ToString("C")</span>
                     </div>
@@ -71,7 +71,7 @@
                     <div style="display:flex;justify-content:space-between;border-top:1px solid var(--ffs-border);padding-top:12px;margin-bottom:18px;font-size:1.1rem;font-family:'Fraunces',serif;font-weight:600;">
                         <span>Total</span><span>@((Model.SubTotal + vat).ToString("C"))</span>
                     </div>
-                    <a asp-controller="Shop" asp-action="Checkout" class="ffs-btn ffs-btn-forest" style="width:100%;justify-content:center;">Proceed to Checkout &rarr;</a>
+                    <a asp-controller="Shop" asp-action="Checkout" class="ffs-btn ffs-btn-forest" style="box-sizing:border-box;display:flex;width:100%;justify-content:center;text-align:center;">Proceed to Checkout &rarr;</a>
                 </div>
             </div>
         }

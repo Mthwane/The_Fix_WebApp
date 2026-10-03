@@ -1,6 +1,8 @@
 using FashionFix.Web.Data;
 using FashionFix.Web.Models.Entities;
 using FashionFix.Web.Security;
+using FashionFix.Web.Services;
+using FashionFix.Web.Services.Images;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -30,6 +32,7 @@ public class SupportTicketsController : Controller
     public async Task<IActionResult> Index(TicketStatus? status, bool? assignedToMe, bool? unassigned)
     {
         var userId = _userManager.GetUserId(User);
+        await TicketSupport.AutoCloseStaleAsync(_context);
 
         var query = _context.SupportTickets
             .AsNoTracking()
@@ -38,7 +41,10 @@ public class SupportTicketsController : Controller
             .Include(t => t.Order)
             .AsQueryable();
 
-        if (status.HasValue) query = query.Where(t => t.Status == status.Value);
+        // Closed tickets live in the Ticket History tab, not the working queue.
+        query = status.HasValue
+            ? query.Where(t => t.Status == status.Value)
+            : query.Where(t => t.Status != TicketStatus.Closed);
         if (assignedToMe == true) query = query.Where(t => t.AssignedEmployeeId == userId);
         if (unassigned == true) query = query.Where(t => t.AssignedEmployeeId == null);
 
@@ -84,20 +90,29 @@ public class SupportTicketsController : Controller
     // so responding and, say, marking Resolved is one click instead of two.
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Reply(int id, string message, TicketStatus? newStatus)
+    public async Task<IActionResult> Reply(int id, string? message, TicketStatus? newStatus, List<IFormFile>? attachments, [FromServices] IImageStorage imageStorage)
     {
         var userId = _userManager.GetUserId(User)!;
         var ticket = await _context.SupportTickets.FirstOrDefaultAsync(t => t.SupportTicketId == id);
         if (ticket is null) return NotFound();
 
-        if (!string.IsNullOrWhiteSpace(message))
+        if (ticket.Status == TicketStatus.Closed)
+        {
+            this.ToastError("This conversation is closed. It can no longer be replied to.");
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        var (attachmentUrls, skippedFiles) = await TicketSupport.UploadAttachmentsAsync(attachments, imageStorage);
+
+        if (!string.IsNullOrWhiteSpace(message) || attachmentUrls is not null)
         {
             _context.TicketMessages.Add(new TicketMessage
             {
                 SupportTicketId = id,
                 SenderId = userId,
                 SenderType = TicketSenderType.Employee,
-                Body = message.Trim()
+                Body = string.IsNullOrWhiteSpace(message) ? "(image attached)" : message.Trim(),
+                AttachmentUrls = attachmentUrls
             });
         }
 
@@ -124,8 +139,70 @@ public class SupportTicketsController : Controller
         _context.AuditLogs.Add(new AuditLog { UserId = userId, Action = "SupportTicketReplied", Details = $"Ticket #{id}" });
         await _context.SaveChangesAsync();
 
-        this.ToastSuccess("Reply sent.");
+        // Closing locks the conversation and saves the transcript to Ticket History.
+        if (newStatus == TicketStatus.Closed)
+        {
+            ticket.Status = TicketStatus.Resolved; // let CloseAsync perform the real transition and stamp the transcript
+            await _context.SaveChangesAsync();
+            await TicketSupport.CloseAsync(_context, id, "This conversation was closed by support.");
+            this.ToastSuccess("Ticket closed and saved to Ticket History.");
+            return RedirectToAction(nameof(History));
+        }
+
+        if (skippedFiles > 0) this.ToastWarning($"Reply sent, but {skippedFiles} image(s) could not be uploaded (use JPG, PNG or WebP under 5 MB).");
+        else this.ToastSuccess("Reply sent.");
         return RedirectToAction(nameof(Details), new { id });
+    }
+
+    // GET: /SupportTickets/History - closed conversations, searchable and filterable, each with a downloadable .txt.
+    [HttpGet]
+    public async Task<IActionResult> History(TicketCategory? category, string? search, DateTime? from, DateTime? to, string? employeeId)
+    {
+        await TicketSupport.AutoCloseStaleAsync(_context);
+
+        var query = _context.SupportTickets.AsNoTracking()
+            .Include(t => t.Customer)
+            .Include(t => t.AssignedEmployee)
+            .Include(t => t.Order)
+            .Where(t => t.Status == TicketStatus.Closed);
+
+        if (category.HasValue) query = query.Where(t => t.Category == category.Value);
+        if (!string.IsNullOrWhiteSpace(employeeId)) query = query.Where(t => t.AssignedEmployeeId == employeeId);
+        if (from.HasValue) query = query.Where(t => (t.DateClosed ?? t.DateCreated) >= from.Value.Date);
+        if (to.HasValue) query = query.Where(t => (t.DateClosed ?? t.DateCreated) < to.Value.Date.AddDays(1));
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            query = query.Where(t => t.Subject.Contains(term)
+                || (t.Customer != null && t.Customer.FullName.Contains(term))
+                || (t.Order != null && t.Order.OrderNumber.Contains(term))
+                || t.SupportTicketId.ToString() == term.TrimStart('#'));
+        }
+
+        var tickets = await query.OrderByDescending(t => t.DateClosed ?? t.DateCreated).Take(300).ToListAsync();
+
+        var staffIds = (await _userManager.GetUsersInRoleAsync("Employee")).Select(u => u.Id)
+            .Concat((await _userManager.GetUsersInRoleAsync("Manager")).Select(u => u.Id))
+            .Concat((await _userManager.GetUsersInRoleAsync("Administrator")).Select(u => u.Id))
+            .Distinct().ToList();
+        ViewBag.StaffOptions = await _context.Users.AsNoTracking().Where(u => staffIds.Contains(u.Id)).OrderBy(u => u.FullName).ToListAsync();
+        ViewBag.Category = category;
+        ViewBag.Search = search;
+        ViewBag.From = from;
+        ViewBag.To = to;
+        ViewBag.EmployeeId = employeeId;
+        return View(tickets);
+    }
+
+    // GET: /SupportTickets/Transcript/5 - download a closed ticket's conversation.
+    [HttpGet]
+    public async Task<IActionResult> Transcript(int id)
+    {
+        var ticket = await _context.SupportTickets.AsNoTracking().FirstOrDefaultAsync(t => t.SupportTicketId == id);
+        if (ticket is null || ticket.TranscriptText is null) return NotFound();
+
+        return File(System.Text.Encoding.UTF8.GetPreamble().Concat(System.Text.Encoding.UTF8.GetBytes(ticket.TranscriptText)).ToArray(),
+            "text/plain; charset=utf-8", $"fashionfix-ticket-{ticket.SupportTicketId}.txt");
     }
 
     // POST: /SupportTickets/Assign/5

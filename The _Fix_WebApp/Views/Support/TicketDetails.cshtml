@@ -51,6 +51,15 @@
                                 @(isCustomer ? "You" : (m.Sender?.FullName ?? "Fashion Fix Support")) &bull; @m.DateSent.ToLocalTime().ToString("dd MMM, HH:mm")
                             </div>
                             <div style="font-size:0.9rem;white-space:pre-line;">@m.Body</div>
+                            @if (m.Attachments.Count > 0)
+                            {
+                                <div class="tk-msg-imgs">
+                                    @foreach (var a in m.Attachments)
+                                    {
+                                        <a href="@a" target="_blank" rel="noopener"><img src="@a" alt="Attachment" loading="lazy" /></a>
+                                    }
+                                </div>
+                            }
                         </div>
                     }
                 </div>
@@ -59,15 +68,55 @@
 
         @if (Model.Status != TicketStatus.Closed)
         {
-            <form asp-action="Reply" asp-route-id="@Model.SupportTicketId" method="post" style="border:1px solid var(--ffs-border);border-radius:var(--ffs-radius);padding:18px;background:var(--ffs-card);">
-                @Html.AntiForgeryToken()
-                <textarea name="message" required rows="3" placeholder="Add a reply..." style="width:100%;border:1px solid var(--ffs-border);border-radius:8px;padding:9px 14px;font-size:0.9rem;margin-bottom:10px;"></textarea>
-                <button type="submit" class="ffs-btn ffs-btn-forest">Send Reply</button>
+            <form asp-action="Reply" asp-route-id="@Model.SupportTicketId" method="post" enctype="multipart/form-data" style="border:1px solid var(--ffs-border);border-radius:var(--ffs-radius);padding:18px;background:var(--ffs-card);">
+                <textarea name="message" rows="3" placeholder="Add a reply..." style="width:100%;border:1px solid var(--ffs-border);border-radius:8px;padding:9px 14px;font-size:0.9rem;margin-bottom:10px;"></textarea>
+                <label class="tk-attach-pick">
+                    <span>&#128247; Attach images (max 3)</span>
+                    <input type="file" name="attachments" accept="image/jpeg,image/png,image/webp" multiple data-previews="replyPreviews" />
+                </label>
+                <div class="tk-previews" id="replyPreviews"></div>
+                <div style="display:flex;gap:10px;align-items:center;">
+                    <button type="submit" class="ffs-btn ffs-btn-forest">Send Reply</button>
+                </div>
+            </form>
+            <form asp-action="Close" asp-route-id="@Model.SupportTicketId" method="post" style="margin-top:12px;text-align:right;" onsubmit="return confirm('Close this ticket? The conversation will be locked and saved to your Ticket History.');">
+                <button type="submit" class="ffs-btn ffs-btn-outline" style="font-size:0.82rem;padding:8px 16px;">Close this ticket</button>
             </form>
         }
         else
         {
-            <p style="color:var(--ffs-ink-muted);font-size:0.85rem;text-align:center;">This ticket is closed. <a asp-action="NewTicket" style="color:var(--ffs-forest);font-weight:600;">Open a new ticket</a> if you need further help.</p>
+            <div style="border:1px solid var(--ffs-border);border-radius:var(--ffs-radius);padding:20px;background:var(--ffs-cream-alt);text-align:center;">
+                <p style="color:var(--ffs-ink-muted);font-size:0.88rem;margin:0 0 12px;">This conversation is closed and saved to your Ticket History.</p>
+                <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+                    @if (Model.TranscriptText is not null)
+                    {
+                        <a asp-action="Transcript" asp-route-id="@Model.SupportTicketId" class="ffs-btn ffs-btn-forest">Download transcript (.txt)</a>
+                    }
+                    <a asp-action="NewTicket" class="ffs-btn ffs-btn-outline">Open a new ticket</a>
+                </div>
+            </div>
         }
     </div>
 </section>
+
+<style>
+    .tk-attach-pick { display:inline-flex;align-items:center;gap:8px;border:1px dashed var(--ffs-border);border-radius:999px;padding:8px 16px;font-size:0.82rem;cursor:pointer;background:#fff;margin-bottom:10px; }
+    .tk-attach-pick:hover { border-color:var(--ffs-forest); }
+    .tk-attach-pick input { display:none; }
+    .tk-previews { display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px; }
+    .tk-previews img, .tk-msg-imgs img { width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid var(--ffs-border); }
+    .tk-msg-imgs { display:flex;gap:6px;flex-wrap:wrap;margin-top:8px; }
+</style>
+<script>
+    document.querySelectorAll('input[type=file][data-previews]').forEach(function (input) {
+        input.addEventListener('change', function () {
+            var box = document.getElementById(input.getAttribute('data-previews'));
+            box.innerHTML = '';
+            Array.prototype.slice.call(input.files, 0, 3).forEach(function (f) {
+                var img = document.createElement('img');
+                img.src = URL.createObjectURL(f);
+                box.appendChild(img);
+            });
+        });
+    });
+</script>

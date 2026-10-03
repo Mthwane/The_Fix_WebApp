@@ -208,6 +208,7 @@ builder.Services.AddControllersWithViews(options =>
     options.ModelBinderProviders.Insert(
         0,
         new FashionFix.Web.Infrastructure.InvariantDecimalModelBinderProvider());
+    options.Filters.Add<FashionFix.Web.Infrastructure.FriendlyErrorFilter>();
 });
 
 var app = builder.Build();
@@ -574,20 +575,30 @@ app.UseStatusCodePagesWithReExecute(
     "/Home/StatusCode/{0}");
 
 // --- South African currency / culture ---
-var siteCulture =
-    new CultureInfo("en-ZA");
+// en-ZA's own decimal separator is a COMMA, but HTML <input type="number"> only accepts / emits a
+// DOT. Rendering "100,7" into a number input made the browser blank the field (prices "disappeared"
+// after saving), and the old parser read "100,70" as 10070. So: keep everything else about en-ZA
+// (Rand symbol "R", date formats) but use a dot as the decimal mark and a space for thousands.
+var siteCulture = (CultureInfo)new CultureInfo("en-ZA").Clone();
+siteCulture.NumberFormat.NumberDecimalSeparator = ".";
+siteCulture.NumberFormat.CurrencyDecimalSeparator = ".";
+siteCulture.NumberFormat.PercentDecimalSeparator = ".";
+siteCulture.NumberFormat.NumberGroupSeparator = " ";
+siteCulture.NumberFormat.CurrencyGroupSeparator = " ";
+siteCulture.NumberFormat.PercentGroupSeparator = " ";
 
-CultureInfo.DefaultThreadCurrentCulture =
-    siteCulture;
+CultureInfo.DefaultThreadCurrentCulture = siteCulture;
+CultureInfo.DefaultThreadCurrentUICulture = siteCulture;
 
-CultureInfo.DefaultThreadCurrentUICulture =
-    siteCulture;
-
-app.UseRequestLocalization(
-    new RequestLocalizationOptions()
-        .SetDefaultCulture("en-ZA")
-        .AddSupportedCultures("en-ZA")
-        .AddSupportedUICultures("en-ZA"));
+var localizationOptions = new RequestLocalizationOptions
+{
+    DefaultRequestCulture = new RequestCulture(siteCulture, siteCulture),
+    SupportedCultures = new List<CultureInfo> { siteCulture },
+    SupportedUICultures = new List<CultureInfo> { siteCulture }
+};
+// Ignore the browser's Accept-Language so every visitor gets the same number formatting.
+localizationOptions.RequestCultureProviders.Clear();
+app.UseRequestLocalization(localizationOptions);
 
 app.UseHttpsRedirection();
 app.UseStaticFiles();

@@ -1,0 +1,104 @@
+@model List<SupportTicket>
+@{
+    ViewData["Title"] = "Ticket History";
+    Layout = "_StaffLayout";
+    var category = ViewBag.Category as TicketCategory?;
+    var search = ViewBag.Search as string;
+    DateTime? from = ViewBag.From;
+    DateTime? to = ViewBag.To;
+    var employeeId = ViewBag.EmployeeId as string;
+    var staff = (List<ApplicationUser>)ViewBag.StaffOptions;
+    string F = "border:1px solid var(--stf-outline-variant);border-radius:8px;padding:8px 12px;font-size:0.85rem;";
+    string CategoryLabel(TicketCategory c) => c switch
+    {
+        TicketCategory.OrderQuery => "Order query",
+        TicketCategory.RefundRequest => "Refund request",
+        TicketCategory.CancelOrder => "Cancel order",
+        _ => "General"
+    };
+}
+
+<div class="stf-content">
+    <div class="stf-page-head">
+        <div>
+            <span class="stf-eyebrow">Support</span>
+            <h1>Ticket History</h1>
+            <p>Closed conversations. Each one is saved as a plain-text transcript you can download.</p>
+        </div>
+        <a asp-action="Index" class="stf-btn stf-btn-outline">&larr; Back to queue</a>
+    </div>
+
+    <form asp-action="History" method="get" class="stf-card" style="display:flex;gap:12px;flex-wrap:wrap;align-items:end;margin-bottom:20px;">
+        <div style="flex:1 1 220px;">
+            <label style="font-size:0.78rem;display:block;margin-bottom:4px;">Search</label>
+            <input type="text" name="search" value="@search" placeholder="Subject, customer, order # or ticket #" style="@F width:100%;" />
+        </div>
+        <div>
+            <label style="font-size:0.78rem;display:block;margin-bottom:4px;">Category</label>
+            <select name="category" style="@F">
+                <option value="">All categories</option>
+                @foreach (var c in Enum.GetValues<TicketCategory>())
+                {
+                    <option value="@c" selected="@(category == c)">@CategoryLabel(c)</option>
+                }
+            </select>
+        </div>
+        <div>
+            <label style="font-size:0.78rem;display:block;margin-bottom:4px;">Handled by</label>
+            <select name="employeeId" style="@F">
+                <option value="">Anyone</option>
+                @foreach (var s in staff)
+                {
+                    <option value="@s.Id" selected="@(s.Id == employeeId)">@s.FullName</option>
+                }
+            </select>
+        </div>
+        <div>
+            <label style="font-size:0.78rem;display:block;margin-bottom:4px;">Closed from</label>
+            <input type="date" name="from" value="@from?.ToString("yyyy-MM-dd")" style="@F" />
+        </div>
+        <div>
+            <label style="font-size:0.78rem;display:block;margin-bottom:4px;">to</label>
+            <input type="date" name="to" value="@to?.ToString("yyyy-MM-dd")" style="@F" />
+        </div>
+        <button type="submit" class="stf-btn stf-btn-primary">Filter</button>
+        <a asp-action="History" class="stf-btn stf-btn-outline">Clear</a>
+    </form>
+
+    <p style="font-size:0.8rem;color:var(--stf-on-surface-variant);">@Model.Count ticket(s) shown (newest first, max 300).</p>
+
+    <div class="stf-table-wrap" style="overflow-x:auto;">
+        <table class="stf-table">
+            <thead>
+                <tr><th>#</th><th>Subject</th><th>Customer</th><th>Category</th><th>Handled by</th><th>Opened</th><th>Closed</th><th></th></tr>
+            </thead>
+            <tbody>
+                @foreach (var t in Model)
+                {
+                    <tr>
+                        <td>@t.SupportTicketId</td>
+                        <td style="font-weight:600;max-width:260px;">
+                            <a asp-action="Details" asp-route-id="@t.SupportTicketId">@t.Subject</a>
+                            @if (t.Order is not null) { <span style="color:var(--stf-on-surface-variant);font-weight:400;">(#@t.Order.OrderNumber)</span> }
+                        </td>
+                        <td>@t.Customer?.FullName</td>
+                        <td>@CategoryLabel(t.Category)</td>
+                        <td>@(t.AssignedEmployee?.FullName ?? "-")</td>
+                        <td>@t.DateCreated.ToLocalTime().ToString("dd MMM yyyy")</td>
+                        <td>@((t.DateClosed ?? t.DateCreated).ToLocalTime().ToString("dd MMM yyyy"))</td>
+                        <td style="text-align:right;white-space:nowrap;">
+                            @if (t.TranscriptText is not null)
+                            {
+                                <a asp-action="Transcript" asp-route-id="@t.SupportTicketId" class="stf-btn stf-btn-outline" style="padding:6px 12px;font-size:0.75rem;">Download .txt</a>
+                            }
+                        </td>
+                    </tr>
+                }
+                @if (!Model.Any())
+                {
+                    <tr><td colspan="8" style="text-align:center;color:var(--stf-on-surface-variant);padding:24px;">No closed tickets match.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

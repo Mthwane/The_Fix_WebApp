@@ -18,6 +18,7 @@
     DateTime from = ViewBag.From;
     DateTime to = ViewBag.To;
     OrderType? selectedChannel = ViewBag.SelectedChannel;
+    string? selectedCategory = ViewBag.SelectedCategory;
 
     IHtmlContent TrendChart(List<(DateTime Date, decimal Revenue)> points, int w, int h)
     {
@@ -103,9 +104,19 @@
                 <option value="Online" selected="@(selectedChannel == OrderType.Online)">Online</option>
             </select>
         </div>
+        <div>
+            <label style="font-size:0.78rem;display:block;margin-bottom:4px;">Category</label>
+            <select name="category" style="@F">
+                <option value="">All Categories</option>
+                @foreach (var cat in (List<string>)ViewBag.Categories)
+                {
+                    <option value="@cat" selected="@(selectedCategory == cat)">@cat</option>
+                }
+            </select>
+        </div>
         <button type="submit" class="stf-btn stf-btn-primary">Update</button>
         <a class="stf-btn stf-btn-outline" asp-controller="Reports" asp-action="Export" asp-route-format="csv"
-           asp-route-from="@from.ToString("yyyy-MM-dd")" asp-route-to="@to.ToString("yyyy-MM-dd")" asp-route-channel="@selectedChannel">
+           asp-route-from="@from.ToString("yyyy-MM-dd")" asp-route-to="@to.ToString("yyyy-MM-dd")" asp-route-channel="@selectedChannel" asp-route-category="@selectedCategory">
             Export CSV
         </a>
     </form>
@@ -138,12 +149,12 @@
         <div class="stf-card">
             <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--stf-outline);margin-bottom:2px;">Daily, over the range</div>
             <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:0 0 12px;">Revenue Trend</h5>
-            @TrendChart(trendPoints, 640, 180)
+            <div style="position:relative;height:240px;"><canvas id="trendChart" height="240"></canvas></div>
         </div>
         <div class="stf-card">
             <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--stf-outline);margin-bottom:2px;">This range</div>
             <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:0 0 12px;">Revenue by Department</h5>
-            <div style="text-align:center;">@DonutChart(deptSegments, 150)</div>
+            <div style="position:relative;height:190px;max-width:260px;margin:0 auto;"><canvas id="deptChart" height="190"></canvas></div>
             <div style="margin-top:14px;">
                 @for (int i = 0; i < deptSegments.Count; i++)
                 {
@@ -154,6 +165,19 @@
                     </div>
                 }
             </div>
+        </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;margin-bottom:24px;">
+        <div class="stf-card">
+            <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--stf-outline);margin-bottom:2px;">@(string.IsNullOrEmpty(selectedCategory) ? "All categories" : selectedCategory)</div>
+            <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:0 0 12px;">Revenue by Category (POS vs Online)</h5>
+            <div style="position:relative;height:260px;"><canvas id="categoryChart" height="260"></canvas></div>
+        </div>
+        <div class="stf-card">
+            <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--stf-outline);margin-bottom:2px;">Top 5 by units sold</div>
+            <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:0 0 12px;">Best Sellers</h5>
+            <div style="position:relative;height:260px;"><canvas id="bestChart" height="260"></canvas></div>
         </div>
     </div>
 
@@ -270,3 +294,33 @@
         </table>
     </details>
 </div>
+
+@section Scripts {
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+    <script src="~/js/ff-charts.js" asp-append-version="true"></script>
+    <script>
+        (function () {
+            ffCharts.line('trendChart',
+                @Html.Raw(Json.Serialize(trendPoints.Select(p => p.Item1.ToString("dd MMM")))),
+                @Html.Raw(Json.Serialize(trendPoints.Select(p => p.Item2))),
+                'Revenue');
+
+            ffCharts.donut('deptChart',
+                @Html.Raw(Json.Serialize(deptSegments.Select(d => d.Item1))),
+                @Html.Raw(Json.Serialize(deptSegments.Select(d => d.Item2))));
+
+            ffCharts.bar('categoryChart',
+                @Html.Raw(Json.Serialize(revenueByCategory?.Select(c => (string)c.Category) ?? Enumerable.Empty<string>())),
+                [
+                    { label: 'POS', color: '#2f5943', data: @Html.Raw(Json.Serialize(revenueByCategory?.Select(c => (decimal)c.PosRevenue) ?? Enumerable.Empty<decimal>())) },
+                    { label: 'Online', color: '#c9a227', data: @Html.Raw(Json.Serialize(revenueByCategory?.Select(c => (decimal)c.OnlineRevenue) ?? Enumerable.Empty<decimal>())) }
+                ],
+                { stacked: true });
+
+            ffCharts.bar('bestChart',
+                @Html.Raw(Json.Serialize(bestSellers?.Select(b => (string)b.Name) ?? Enumerable.Empty<string>())),
+                [{ label: 'Units sold', data: @Html.Raw(Json.Serialize(bestSellers?.Select(b => (int)b.UnitsSold) ?? Enumerable.Empty<int>())) }],
+                { horizontal: true, money: false });
+        })();
+    </script>
+}

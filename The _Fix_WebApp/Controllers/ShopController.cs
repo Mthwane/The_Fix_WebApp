@@ -574,7 +574,7 @@ public class ShopController : Controller
     [HttpPost]
     [ValidateAntiForgeryToken]
     [Authorize(Roles = "Customer")]
-    public async Task<IActionResult> SubmitReview(int productId, int rating, string? comment)
+    public async Task<IActionResult> SubmitReview(int productId, int rating, string? comment, List<IFormFile>? photos, [FromServices] FashionFix.Web.Services.Images.IImageStorage imageStorage)
     {
         var userId = _userManager.GetUserId(User)!;
 
@@ -597,13 +597,24 @@ public class ShopController : Controller
                 && oi.Order.CustomerId == userId
                 && oi.Order.Status == OrderStatus.Delivered);
 
+        // Optional photos (max 3). A bad file is skipped with a warning rather than losing the whole review.
+        var photoUrls = new List<string>();
+        var skipped = 0;
+        foreach (var file in (photos ?? new List<IFormFile>()).Where(f => f.Length > 0).Take(3))
+        {
+            var upload = await imageStorage.UploadAsync(file, "reviews");
+            if (upload.Success && !string.IsNullOrWhiteSpace(upload.Url)) photoUrls.Add(upload.Url!);
+            else skipped++;
+        }
+
         _context.ProductReviews.Add(new ProductReview
         {
             ProductId = productId,
             CustomerId = userId,
             Rating = rating,
             Comment = string.IsNullOrWhiteSpace(comment) ? null : comment.Trim(),
-            IsVerifiedPurchase = isVerified
+            IsVerifiedPurchase = isVerified,
+            PhotoUrls = photoUrls.Count > 0 ? string.Join("|", photoUrls) : null
         });
         await _context.SaveChangesAsync();
 
@@ -618,7 +629,8 @@ public class ShopController : Controller
         product.ReviewCount = stats.Count;
         await _context.SaveChangesAsync();
 
-        this.ToastSuccess("Thanks - your review has been posted.");
+        if (skipped > 0) this.ToastWarning($"Your review was posted, but {skipped} photo(s) could not be uploaded (use JPG, PNG or WebP under 5 MB).");
+        else this.ToastSuccess("Thanks - your review has been posted.");
         return RedirectToAction(nameof(Product), new { id = productId });
     }
 }

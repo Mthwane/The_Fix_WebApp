@@ -32,4 +32,14 @@ public class TicketMessage
     public string Body { get; set; } = string.Empty;
 
     public DateTime DateSent { get; set; } = DateTime.UtcNow;
+
+    /// <summary>Up to 3 image URLs attached to this message, separated by '|'. Null when none.</summary>
+    [MaxLength(1500)]
+    public string? AttachmentUrls { get; set; }
+
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public IReadOnlyList<string> Attachments =>
+        string.IsNullOrWhiteSpace(AttachmentUrls)
+            ? Array.Empty<string>()
+            : AttachmentUrls.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 }

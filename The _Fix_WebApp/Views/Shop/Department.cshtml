@@ -225,9 +225,22 @@
                                 <span class="ffs-product-badge @(product.IsOnSale ? "ffs-badge-clay" : "")">@product.Badge</span>
                             }
                         </a>
-                        <button type="button" class="ffs-wishlist-btn" title="Save to wishlist" onclick="location.href='@Url.Action("Login", "Account", new { returnUrl })'">
+                        @if (User.IsInRole("Customer"))
+                        {
+                            <form asp-controller="Customer" asp-action="ToggleWishlist" method="post">
+                                <input type="hidden" name="productId" value="@product.ProductId" />
+                                <input type="hidden" name="returnUrl" value="@(Context.Request.Path + Context.Request.QueryString)" />
+                                <button type="submit" class="ffs-wishlist-btn" title="Save to wishlist">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z"/></svg>
+                                </button>
+                            </form>
+                        }
+                        else
+                        {
+                            <button type="button" class="ffs-wishlist-btn" title="Save to wishlist" onclick="location.href='@Url.Action("Login", "Account", new { returnUrl })'">
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z"/></svg>
                         </button>
+                        }
                         <div class="ffs-product-meta">
                             @if (product.ReviewCount > 0)
                             {

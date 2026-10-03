@@ -22,7 +22,7 @@ public class ReportsController : Controller
     // Every figure here is computed live from Orders/OrderItems - nothing is a "batch" or
     // pre-aggregated rollup, so it's always consistent with what Orders/POS actually show.
     [HttpGet]
-    public async Task<IActionResult> Index(DateTime? from, DateTime? to, OrderType? channel)
+    public async Task<IActionResult> Index(DateTime? from, DateTime? to, OrderType? channel, string? category)
     {
         var start = from ?? DateTime.UtcNow.AddDays(-30);
         var end = (to ?? DateTime.UtcNow).Date.AddDays(1).AddTicks(-1);
@@ -37,11 +37,33 @@ public class ReportsController : Controller
         }
 
         var orders = await ordersQuery.ToListAsync();
+
+        // Optional category filter: keep only the lines in that category, and only the orders that
+        // contain at least one such line, so every chart and KPI below describes just that category.
+        var hasCategory = !string.IsNullOrWhiteSpace(category);
+        if (hasCategory)
+        {
+            foreach (var o in orders)
+                o.OrderItems = o.OrderItems.Where(oi => oi.Product?.Category == category).ToList();
+            orders = orders.Where(o => o.OrderItems.Count > 0).ToList();
+        }
+        ViewBag.SelectedCategory = hasCategory ? category : null;
+        ViewBag.Categories = Models.ViewModels.ProductViewModel.Categories.ToList();
+
         var allItems = orders.SelectMany(o => o.OrderItems).ToList();
+
+        // GrandTotal for a whole order, or just the filtered lines' total (ex-split VAT) when a category is chosen.
+        decimal Revenue(Order o) => hasCategory ? o.OrderItems.Sum(oi => oi.LineTotal) : o.GrandTotal;
+        decimal Vat(Order o)
+        {
+            if (!hasCategory) return o.TaxTotal;
+            var full = o.SubTotal > 0 ? o.SubTotal : 1m;
+            return o.TaxTotal * (o.OrderItems.Sum(oi => oi.LineTotal) / full);
+        }
 
         decimal Cogs(IEnumerable<OrderItem> items) => items.Sum(oi => oi.Quantity * (oi.Product?.CostPrice ?? 0));
 
-        var totalRevenue = orders.Sum(o => o.GrandTotal);
+        var totalRevenue = orders.Sum(o => Revenue(o));
         var costOfGoodsSold = Cogs(allItems);
 
         ViewBag.TotalRevenue = totalRevenue;
@@ -49,7 +71,7 @@ public class ReportsController : Controller
         ViewBag.EstimatedProfit = totalRevenue - costOfGoodsSold;
         ViewBag.OrderCount = orders.Count;
         ViewBag.UnitsDispatched = allItems.Sum(oi => oi.Quantity);
-        ViewBag.VatCollected = orders.Sum(o => o.TaxTotal);
+        ViewBag.VatCollected = orders.Sum(o => Vat(o));
         ViewBag.DiscountsGiven = orders.Sum(o => o.DiscountTotal);
         ViewBag.From = start;
         ViewBag.To = to ?? DateTime.UtcNow;
@@ -78,7 +100,7 @@ public class ReportsController : Controller
 
         ViewBag.ChannelSplit = orders
             .GroupBy(o => o.OrderType)
-            .Select(g => new { Channel = g.Key.ToString(), Revenue = g.Sum(o => o.GrandTotal), Count = g.Count() })
+            .Select(g => new { Channel = g.Key.ToString(), Revenue = g.Sum(o => Revenue(o)), Count = g.Count() })
             .ToList();
 
         // Daily revenue trend for the selected range - capped to the last 60 days of buckets
@@ -87,7 +109,7 @@ public class ReportsController : Controller
         ViewBag.DailyTrend = orders
             .Where(o => o.DateCreated.Date >= trendStart)
             .GroupBy(o => o.DateCreated.Date)
-            .Select(g => new { Date = g.Key, Revenue = g.Sum(o => o.GrandTotal) })
+            .Select(g => new { Date = g.Key, Revenue = g.Sum(o => Revenue(o)) })
             .OrderBy(g => g.Date)
             .ToList();
 
@@ -121,10 +143,10 @@ public class ReportsController : Controller
                 o.OrderNumber,
                 o.DateCreated,
                 o.OrderType,
-                Gmv = o.GrandTotal,
-                Vat = o.TaxTotal,
+                Gmv = Revenue(o),
+                Vat = Vat(o),
                 Cogs = Cogs(o.OrderItems),
-                Margin = o.GrandTotal - o.TaxTotal - Cogs(o.OrderItems)
+                Margin = Revenue(o) - Vat(o) - Cogs(o.OrderItems)
             })
             .ToList();
 
@@ -133,7 +155,7 @@ public class ReportsController : Controller
 
     // GET: /Reports/Export?format=csv - export the sales report for the given date range.
     [HttpGet]
-    public async Task<IActionResult> Export(string format, DateTime? from, DateTime? to, OrderType? channel)
+    public async Task<IActionResult> Export(string format, DateTime? from, DateTime? to, OrderType? channel, string? category)
     {
         var start = from ?? DateTime.UtcNow.AddDays(-30);
         var end = (to ?? DateTime.UtcNow).Date.AddDays(1).AddTicks(-1);
@@ -141,6 +163,7 @@ public class ReportsController : Controller
         var query = _context.Orders.AsNoTracking()
             .Where(o => o.DateCreated >= start && o.DateCreated <= end);
         if (channel.HasValue) query = query.Where(o => o.OrderType == channel.Value);
+        if (!string.IsNullOrWhiteSpace(category)) query = query.Where(o => o.OrderItems.Any(oi => oi.Product!.Category == category));
 
         var orders = await query.OrderBy(o => o.DateCreated).ToListAsync();
 

@@ -139,22 +139,73 @@
 
         @if (Model.CanReview)
         {
-            <form asp-controller="Shop" asp-action="SubmitReview" method="post" style="background:var(--ffs-card);border:1px solid var(--ffs-border);border-radius:var(--ffs-radius);padding:20px;margin-bottom:28px;">
-                @Html.AntiForgeryToken()
+            <style>
+                .rv-form { background:var(--ffs-card);border:1px solid var(--ffs-border);border-radius:var(--ffs-radius);padding:24px;margin-bottom:28px; }
+                .rv-form h3 { font-family:'Fraunces',serif;font-size:1.15rem;margin:0 0 4px; }
+                .rv-form .rv-sub { font-size:0.82rem;color:var(--ffs-ink-muted);margin:0 0 18px; }
+                .rv-label { font-size:0.8rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase;display:block;margin-bottom:8px; }
+                .rv-stars { display:inline-flex;flex-direction:row-reverse;gap:4px;margin-bottom:18px; }
+                .rv-stars input { position:absolute;opacity:0;width:0;height:0; }
+                .rv-stars label { font-size:2rem;line-height:1;color:var(--ffs-border);cursor:pointer;transition:color .12s, transform .12s; }
+                .rv-stars label:hover, .rv-stars label:hover ~ label, .rv-stars input:checked ~ label { color:var(--ffs-clay); }
+                .rv-stars label:hover { transform:scale(1.12); }
+                .rv-stars input:focus-visible + label { outline:2px solid var(--ffs-forest);outline-offset:2px;border-radius:4px; }
+                .rv-text { width:100%;box-sizing:border-box;border:1px solid var(--ffs-border);border-radius:10px;padding:12px 14px;font:inherit;font-size:0.9rem;background:#fff;resize:vertical;margin-bottom:18px; }
+                .rv-text:focus { outline:none;border-color:var(--ffs-forest);box-shadow:0 0 0 3px rgba(47,89,67,.12); }
+                .rv-drop { display:flex;align-items:center;gap:12px;border:1.5px dashed var(--ffs-border);border-radius:10px;padding:14px 16px;cursor:pointer;margin-bottom:10px;background:#fff; }
+                .rv-drop:hover { border-color:var(--ffs-forest); }
+                .rv-drop input { display:none; }
+                .rv-drop-icon { width:36px;height:36px;border-radius:50%;background:var(--ffs-forest);color:#fff;display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0; }
+                .rv-previews { display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px; }
+                .rv-previews img { width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid var(--ffs-border); }
+                .rv-photos { display:flex;gap:8px;flex-wrap:wrap;margin-top:10px; }
+                .rv-photos a { display:block; }
+                .rv-photos img { width:84px;height:84px;object-fit:cover;border-radius:8px;border:1px solid var(--ffs-border); }
+            </style>
+            <form asp-controller="Shop" asp-action="SubmitReview" method="post" enctype="multipart/form-data" class="rv-form">
+                <h3>Write a review</h3>
+                <p class="rv-sub">Tell other shoppers how this piece wears.</p>
                 <input type="hidden" name="productId" value="@product.ProductId" />
-                <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;">Your rating</label>
-                <select name="rating" class="form-select" style="max-width:160px;margin-bottom:12px;" required>
-                    <option value="">Choose...</option>
-                    <option value="5">&#9733;&#9733;&#9733;&#9733;&#9733; Excellent</option>
-                    <option value="4">&#9733;&#9733;&#9733;&#9733; Good</option>
-                    <option value="3">&#9733;&#9733;&#9733; Average</option>
-                    <option value="2">&#9733;&#9733; Poor</option>
-                    <option value="1">&#9733; Very Poor</option>
-                </select>
-                <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;">Your review (optional)</label>
-                <textarea name="comment" class="form-control" rows="3" maxlength="2000" style="margin-bottom:14px;" placeholder="How did this piece wear? Fit, fabric, comfort..."></textarea>
+
+                <span class="rv-label">Your rating</span>
+                <div class="rv-stars" role="radiogroup" aria-label="Rating">
+                    @for (var star = 5; star >= 1; star--)
+                    {
+                        <input type="radio" name="rating" id="star@(star)" value="@star" required />
+                        <label for="star@(star)" title="@star star@(star == 1 ? "" : "s")">&#9733;</label>
+                    }
+                </div>
+
+                <label class="rv-label" for="rvComment">Your review (optional)</label>
+                <textarea id="rvComment" name="comment" class="rv-text" rows="4" maxlength="2000" placeholder="Fit, fabric, comfort..."></textarea>
+
+                <span class="rv-label">Photos (optional, up to 3)</span>
+                <label class="rv-drop">
+                    <span class="rv-drop-icon">+</span>
+                    <span style="font-size:0.88rem;">Add photos <span style="color:var(--ffs-ink-muted);">JPG, PNG or WebP, max 5 MB each</span></span>
+                    <input type="file" name="photos" id="rvPhotos" accept="image/jpeg,image/png,image/webp" multiple />
+                </label>
+                <div class="rv-previews" id="rvPreviews"></div>
+
                 <button type="submit" class="ffs-btn ffs-btn-forest">Post Review</button>
             </form>
+            <script>
+                (function () {
+                    var input = document.getElementById('rvPhotos');
+                    var box = document.getElementById('rvPreviews');
+                    if (!input) return;
+                    input.addEventListener('change', function () {
+                        box.innerHTML = '';
+                        var files = Array.prototype.slice.call(input.files, 0, 3);
+                        if (input.files.length > 3) alert('Only the first 3 photos will be uploaded.');
+                        files.forEach(function (f) {
+                            var img = document.createElement('img');
+                            img.src = URL.createObjectURL(f);
+                            box.appendChild(img);
+                        });
+                    });
+                })();
+            </script>
         }
         else if (User.Identity?.IsAuthenticated != true)
         {
@@ -187,6 +238,15 @@
                         @if (!string.IsNullOrWhiteSpace(review.Comment))
                         {
                             <p style="font-size:0.9rem;margin:0;">@review.Comment</p>
+                        }
+                        @if (review.Photos.Count > 0)
+                        {
+                            <div class="rv-photos">
+                                @foreach (var photo in review.Photos)
+                                {
+                                    <a href="@photo" target="_blank" rel="noopener"><img src="@photo" alt="Review photo" loading="lazy" /></a>
+                                }
+                            </div>
                         }
                     </div>
                 }

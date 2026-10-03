@@ -171,15 +171,12 @@
         <div class="stf-card">
             <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--stf-outline);margin-bottom:2px;">Today, by the hour</div>
             <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:0 0 12px;">Sales & Revenue Velocity</h5>
-            @RevenueLineChart(Model.HourlyRevenueToday, 640, 180)
-            <div style="display:flex;justify-content:space-between;font-size:0.72rem;color:var(--stf-outline);margin-top:4px;">
-                <span>08:00</span><span>12:00</span><span>16:00</span><span>20:00</span>
-            </div>
+            <div style="position:relative;height:220px;"><canvas id="hourlyChart" height="220"></canvas></div>
         </div>
         <div class="stf-card" style="text-align:center;">
             <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--stf-outline);margin-bottom:2px;text-align:left;">@(useDeptDonut ? "This Month" : "Today")</div>
             <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:0 0 12px;text-align:left;">@(useDeptDonut ? "Revenue by Department" : "Channel Split")</h5>
-            @DonutChart(donutSegments, 160)
+            <div style="position:relative;height:190px;max-width:260px;margin:0 auto;"><canvas id="donutChart" height="190"></canvas></div>
             <div style="text-align:left;margin-top:14px;">
                 @for (int i = 0; i < donutSegments.Count; i++)
                 {
@@ -388,6 +385,21 @@
 </div>
 
 @section Scripts {
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+    <script src="~/js/ff-charts.js" asp-append-version="true"></script>
+    <script>
+        (function () {
+            var hourRange = Array.from({ length: 13 }, function (_, i) { return i + 8; });
+            var byHour = @Html.Raw(Json.Serialize(Model.HourlyRevenueToday.ToDictionary(p => p.Hour.ToString(), p => p.Revenue)));
+            ffCharts.line('hourlyChart',
+                hourRange.map(function (h) { return (h < 10 ? '0' : '') + h + ':00'; }),
+                hourRange.map(function (h) { return Number(byHour[h]) || 0; }),
+                'Revenue');
+            ffCharts.donut('donutChart',
+                @Html.Raw(Json.Serialize(donutSegments.Select(s => s.Label))),
+                @Html.Raw(Json.Serialize(donutSegments.Select(s => s.Value))));
+        })();
+    </script>
     <script>
         (function () {
             function money(v) { return 'R' + Number(v).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }

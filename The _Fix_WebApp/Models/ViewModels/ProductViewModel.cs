@@ -93,6 +93,9 @@ public class ProductViewModel
 
     public int? DepartmentId { get; set; }
 
+    /// <summary>Which supplier this style is bought from (optional).</summary>
+    public int? SupplierId { get; set; }
+
     /// <summary>
     /// Every size/colour this style is sold in. Create requires at least one; Edit lets staff
     /// add new variants, adjust stock (routed through IInventoryService as a
@@ -107,8 +110,21 @@ public class ProductViewModel
     /// <summary>Seed size list - offered as suggestions when adding a variant row (free text + datalist, same UX the old top-level Size field used).</summary>
     public static readonly string[] Sizes = { "XS", "S", "M", "L", "XL", "XXL", "One Size" };
 
-    /// <summary>Colour is a closed list - exactly these 6, picked from a real dropdown per variant row. Edit this array to change the set.</summary>
-    public static readonly string[] Colors = { "Black", "White", "Grey", "Navy", "Beige", "Red" };
+    /// <summary>Colour name -> hex. The dropdown is built from these keys, and picking a colour auto-fills the swatch hex.</summary>
+    public static readonly Dictionary<string, string> ColorHexMap = new()
+    {
+        ["Black"] = "#000000", ["White"] = "#FFFFFF", ["Grey"] = "#808080", ["Charcoal"] = "#36454F",
+        ["Silver"] = "#C0C0C0", ["Navy"] = "#1F2A44", ["Blue"] = "#1E5BC6", ["Light Blue"] = "#9CC9F0",
+        ["Teal"] = "#128C8C", ["Turquoise"] = "#30D5C8", ["Green"] = "#2E8B57", ["Olive"] = "#6B6B2F",
+        ["Khaki"] = "#C3B091", ["Mint"] = "#B8E6CF", ["Yellow"] = "#F4D03F", ["Mustard"] = "#D4A017",
+        ["Orange"] = "#F28C28", ["Rust"] = "#B7410E", ["Red"] = "#C62828", ["Burgundy"] = "#800020",
+        ["Maroon"] = "#5A1A1A", ["Pink"] = "#F4A6C0", ["Hot Pink"] = "#E91E8C", ["Purple"] = "#6A3FA0",
+        ["Lilac"] = "#C8A2C8", ["Brown"] = "#6B4226", ["Tan"] = "#C19A6B", ["Beige"] = "#E8DCC4",
+        ["Cream"] = "#FFF8E1", ["Gold"] = "#D4AF37", ["Multicolour"] = "#999999"
+    };
+
+    /// <summary>Colour is a closed list picked from a real dropdown per variant row. Edit ColorHexMap to change the set.</summary>
+    public static readonly string[] Colors = ColorHexMap.Keys.ToArray();
 
     /// <summary>No fixed seed for Brand - the dropdown is built entirely from brands already used on existing products.</summary>
     public static readonly string[] Brands = Array.Empty<string>();

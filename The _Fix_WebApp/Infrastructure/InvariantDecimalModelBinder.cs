@@ -25,6 +25,46 @@ namespace FashionFix.Web.Infrastructure;
 /// </summary>
 public class InvariantDecimalModelBinder : IModelBinder
 {
+    /// <summary>
+    /// Accepts "100.70", "100,70", "1 234,50", "1,234.50" and "1.234,50". The previous
+    /// implementation used NumberStyles.Number with the invariant culture, which treats a comma as a
+    /// THOUSANDS separator - so a user typing "100,70" got 10070. Rule: when both separators appear,
+    /// the LAST one is the decimal mark; when only a comma appears it is a decimal mark unless it is
+    /// followed by exactly three digits and nothing else after a leading group (e.g. "1,234").
+    /// </summary>
+    public static bool TryParseFlexible(string raw, out decimal result)
+    {
+        result = 0;
+        var v = raw.Trim().Replace("\u00A0", "").Replace(" ", "").Replace("R", "").Replace("r", "");
+        if (v.Length == 0) return false;
+
+        var lastDot = v.LastIndexOf('.');
+        var lastComma = v.LastIndexOf(',');
+
+        if (lastDot >= 0 && lastComma >= 0)
+        {
+            var decimalMark = lastDot > lastComma ? '.' : ',';
+            var groupMark = decimalMark == '.' ? ',' : '.';
+            v = v.Replace(groupMark.ToString(), "").Replace(decimalMark, '.');
+        }
+        else if (lastComma >= 0)
+        {
+            var commaCount = v.Count(c => c == ',');
+            var digitsAfter = v.Length - lastComma - 1;
+            // "1,234" or "1,234,567" -> thousands; "100,7" / "100,70" -> decimal.
+            var looksLikeThousands = commaCount > 1 || (digitsAfter == 3 && lastComma > 0 && lastComma <= 3);
+            v = looksLikeThousands ? v.Replace(",", "") : v.Replace(',', '.');
+        }
+        else if (lastDot >= 0)
+        {
+            var dotCount = v.Count(c => c == '.');
+            if (dotCount > 1) v = v.Replace(".", "");
+        }
+
+        return decimal.TryParse(v, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint,
+            CultureInfo.InvariantCulture, out result);
+    }
+
     public Task BindModelAsync(ModelBindingContext bindingContext)
     {
         ArgumentNullException.ThrowIfNull(bindingContext);
@@ -49,7 +89,7 @@ public class InvariantDecimalModelBinder : IModelBinder
             return Task.CompletedTask;
         }
 
-        if (decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed))
+        if (TryParseFlexible(value, out var parsed))
         {
             bindingContext.Result = ModelBindingResult.Success(parsed);
         }

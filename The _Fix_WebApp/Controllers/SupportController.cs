@@ -1,6 +1,7 @@
 using FashionFix.Web.Data;
 using FashionFix.Web.Models.Entities;
 using FashionFix.Web.Services;
+using FashionFix.Web.Services.Images;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -59,16 +60,36 @@ public class SupportController : Controller
     // GET: /Support/Tickets - the customer's own ticket list.
     [HttpGet]
     [Authorize(Roles = "Customer")]
-    public async Task<IActionResult> Tickets()
+    public async Task<IActionResult> Tickets(string? tab, TicketCategory? category, string? search)
     {
         var userId = _userManager.GetUserId(User);
-        var tickets = await _context.SupportTickets
+        await TicketSupport.AutoCloseStaleAsync(_context);
+
+        var history = string.Equals(tab, "history", StringComparison.OrdinalIgnoreCase);
+        var query = _context.SupportTickets
             .AsNoTracking()
             .Where(t => t.CustomerId == userId)
             .Include(t => t.Order)
-            .OrderByDescending(t => t.DateCreated)
+            .AsQueryable();
+
+        query = history
+            ? query.Where(t => t.Status == TicketStatus.Closed)
+            : query.Where(t => t.Status != TicketStatus.Closed);
+
+        if (category.HasValue) query = query.Where(t => t.Category == category.Value);
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            query = query.Where(t => t.Subject.Contains(term) || (t.Order != null && t.Order.OrderNumber.Contains(term)));
+        }
+
+        var tickets = await query
+            .OrderByDescending(t => history ? (t.DateClosed ?? t.DateCreated) : t.DateCreated)
             .ToListAsync();
 
+        ViewBag.Tab = history ? "history" : "active";
+        ViewBag.Category = category;
+        ViewBag.Search = search;
         return View(tickets);
     }
 
@@ -95,7 +116,7 @@ public class SupportController : Controller
     [HttpPost]
     [Authorize(Roles = "Customer")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> NewTicket(TicketCategory category, string subject, string message, int? orderId)
+    public async Task<IActionResult> NewTicket(TicketCategory category, string subject, string message, int? orderId, List<IFormFile>? attachments, [FromServices] IImageStorage imageStorage)
     {
         var userId = _userManager.GetUserId(User)!;
 
@@ -112,6 +133,8 @@ public class SupportController : Controller
             if (!owned) return NotFound();
         }
 
+        var (attachmentUrls, skippedFiles) = await TicketSupport.UploadAttachmentsAsync(attachments, imageStorage);
+
         var ticket = new SupportTicket
         {
             CustomerId = userId,
@@ -124,7 +147,8 @@ public class SupportController : Controller
         {
             SenderId = userId,
             SenderType = TicketSenderType.Customer,
-            Body = message.Trim()
+            Body = message.Trim(),
+            AttachmentUrls = attachmentUrls
         });
 
         _context.SupportTickets.Add(ticket);
@@ -151,7 +175,8 @@ public class SupportController : Controller
             _logger.LogWarning(ex, "Support ticket notification email failed for ticket {TicketId}.", ticket.SupportTicketId);
         }
 
-        this.ToastSuccess("Your ticket has been submitted - we'll get back to you shortly.");
+        if (skippedFiles > 0) this.ToastWarning($"Your ticket was submitted, but {skippedFiles} image(s) could not be uploaded (use JPG, PNG or WebP under 5 MB).");
+        else this.ToastSuccess("Your ticket has been submitted - we'll get back to you shortly.");
         return RedirectToAction(nameof(TicketDetails), new { id = ticket.SupportTicketId });
     }
 
@@ -177,7 +202,7 @@ public class SupportController : Controller
     [HttpPost]
     [Authorize(Roles = "Customer")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Reply(int id, string message)
+    public async Task<IActionResult> Reply(int id, string? message, List<IFormFile>? attachments, [FromServices] IImageStorage imageStorage)
     {
         var userId = _userManager.GetUserId(User)!;
         var ticket = await _context.SupportTickets.FirstOrDefaultAsync(t => t.SupportTicketId == id && t.CustomerId == userId);
@@ -189,7 +214,9 @@ public class SupportController : Controller
             return RedirectToAction(nameof(TicketDetails), new { id });
         }
 
-        if (string.IsNullOrWhiteSpace(message))
+        var (attachmentUrls, skippedFiles) = await TicketSupport.UploadAttachmentsAsync(attachments, imageStorage);
+
+        if (string.IsNullOrWhiteSpace(message) && attachmentUrls is null)
         {
             this.ToastError("Message can't be empty.");
             return RedirectToAction(nameof(TicketDetails), new { id });
@@ -200,7 +227,8 @@ public class SupportController : Controller
             SupportTicketId = id,
             SenderId = userId,
             SenderType = TicketSenderType.Customer,
-            Body = message.Trim()
+            Body = string.IsNullOrWhiteSpace(message) ? "(image attached)" : message.Trim(),
+            AttachmentUrls = attachmentUrls
         });
 
         // A customer replying to a Resolved ticket means it isn't actually resolved -
@@ -208,6 +236,36 @@ public class SupportController : Controller
         if (ticket.Status == TicketStatus.Resolved) ticket.Status = TicketStatus.Open;
 
         await _context.SaveChangesAsync();
+        if (skippedFiles > 0) this.ToastWarning($"{skippedFiles} image(s) could not be uploaded (use JPG, PNG or WebP under 5 MB).");
         return RedirectToAction(nameof(TicketDetails), new { id });
+    }
+
+    // POST: /Support/Close/5 - the customer ends the conversation themselves ("my problem is sorted").
+    [HttpPost]
+    [Authorize(Roles = "Customer")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Close(int id)
+    {
+        var userId = _userManager.GetUserId(User);
+        var owned = await _context.SupportTickets.AnyAsync(t => t.SupportTicketId == id && t.CustomerId == userId);
+        if (!owned) return NotFound();
+
+        await TicketSupport.CloseAsync(_context, id, "The customer closed this conversation.");
+        this.ToastSuccess("Ticket closed. You can download the conversation from Ticket History.");
+        return RedirectToAction(nameof(Tickets), new { tab = "history" });
+    }
+
+    // GET: /Support/Transcript/5 - downloads the closed ticket's conversation as a .txt file.
+    [HttpGet]
+    [Authorize(Roles = "Customer")]
+    public async Task<IActionResult> Transcript(int id)
+    {
+        var userId = _userManager.GetUserId(User);
+        var ticket = await _context.SupportTickets.AsNoTracking()
+            .FirstOrDefaultAsync(t => t.SupportTicketId == id && t.CustomerId == userId);
+        if (ticket is null || ticket.TranscriptText is null) return NotFound();
+
+        return File(System.Text.Encoding.UTF8.GetPreamble().Concat(System.Text.Encoding.UTF8.GetBytes(ticket.TranscriptText)).ToArray(),
+            "text/plain; charset=utf-8", $"fashionfix-ticket-{ticket.SupportTicketId}.txt");
     }
 }

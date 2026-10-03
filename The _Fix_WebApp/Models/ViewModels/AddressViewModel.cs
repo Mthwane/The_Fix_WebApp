@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations;
+using FashionFix.Web.Infrastructure;
+using System.ComponentModel.DataAnnotations;
 
 namespace FashionFix.Web.Models.ViewModels;
 
@@ -12,10 +13,12 @@ public class AddressViewModel
     public string Label { get; set; } = string.Empty;
 
     [Required, MaxLength(100)]
+    [RegularExpression(InputRules.NamePattern, ErrorMessage = InputRules.NameMessage)]
     [Display(Name = "Recipient Name")]
     public string RecipientName { get; set; } = string.Empty;
 
     [Required, MaxLength(20)]
+    [RegularExpression(InputRules.PhonePattern, ErrorMessage = InputRules.PhoneMessage)]
     [Phone(ErrorMessage = "Enter a valid phone number.")]
     [Display(Name = "Phone Number")]
     public string PhoneNumber { get; set; } = string.Empty;

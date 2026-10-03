@@ -1,3 +1,4 @@
+using FashionFix.Web.Infrastructure;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -17,12 +18,15 @@ public class Supplier
     public string Name { get; set; } = string.Empty;
 
     [MaxLength(150)]
+    [RegularExpression(InputRules.NamePattern, ErrorMessage = InputRules.NameMessage)]
     public string? ContactName { get; set; }
 
     [MaxLength(150)]
+    [EmailAddress(ErrorMessage = "Enter a valid email address")]
     public string? ContactEmail { get; set; }
 
     [MaxLength(30)]
+    [RegularExpression(InputRules.PhonePattern, ErrorMessage = InputRules.PhoneMessage)]
     public string? ContactPhone { get; set; }
 
     /// <summary>Typical lead time in days from PO placement to delivery.</summary>

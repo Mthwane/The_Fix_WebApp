@@ -26,14 +26,8 @@
         <div>
             <span class="stf-eyebrow">Order Fulfillment</span>
             <h1>Orders</h1>
-            <p>Move online orders through Processing &rarr; Shipped &rarr; Delivered, or cancel one that can't be fulfilled.</p>
+            <p>Courier booking and tracking updates run automatically in the background. You can still move an order along manually or cancel one that can't be fulfilled.</p>
         </div>
-        <form asp-controller="Orders" asp-action="RunFulfillmentCycle" method="post">
-            @Html.AntiForgeryToken()
-            <button type="submit" class="stf-btn stf-btn-outline" title="Books couriers for ready orders, refreshes tracking, and emails customers - normally runs automatically every 20 minutes.">
-                Run Fulfillment Cycle Now
-            </button>
-        </form>
     </div>
 
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">

@@ -3,6 +3,11 @@
     ViewData["Title"] = "My Support Tickets";
     Layout = "_AccountLayout";
 
+    var tab = (string)ViewBag.Tab;
+    var isHistory = tab == "history";
+    var selectedCategory = ViewBag.Category as TicketCategory?;
+    var search = ViewBag.Search as string;
+
     (string bg, string fg) BadgeColors(TicketStatus s) => s switch
     {
         TicketStatus.Resolved or TicketStatus.Closed => ("var(--ffs-cream-alt)", "var(--ffs-ink-muted)"),
@@ -22,11 +27,41 @@
             <a asp-action="NewTicket" class="ffs-btn ffs-btn-forest">New Ticket</a>
         </div>
 
+        <div style="display:flex;gap:8px;margin-bottom:18px;">
+            <a asp-action="Tickets" asp-route-tab="active" class="ffs-btn @(!isHistory ? "ffs-btn-forest" : "ffs-btn-outline")" style="padding:8px 18px;font-size:0.82rem;">Active</a>
+            <a asp-action="Tickets" asp-route-tab="history" class="ffs-btn @(isHistory ? "ffs-btn-forest" : "ffs-btn-outline")" style="padding:8px 18px;font-size:0.82rem;">Ticket History</a>
+        </div>
+
+        <form asp-action="Tickets" method="get" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;">
+            <input type="hidden" name="tab" value="@tab" />
+            <input type="text" name="search" value="@search" placeholder="Search subject or order number"
+                   style="flex:1 1 220px;border:1px solid var(--ffs-border);border-radius:999px;padding:9px 16px;font-size:0.85rem;background:var(--ffs-card);" />
+            <select name="category" style="border:1px solid var(--ffs-border);border-radius:999px;padding:9px 16px;font-size:0.85rem;background:var(--ffs-card);">
+                <option value="">All categories</option>
+                @foreach (var c in Enum.GetValues<TicketCategory>())
+                {
+                    <option value="@c" selected="@(selectedCategory == c)">@(c switch { TicketCategory.OrderQuery => "Order query", TicketCategory.RefundRequest => "Refund request", TicketCategory.CancelOrder => "Cancel order", _ => "General" })</option>
+                }
+            </select>
+            <button type="submit" class="ffs-btn ffs-btn-outline" style="padding:9px 18px;font-size:0.82rem;">Filter</button>
+            @if (selectedCategory.HasValue || !string.IsNullOrWhiteSpace(search))
+            {
+                <a asp-action="Tickets" asp-route-tab="@tab" class="ffs-btn ffs-btn-outline" style="padding:9px 18px;font-size:0.82rem;">Clear</a>
+            }
+        </form>
+
         @if (!Model.Any())
         {
             <div style="border:1px solid var(--ffs-border);border-radius:var(--ffs-radius);padding:32px;text-align:center;color:var(--ffs-ink-muted);">
-                <p style="margin:0 0 14px;">You haven't opened any support tickets yet.</p>
-                <a asp-action="NewTicket" class="ffs-btn ffs-btn-forest">Start a Ticket</a>
+                @if (isHistory)
+                {
+                    <p style="margin:0;">No closed tickets match. Closed conversations are saved here so you can download them.</p>
+                }
+                else
+                {
+                    <p style="margin:0 0 14px;">No active support tickets.</p>
+                    <a asp-action="NewTicket" class="ffs-btn ffs-btn-forest">Start a Ticket</a>
+                }
             </div>
         }
         else
@@ -35,8 +70,9 @@
                 @foreach (var t in Model)
                 {
                     var (bg, fg) = BadgeColors(t.Status);
+                    <div style="border:1px solid var(--ffs-border);border-radius:var(--ffs-radius);padding:16px 20px;background:var(--ffs-card);">
                     <a asp-action="TicketDetails" asp-route-id="@t.SupportTicketId"
-                       style="display:block;border:1px solid var(--ffs-border);border-radius:var(--ffs-radius);padding:16px 20px;text-decoration:none;color:inherit;background:var(--ffs-card);">
+                       style="display:block;text-decoration:none;color:inherit;">
                         <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
                             <div>
                                 <strong>@t.Subject</strong>
@@ -51,6 +87,13 @@
                             <span style="background:@bg;color:@fg;font-size:0.75rem;font-weight:600;padding:5px 12px;border-radius:999px;white-space:nowrap;">@t.Status</span>
                         </div>
                     </a>
+                    @if (isHistory && t.TranscriptText is not null)
+                    {
+                        <div style="margin-top:10px;">
+                            <a asp-action="Transcript" asp-route-id="@t.SupportTicketId" class="ffs-btn ffs-btn-outline" style="padding:6px 14px;font-size:0.78rem;">Download transcript (.txt)</a>
+                        </div>
+                    }
+                    </div>
                 }
             </div>
         }
