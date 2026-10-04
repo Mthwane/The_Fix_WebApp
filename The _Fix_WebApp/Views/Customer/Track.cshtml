@@ -180,7 +180,7 @@
                             @item.Product?.Name
                             @if (item.ProductVariant != null)
                             {
-                                <span style="color:var(--ffs-ink-muted);">(@item.ProductVariant.Size/@item.ProductVariant.Color)</span>
+                                <span style="color:var(--ffs-ink-muted);">(@item.ProductVariant.DisplaySize/@item.ProductVariant.Color)</span>
                             }
                             <span style="color:var(--ffs-ink-muted);">&times;@item.Quantity</span>
                         </div>

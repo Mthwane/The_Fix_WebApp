@@ -39,7 +39,13 @@
                 }
             </p>
         </div>
-        <a asp-action="Index" class="stf-btn stf-btn-outline">&larr; Back to Purchase Orders</a>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;">
+            @if (Model.Items.Any(i => i.QuantityReceived > 0))
+            {
+                <a asp-action="ReceivingReceipt" asp-route-id="@Model.PurchaseOrderId" class="stf-btn stf-btn-primary">Download receiving receipt</a>
+            }
+            <a asp-action="Index" class="stf-btn stf-btn-outline">&larr; Back to Purchase Orders</a>
+        </div>
     </div>
 
     <div style="display:grid;grid-template-columns:2fr 1fr;gap:20px;align-items:start;">
@@ -59,7 +65,7 @@
                     @foreach (var item in Model.Items)
                     {
                         <tr>
-                            <td>@item.ProductVariant.Product.Name <span style="color:var(--stf-on-surface-variant);">(@item.ProductVariant.Size/@item.ProductVariant.Color)</span></td>
+                            <td>@item.ProductVariant.Product.Name <span style="color:var(--stf-on-surface-variant);">(@item.ProductVariant.DisplaySize/@item.ProductVariant.Color)</span></td>
                             <td><code>@item.ProductVariant.SKU</code></td>
                             <td>@item.QuantityOrdered</td>
                             <td>@item.QuantityReceived @(item.QuantityOutstanding > 0 ? $"({item.QuantityOutstanding} outstanding)" : "")</td>
@@ -140,7 +146,7 @@
                                     @foreach (var item in outstanding)
                                     {
                                         <tr>
-                                            <td>@item.ProductVariant.Product.Name (@item.ProductVariant.Size/@item.ProductVariant.Color)</td>
+                                            <td>@item.ProductVariant.Product.Name (@item.ProductVariant.DisplaySize/@item.ProductVariant.Color)</td>
                                             <td>@item.QuantityOutstanding</td>
                                             <td>
                                                 <input type="hidden" name="itemIds" value="@item.PurchaseOrderItemId" />

@@ -278,7 +278,7 @@
                                     <select name="variantId" class="form-select form-select-sm" style="font-size:0.78rem;">
                                         @foreach (var v in variants)
                                         {
-                                            <option value="@v.ProductVariantId">@v.Size / @v.Color &mdash; @v.StockQuantity left</option>
+                                            <option value="@v.ProductVariantId">@v.DisplaySize / @v.Color &mdash; @v.StockQuantity left</option>
                                         }
                                     </select>
                                     <button type="submit" class="ffs-btn ffs-btn-forest" style="padding:8px 14px;font-size:0.78rem;white-space:nowrap;">Add</button>

@@ -113,6 +113,30 @@ public class PurchaseOrdersController : Controller
         return View(order);
     }
 
+    // GET: /PurchaseOrders/ReceivingReceipt/5 - the printable / save-as-PDF "Goods received" receipt for what has been
+    // booked in against this purchase order so far (ordered vs received vs outstanding, with the value received).
+    [HttpGet]
+    public async Task<IActionResult> ReceivingReceipt(int id)
+    {
+        var order = await _context.PurchaseOrders
+            .AsNoTracking()
+            .Include(p => p.Supplier)
+            .Include(p => p.CreatedByUser)
+            .Include(p => p.Items).ThenInclude(i => i.ProductVariant).ThenInclude(v => v.Product)
+            .FirstOrDefaultAsync(p => p.PurchaseOrderId == id);
+
+        if (order is null) return NotFound();
+
+        if (!order.Items.Any(i => i.QuantityReceived > 0))
+        {
+            this.ToastError("Nothing has been received against this purchase order yet, so there is no receiving receipt to download.");
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        ViewBag.PrintedBy = User.Identity?.Name;
+        return View(order);
+    }
+
     // GET: /PurchaseOrders/Create - a blank manual restock request.
     [HttpGet]
     [Authorize(Roles = "Manager,Administrator")] // only managers raise, submit, approve or cancel purchase orders

@@ -66,6 +66,11 @@ public class Order
     [Column(TypeName = "decimal(18,2)")]
     public decimal TaxTotal { get; set; }
 
+    /// <summary>Flat delivery charge added to online orders under the free-delivery threshold (see
+    /// DeliverySettings). 0 for free delivery and for in-store POS sales. Already included in GrandTotal.</summary>
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal DeliveryFee { get; set; }
+
     [Column(TypeName = "decimal(18,2)")]
     public decimal GrandTotal { get; set; }
 

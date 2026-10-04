@@ -98,21 +98,109 @@
 
                 @if (activeVariants.Count > 0)
                 {
-                    <form asp-controller="Shop" asp-action="AddToCart" method="post">
+                    // Every size the style has ever been sold in (so sold-out sizes show crossed out, like the reference),
+                    // grouped by colour. A size button is only selectable for the chosen colour if that combination is in stock.
+                    var allVariants = product.Variants.Where(v => v.IsActive).ToList();
+                    var colours = allVariants.Where(v => !string.IsNullOrWhiteSpace(v.Color))
+                        .GroupBy(v => v.Color!).Select(g => g.First()).ToList();
+                    var sizeOrder = allVariants.Where(v => !string.IsNullOrWhiteSpace(v.Size))
+                        .Select(v => v.DisplaySize ?? v.Size!).Distinct()
+                        .OrderBy(x => double.TryParse(new string(x.Where(c => char.IsDigit(c) || c == '.').ToArray()), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var n) ? n : 1000)
+                        .ThenBy(x => x).ToList();
+                    var isFootwear = ProductViewModel.IsFootwear(product.Category);
+                    var firstInStock = activeVariants.First();
+                    var variantJson = allVariants.Select(v => new { id = v.ProductVariantId, size = v.DisplaySize ?? v.Size ?? "", color = v.Color ?? "", stock = v.IsActive ? v.StockQuantity : 0 });
+
+                    <form asp-controller="Shop" asp-action="AddToCart" method="post" id="variantForm">
                         @Html.AntiForgeryToken()
                         <input type="hidden" name="returnUrl" value="@Model.ReturnUrl" />
-                        <label style="font-size:0.82rem;font-weight:600;display:block;margin-bottom:6px;">Size / Colour</label>
-                        <select name="variantId" class="form-select" style="max-width:320px;margin-bottom:14px;">
-                            @foreach (var v in activeVariants)
-                            {
-                                <option value="@v.ProductVariantId">@v.Size / @v.Color &mdash; @v.StockQuantity in stock</option>
-                            }
-                        </select>
-                        <div style="display:flex;gap:10px;align-items:center;">
+                        <input type="hidden" name="variantId" id="variantId" value="@firstInStock.ProductVariantId" />
+
+                        @if (colours.Count > 0)
+                        {
+                            <div class="ffs-opt-head"><span>Colour</span> <b id="colourName">@firstInStock.Color</b><i></i></div>
+                            <div class="ffs-colour-row" role="radiogroup" aria-label="Colour">
+                                @foreach (var c in colours)
+                                {
+                                    var hex = !string.IsNullOrWhiteSpace(c.ColorHex) ? c.ColorHex : (ProductViewModel.ColorHexMap.TryGetValue(c.Color!, out var h) ? h : "#999999");
+                                    var colourInStock = allVariants.Any(v => v.Color == c.Color && v.StockQuantity > 0);
+                                    <button type="button" class="ffs-colour-chip @(c.Color == firstInStock.Color ? "is-active" : "") @(colourInStock ? "" : "is-out")" data-colour="@c.Color" title="@c.Color" aria-label="@c.Color" role="radio" aria-checked="@(c.Color == firstInStock.Color ? "true" : "false")">
+                                        <span style="background:@hex;"></span>
+                                    </button>
+                                }
+                            </div>
+                        }
+
+                        @if (sizeOrder.Count > 0)
+                        {
+                            <div class="ffs-opt-head"><span>@(isFootwear ? "Size (UK)" : "Size")</span> <b id="sizeName"></b><i></i></div>
+                            <div class="ffs-size-grid" role="radiogroup" aria-label="Size">
+                                @foreach (var sz in sizeOrder)
+                                {
+                                    <button type="button" class="ffs-size-btn" data-size="@sz" role="radio" aria-checked="false">@sz</button>
+                                }
+                            </div>
+                            <div id="stockNote" class="ffs-stock-note"></div>
+                        }
+
+                        <div style="display:flex;gap:10px;align-items:center;margin-top:18px;">
                             <input type="number" name="quantity" value="1" min="1" class="form-control" style="width:80px;" />
-                            <button type="submit" class="ffs-btn ffs-btn-forest">Add to Cart</button>
+                            <button type="submit" id="addBtn" class="ffs-btn ffs-btn-forest">Add to Cart</button>
                         </div>
                     </form>
+                    <script id="variantData" type="application/json">@Html.Raw(Json.Serialize(variantJson))</script>
+                    <script>
+                        (function () {
+                            var variants = JSON.parse(document.getElementById('variantData').textContent);
+                            var hasColour = document.querySelectorAll('.ffs-colour-chip').length > 0;
+                            var hasSize = document.querySelectorAll('.ffs-size-btn').length > 0;
+                            var colour = hasColour ? (document.querySelector('.ffs-colour-chip.is-active') || {}).dataset.colour : '';
+                            var size = '@(firstInStock.DisplaySize ?? firstInStock.Size)';
+                            var idInput = document.getElementById('variantId');
+                            var addBtn = document.getElementById('addBtn');
+
+                            function find(c, s) {
+                                return variants.filter(function (v) { return (!hasColour || v.color === c) && (!hasSize || v.size === s); })[0];
+                            }
+                            function render() {
+                                // If the chosen size doesn't exist in stock for this colour, jump to the first one that does.
+                                var cur = find(colour, size);
+                                if (!cur || cur.stock <= 0) {
+                                    var alt = variants.filter(function (v) { return (!hasColour || v.color === colour) && v.stock > 0; })[0];
+                                    if (alt) { size = alt.size; cur = alt; }
+                                }
+                                document.querySelectorAll('.ffs-colour-chip').forEach(function (b) {
+                                    var on = b.dataset.colour === colour;
+                                    b.classList.toggle('is-active', on); b.setAttribute('aria-checked', on);
+                                });
+                                document.querySelectorAll('.ffs-size-btn').forEach(function (b) {
+                                    var v = find(colour, b.dataset.size);
+                                    var out = !v || v.stock <= 0;
+                                    b.classList.toggle('is-out', out);
+                                    b.disabled = out;
+                                    var on = b.dataset.size === size && !out;
+                                    b.classList.toggle('is-active', on); b.setAttribute('aria-checked', on);
+                                });
+                                var cn = document.getElementById('colourName'); if (cn) cn.textContent = colour;
+                                var sn = document.getElementById('sizeName'); if (sn) sn.textContent = cur && cur.stock > 0 ? size : '';
+                                var note = document.getElementById('stockNote');
+                                if (cur && cur.stock > 0) {
+                                    idInput.value = cur.id; addBtn.disabled = false;
+                                    if (note) note.textContent = cur.stock <= 5 ? 'Only ' + cur.stock + ' left' : '';
+                                } else {
+                                    addBtn.disabled = true;
+                                    if (note) note.textContent = 'Currently unavailable in this colour';
+                                }
+                            }
+                            document.querySelectorAll('.ffs-colour-chip').forEach(function (b) {
+                                b.addEventListener('click', function () { colour = b.dataset.colour; render(); });
+                            });
+                            document.querySelectorAll('.ffs-size-btn').forEach(function (b) {
+                                b.addEventListener('click', function () { if (!b.disabled) { size = b.dataset.size; render(); } });
+                            });
+                            render();
+                        })();
+                    </script>
                 }
                 else
                 {
@@ -229,34 +317,35 @@
         }
         else
         {
-            <div style="display:flex;flex-direction:column;gap:18px;">
+            // Compact list, same feel as the order-history list: one bordered row per review, small thumbnails to the right.
+            <div class="ffs-review-list">
                 @foreach (var review in Model.Reviews)
                 {
-                    <div style="border-bottom:1px solid var(--ffs-border);padding-bottom:16px;">
-                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                            <div>
-                                <span style="color:var(--ffs-clay);">@(new string('\u2605', review.Rating))@(new string('\u2606', 5 - review.Rating))</span>
-                                @if (review.IsVerifiedPurchase)
-                                {
-                                    <span style="font-size:0.7rem;color:var(--ffs-forest);font-weight:600;margin-left:6px;">VERIFIED PURCHASE</span>
-                                }
-                            </div>
-                            <span style="font-size:0.75rem;color:var(--ffs-ink-muted);">@review.DateCreated.ToString("MMM d, yyyy")</span>
+                    <div class="ffs-review-row">
+                        <div class="ffs-review-top">
+                            <span class="ffs-review-stars">@(new string('\u2605', review.Rating))<span class="off">@(new string('\u2606', 5 - review.Rating))</span></span>
+                            <span class="ffs-review-who">@(review.Customer?.FullName ?? "Fashion Fix Customer")</span>
+                            @if (review.IsVerifiedPurchase)
+                            {
+                                <span class="ffs-review-verified">Verified purchase</span>
+                            }
+                            <span class="ffs-review-date">@review.DateCreated.ToString("dd MMM yyyy")</span>
                         </div>
-                        <p style="font-size:0.8rem;color:var(--ffs-ink-muted);margin-bottom:4px;">@(review.Customer?.FullName ?? "Fashion Fix Customer")</p>
-                        @if (!string.IsNullOrWhiteSpace(review.Comment))
-                        {
-                            <p style="font-size:0.9rem;margin:0;">@review.Comment</p>
-                        }
-                        @if (review.Photos.Count > 0)
-                        {
-                            <div class="rv-photos">
-                                @foreach (var photo in review.Photos)
-                                {
-                                    <a href="@photo" target="_blank" rel="noopener"><img src="@photo" alt="Review photo" loading="lazy" /></a>
-                                }
-                            </div>
-                        }
+                        <div class="ffs-review-body">
+                            @if (!string.IsNullOrWhiteSpace(review.Comment))
+                            {
+                                <p>@review.Comment</p>
+                            }
+                            @if (review.Photos.Count > 0)
+                            {
+                                <div class="ffs-review-photos">
+                                    @foreach (var photo in review.Photos)
+                                    {
+                                        <a href="@photo" target="_blank" rel="noopener"><img src="@photo.Sized(120)" alt="Review photo" loading="lazy" /></a>
+                                    }
+                                </div>
+                            }
+                        </div>
                     </div>
                 }
             </div>

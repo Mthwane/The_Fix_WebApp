@@ -488,6 +488,35 @@ public class ProductsController : Controller
         if (!ProductViewModel.Categories.Contains(model.Category))
             ModelState.AddModelError(nameof(model.Category), "Please choose a category from the list.");
 
+        // Footwear is always sized in UK sizes: "7" / "uk7" become "UK 7" before anything is saved, and a size that isn't
+        // a UK size (letters like "M", or "UK 99") is rejected. Custom sizes such as "UK 7.5" are fine.
+        if (ProductViewModel.IsFootwear(model.Category))
+        {
+            for (var i = 0; i < model.Variants.Count; i++)
+            {
+                var row = model.Variants[i];
+                if (row.Remove) continue;
+
+                row.Size = ProductViewModel.NormaliseFootwearSize(row.Size);
+                var key = $"{nameof(model.Variants)}[{i}].{nameof(row.Size)}";
+                if (string.IsNullOrEmpty(row.Size))
+                {
+                    ModelState.Remove(key);
+                    ModelState.AddModelError(key, "Choose a UK size for this footwear variant.");
+                }
+                else if (!System.Text.RegularExpressions.Regex.IsMatch(row.Size, ProductViewModel.FootwearSizePattern))
+                {
+                    ModelState.Remove(key);
+                    ModelState.AddModelError(key, "Footwear sizes must be UK sizes, e.g. UK 7 or UK 7.5.");
+                }
+                else
+                {
+                    // The normalised value replaces whatever was posted, and clears any stale format error for it.
+                    ModelState.Remove(key);
+                }
+            }
+        }
+
         for (var i = 0; i < model.Variants.Count; i++)
         {
             var row = model.Variants[i];
@@ -529,6 +558,11 @@ public class ProductsController : Controller
             .Where(v => v.Size != null && v.Size != "").Select(v => v.Size!).Distinct().ToListAsync();
         var dbBrands = await _context.Products.AsNoTracking()
             .Where(p => p.Brand != null && p.Brand != "").Select(p => p.Brand!).Distinct().ToListAsync();
+
+        // Footwear (UK) sizes have their own fixed dropdown - keep them out of the clothing size suggestions.
+        ViewBag.FootwearSizes = ProductViewModel.FootwearSizes.ToList();
+        ViewBag.FootwearCategory = ProductViewModel.FootwearCategory;
+        dbSizes = dbSizes.Where(x => !x.StartsWith("UK ", StringComparison.OrdinalIgnoreCase)).ToList();
 
         ViewBag.Sizes = ProductViewModel.Sizes.Union(dbSizes, StringComparer.OrdinalIgnoreCase)
             .OrderBy(s => s, StringComparer.OrdinalIgnoreCase).ToList();

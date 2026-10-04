@@ -2,49 +2,120 @@
 @{
     ViewData["Title"] = "Review Moderation";
     Layout = "_StaffLayout";
+
+    var pager = (PagerModel)ViewBag.Pager;
+    var search = ViewBag.Search as string;
+    var rating = ViewBag.Rating as int?;
+    var verified = (bool)ViewBag.Verified;
+    var photos = (bool)ViewBag.Photos;
+    var from = ViewBag.From as DateTime?;
+    var to = ViewBag.To as DateTime?;
+    var sort = (string)ViewBag.Sort;
+    var totalAll = (int)ViewBag.TotalAll;
+    var avgAll = (double)ViewBag.AverageAll;
+    var totalFiltered = (int)ViewBag.TotalFiltered;
+    var filtered = !string.IsNullOrWhiteSpace(search) || rating.HasValue || verified || photos || from.HasValue || to.HasValue;
+    var returnQuery = Context.Request.QueryString.Value ?? "";
+    string F = "border:1px solid var(--stf-outline-variant);border-radius:8px;padding:8px 12px;font-size:0.85rem;background:#fff;";
 }
 <div class="stf-content">
-    <span class="stf-eyebrow">Storefront</span>
-    <h1 style="margin-bottom:6px;">Review Moderation</h1>
-    <p style="color:var(--stf-on-surface-variant);margin-bottom:10px;">Most recent 200 reviews across the catalogue.</p>
-    <div class="stf-card" style="background:var(--stf-surface-container);border:none;margin-bottom:20px;">
-        <p style="margin:0;font-size:0.82rem;color:var(--stf-on-surface-variant);">Backlog item: filtering by product/rating/date isn't built yet - this is a flat chronological list for now.</p>
+    <div class="stf-page-head">
+        <div>
+            <span class="stf-eyebrow">Storefront</span>
+            <h1>Review Moderation</h1>
+            <p>@totalAll review@(totalAll == 1 ? "" : "s") across the catalogue@(totalAll > 0 ? $" \u2022 average {avgAll:0.0} \u2605" : ""). 10 per page.</p>
+        </div>
     </div>
+
+    <form method="get" asp-action="Reviews" class="stf-card" style="margin-bottom:16px;">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+            <div style="flex:2 1 240px;">
+                <label style="font-size:0.75rem;font-weight:600;display:block;margin-bottom:4px;">Search</label>
+                <input type="text" name="search" value="@search" placeholder="Product, SKU, customer or comment" style="@F width:100%;" />
+            </div>
+            <div>
+                <label style="font-size:0.75rem;font-weight:600;display:block;margin-bottom:4px;">Rating</label>
+                <select name="rating" style="@F">
+                    <option value="">All</option>
+                    @for (var r = 5; r >= 1; r--) { <option value="@r" selected="@(rating == r)">@r star@(r == 1 ? "" : "s")</option> }
+                </select>
+            </div>
+            <div>
+                <label style="font-size:0.75rem;font-weight:600;display:block;margin-bottom:4px;">From</label>
+                <input type="date" name="from" value="@from?.ToString("yyyy-MM-dd")" style="@F" />
+            </div>
+            <div>
+                <label style="font-size:0.75rem;font-weight:600;display:block;margin-bottom:4px;">To</label>
+                <input type="date" name="to" value="@to?.ToString("yyyy-MM-dd")" style="@F" />
+            </div>
+            <div>
+                <label style="font-size:0.75rem;font-weight:600;display:block;margin-bottom:4px;">Sort</label>
+                <select name="sort" style="@F">
+                    <option value="newest" selected="@(sort == "newest")">Newest first</option>
+                    <option value="oldest" selected="@(sort == "oldest")">Oldest first</option>
+                    <option value="lowest" selected="@(sort == "lowest")">Lowest rating</option>
+                    <option value="highest" selected="@(sort == "highest")">Highest rating</option>
+                </select>
+            </div>
+        </div>
+        <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-top:12px;">
+            <label style="font-size:0.82rem;display:flex;gap:6px;align-items:center;"><input type="checkbox" name="verified" value="true" checked="@verified" /> Verified purchases only</label>
+            <label style="font-size:0.82rem;display:flex;gap:6px;align-items:center;"><input type="checkbox" name="photos" value="true" checked="@photos" /> With photos only</label>
+            <span style="flex:1;"></span>
+            @if (filtered)
+            {
+                <a asp-action="Reviews" class="stf-btn stf-btn-outline" style="padding:7px 16px;font-size:0.8rem;">Clear</a>
+            }
+            <button type="submit" class="stf-btn stf-btn-primary" style="padding:7px 18px;font-size:0.8rem;">Apply filters</button>
+        </div>
+    </form>
+
+    @if (filtered)
+    {
+        <p style="font-size:0.82rem;color:var(--stf-on-surface-variant);margin:0 0 10px;">@totalFiltered matching review@(totalFiltered == 1 ? "" : "s").</p>
+    }
 
     @if (!Model.Any())
     {
-        <div class="stf-card" style="text-align:center;padding:40px 20px;color:var(--stf-on-surface-variant);">No reviews yet.</div>
+        <div class="stf-card" style="text-align:center;padding:40px 20px;color:var(--stf-on-surface-variant);">@(filtered ? "No reviews match these filters." : "No reviews yet.")</div>
     }
     else
     {
-        <table class="stf-table">
-            <thead>
-                <tr><th>Product</th><th>Customer</th><th>Rating</th><th>Comment</th><th>Date</th><th></th></tr>
-            </thead>
-            <tbody>
-                @foreach (var r in Model)
-                {
-                    <tr>
-                        <td style="font-weight:600;">@r.Product.Name</td>
-                        <td>
-                            @(r.Customer?.FullName ?? "(deleted account)")
-                            @if (r.IsVerifiedPurchase)
+        <div style="border:1px solid var(--stf-outline-variant);border-radius:12px;overflow:hidden;background:#fff;">
+            @foreach (var r in Model)
+            {
+                <div style="padding:12px 16px;border-bottom:1px solid var(--stf-outline-variant);display:flex;gap:14px;align-items:flex-start;">
+                    <div style="flex:1;min-width:0;">
+                        <div style="display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center;font-size:0.82rem;">
+                            <a asp-controller="Shop" asp-action="Product" asp-route-id="@r.ProductId" target="_blank" style="font-weight:600;color:inherit;">@r.Product.Name</a>
+                            <span style="color:#c9a227;letter-spacing:1px;">@(new string('\u2605', r.Rating))<span style="color:var(--stf-outline-variant);">@(new string('\u2606', 5 - r.Rating))</span></span>
+                            <span style="color:var(--stf-on-surface-variant);">@(r.Customer?.FullName ?? "(deleted account)")</span>
+                            @if (r.IsVerifiedPurchase) { <span class="stf-badge stf-badge-active">Verified</span> }
+                            <span style="margin-left:auto;font-size:0.76rem;color:var(--stf-on-surface-variant);">@r.DateCreated.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</span>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(r.Comment))
+                        {
+                            <p style="margin:4px 0 0;font-size:0.86rem;line-height:1.45;white-space:pre-line;">@r.Comment</p>
+                        }
+                    </div>
+                    @if (r.Photos.Count > 0)
+                    {
+                        <div style="display:flex;gap:6px;flex-shrink:0;">
+                            @foreach (var photo in r.Photos)
                             {
-                                <span class="stf-badge stf-badge-active" style="margin-left:6px;">Verified</span>
+                                <a href="@photo" target="_blank" rel="noopener"><img src="@photo.Sized(120)" alt="Review photo" loading="lazy" style="width:40px;height:40px;object-fit:cover;border-radius:6px;border:1px solid var(--stf-outline-variant);display:block;" /></a>
                             }
-                        </td>
-                        <td><span style="color:#c9a227;">@(new string('\u2605', r.Rating))</span><span style="color:var(--stf-outline-variant);">@(new string('\u2606', 5 - r.Rating))</span></td>
-                        <td style="max-width:320px;">@r.Comment</td>
-                        <td style="font-size:0.8rem;color:var(--stf-on-surface-variant);">@r.DateCreated.ToString("MMM d, yyyy")</td>
-                        <td>
-                            <form asp-action="DeleteReview" asp-route-id="@r.ProductReviewId" method="post" style="display:inline;">
-                                @Html.AntiForgeryToken()
-                                <button type="submit" class="stf-btn stf-btn-danger-outline" style="padding:6px 14px;font-size:0.78rem;" onclick="return confirm('Delete this review? This recalculates the product rating.');">Delete</button>
-                            </form>
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </table>
+                        </div>
+                    }
+                    <form asp-action="DeleteReview" asp-route-id="@r.ProductReviewId" method="post" style="flex-shrink:0;">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="returnQuery" value="@returnQuery" />
+                        <button type="submit" class="stf-btn stf-btn-danger-outline" style="padding:5px 12px;font-size:0.76rem;" onclick="return confirm('Delete this review? This recalculates the product rating.');">Delete</button>
+                    </form>
+                </div>
+            }
+        </div>
+
+        <partial name="_Pager" model="pager" />
     }
 </div>

@@ -110,6 +110,35 @@ public class ProductViewModel
     /// <summary>Seed size list - offered as suggestions when adding a variant row (free text + datalist, same UX the old top-level Size field used).</summary>
     public static readonly string[] Sizes = { "XS", "S", "M", "L", "XL", "XXL", "One Size" };
 
+    // ---- Footwear sizing: stored and shown as "UK 7" everywhere in the app ----
+    /// <summary>The category whose variants use the fixed UK shoe-size list.</summary>
+    public const string FootwearCategory = "Shoes";
+
+    /// <summary>The fixed UK size dropdown for footwear (UK 1 - UK 15). Staff can still add a size outside this list
+    /// (e.g. a half size "UK 7.5") through the "Add custom size" option - see wwwroot/js/variant-sizes.js.</summary>
+    public static readonly string[] FootwearSizes = Enumerable.Range(1, 15).Select(n => $"UK {n}").ToArray();
+
+    /// <summary>"UK 7" or "UK 7.5" - the only shape a footwear size may take once saved.</summary>
+    public const string FootwearSizePattern = @"^UK (?:[1-9]|1[0-9]|20)(?:\.5)?$";
+
+    public static bool IsFootwear(string? category) =>
+        string.Equals(category, FootwearCategory, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Turns "7", "uk7", "UK-7", "uk 7.5" into "UK 7" / "UK 7.5". Anything unrecognised comes back trimmed and
+    /// unchanged so validation can reject it with a clear message. Null/blank stays null.</summary>
+    public static string? NormaliseFootwearSize(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        var t = raw.Trim();
+        var m = System.Text.RegularExpressions.Regex.Match(t, @"^(?:UK[\s\-]*)?(\d{1,2}(?:\.5)?)$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        return m.Success ? $"UK {m.Groups[1].Value}" : t;
+    }
+
+    /// <summary>Display helper for any place that shows a size next to its category: footwear sizes always read "UK n",
+    /// even for older rows saved as a bare number.</summary>
+    public static string? DisplaySize(string? category, string? size) =>
+        IsFootwear(category) ? NormaliseFootwearSize(size) : size;
+
     /// <summary>Colour name -> hex. The dropdown is built from these keys, and picking a colour auto-fills the swatch hex.</summary>
     public static readonly Dictionary<string, string> ColorHexMap = new()
     {

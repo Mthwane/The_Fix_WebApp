@@ -205,6 +205,161 @@ public class SupportTicketsController : Controller
             "text/plain; charset=utf-8", $"fashionfix-ticket-{ticket.SupportTicketId}.txt");
     }
 
+    // POST: /SupportTickets/QuickAction/5 - the "Quick actions" dropdown on a ticket. One endpoint, one action name
+    // per menu entry. Anything that moves money or cancels an order re-checks the matching permission here (the page
+    // only needs Support Tickets access), and every outcome is written into the conversation as a system line so the
+    // thread - and the closed-ticket transcript - shows exactly what support did.
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> QuickAction(
+        int id, string? action, decimal? amount, string? note,
+        [FromServices] IOrderCancellationService cancellation,
+        [FromServices] IWalletService wallet,
+        [FromServices] IAuthorizationService authorization)
+    {
+        var userId = _userManager.GetUserId(User)!;
+        var ticket = await _context.SupportTickets.Include(t => t.Order).FirstOrDefaultAsync(t => t.SupportTicketId == id);
+        if (ticket is null) return NotFound();
+
+        if (ticket.Status == TicketStatus.Closed)
+        {
+            this.ToastError("This conversation is closed. It can no longer be actioned.");
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        note = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+        var staff = await _userManager.GetUserAsync(User);
+        var staffName = staff?.FullName ?? "Support";
+
+        void SystemLine(string text) => _context.TicketMessages.Add(new TicketMessage
+        {
+            SupportTicketId = id,
+            SenderType = TicketSenderType.System,
+            Body = text
+        });
+
+        // Acting on a ticket claims it, same as replying does.
+        void Claim()
+        {
+            if (ticket.AssignedEmployeeId is null) ticket.AssignedEmployeeId = userId;
+            if (ticket.Status == TicketStatus.Open) ticket.Status = TicketStatus.InProgress;
+        }
+
+        switch (action)
+        {
+            case "cancel_order":
+            {
+                if (ticket.Order is null) { this.ToastError("This ticket isn't linked to an order."); break; }
+                if (!(await authorization.AuthorizeAsync(User, Permissions.OrdersManage)).Succeeded)
+                { this.ToastError("You need the Manage Orders permission to cancel an order."); break; }
+
+                var result = await cancellation.CancelAsync(ticket.Order.OrderId, userId,
+                    note ?? $"Cancelled from support ticket #{id}", $"support ticket #{id}");
+
+                if (!result.Cancelled)
+                {
+                    this.ToastError(result.Message);
+                    break;
+                }
+
+                Claim();
+                SystemLine($"{staffName} cancelled order {ticket.Order.OrderNumber}. " + result.Message);
+                if (ticket.Category is TicketCategory.CancelOrder or TicketCategory.RefundRequest)
+                {
+                    ticket.Status = TicketStatus.Resolved;
+                    ticket.DateResolved = DateTime.UtcNow;
+                }
+                await _context.SaveChangesAsync();
+
+                if (result.HasRefundProblem) this.ToastWarning(result.Message);
+                else this.ToastSuccess(result.Message);
+                break;
+            }
+
+            case "refund_wallet":
+            {
+                if (ticket.Order is null) { this.ToastError("This ticket isn't linked to an order."); break; }
+                if (!(await authorization.AuthorizeAsync(User, Permissions.WalletAdjust)).Succeeded)
+                { this.ToastError("You need the Adjust FixCash Wallets permission to issue a wallet refund."); break; }
+                if (amount is null || amount <= 0)
+                { this.ToastError("Enter the amount to refund."); break; }
+                if (amount > ticket.Order.GrandTotal)
+                { this.ToastError($"You can't refund more than the order total ({ticket.Order.GrandTotal:C})."); break; }
+
+                var refunded = Math.Round(amount.Value, 2, MidpointRounding.AwayFromZero);
+                var credit = await wallet.CreditRefundAsync(ticket.CustomerId, refunded, ticket.Order.OrderId,
+                    $"Support refund for order {ticket.Order.OrderNumber} (ticket #{id})" + (note is null ? "" : $": {note}"));
+
+                if (!credit.Success)
+                {
+                    this.ToastError($"The FixCash refund failed: {credit.ErrorMessage ?? "unknown error"}.");
+                    break;
+                }
+
+                Claim();
+                SystemLine($"{staffName} refunded {refunded:C} to the customer's FixCash wallet for order {ticket.Order.OrderNumber}.");
+                _context.AuditLogs.Add(new AuditLog
+                {
+                    UserId = userId,
+                    Action = "SupportWalletRefund",
+                    Details = $"Ticket #{id}: {refunded:0.00} credited to FixCash for order {ticket.Order.OrderNumber}."
+                });
+                await _context.SaveChangesAsync();
+                this.ToastSuccess($"{refunded:C} refunded to the customer's FixCash wallet.");
+                break;
+            }
+
+            case "process_return":
+                if (ticket.Order is null) { this.ToastError("This ticket isn't linked to an order."); break; }
+                return RedirectToAction("Lookup", "Returns", new { orderNumber = ticket.Order.OrderNumber });
+
+            case "request_info":
+            {
+                Claim();
+                _context.TicketMessages.Add(new TicketMessage
+                {
+                    SupportTicketId = id,
+                    SenderId = userId,
+                    SenderType = TicketSenderType.Employee,
+                    Body = note ??
+                           "Hi, thanks for getting in touch. To look into this we need a little more detail - " +
+                           "please reply with your order number, what went wrong, and a photo if that helps."
+                });
+                await _context.SaveChangesAsync();
+                this.ToastSuccess("Request for more information sent.");
+                break;
+            }
+
+            case "mark_resolved":
+            {
+                Claim();
+                ticket.Status = TicketStatus.Resolved;
+                ticket.DateResolved = DateTime.UtcNow;
+                SystemLine($"{staffName} marked this ticket as resolved.");
+                await _context.SaveChangesAsync();
+                this.ToastSuccess("Ticket marked as resolved.");
+                break;
+            }
+
+            case "close_ticket":
+            {
+                Claim();
+                ticket.Status = TicketStatus.Resolved; // CloseAsync performs the real transition and stamps the transcript
+                ticket.DateResolved = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+                await TicketSupport.CloseAsync(_context, id, "This conversation was closed by support.");
+                this.ToastSuccess("Ticket closed and saved to Ticket History.");
+                return RedirectToAction(nameof(History));
+            }
+
+            default:
+                this.ToastError("Choose an action from the list first.");
+                break;
+        }
+
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
     // POST: /SupportTickets/Assign/5
     [HttpPost]
     [ValidateAntiForgeryToken]

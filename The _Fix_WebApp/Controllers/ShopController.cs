@@ -456,7 +456,8 @@ public class ShopController : Controller
 
         var totalDiscount = codeDiscount + pointsDiscount;
         var vat = TaxSettings.CalculateVat(cart.SubTotal, totalDiscount);
-        var grandTotal = cart.SubTotal - totalDiscount + vat;
+        var deliveryFee = DeliverySettings.CalculateFee(cart.SubTotal); // flat R100 under R500, free from R500
+        var grandTotal = cart.SubTotal - totalDiscount + vat + deliveryFee;
         var reference = $"WEB-{DateTime.UtcNow:yyyyMMddHHmmssfff}";
 
         // --- FixCash wallet: covers as much of the total as the balance allows, the card pays the rest ---

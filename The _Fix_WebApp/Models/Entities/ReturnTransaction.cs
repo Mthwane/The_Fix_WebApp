@@ -10,6 +10,17 @@ public enum RefundMethod
 }
 
 /// <summary>
+/// Where a return stands. Completed = stock handled AND the customer's money is fully back with them.
+/// InProgress = the return is recorded but a refund leg (FixCash credit or card refund) failed or still needs
+/// manual follow-up - staff close it with "Mark completed" once the money has actually been returned.
+/// </summary>
+public enum ReturnStatus
+{
+    Completed = 0,
+    InProgress = 1
+}
+
+/// <summary>
 /// A processed return against a line on a past order. Ported from V1 with one substantive change:
 /// restocking now targets the specific ProductVariant that came back, not the parent style, so a
 /// returned "M/Black" goes back into M/Black stock rather than being smeared across the style.
@@ -48,4 +59,9 @@ public class ReturnTransaction
     public string? Reason { get; set; }
 
     public DateTime DateProcessed { get; set; } = DateTime.UtcNow;
+
+    /// <summary>Defaults to Completed so every return recorded before this column existed counts as completed.</summary>
+    public ReturnStatus Status { get; set; } = ReturnStatus.Completed;
+
+    public DateTime? DateCompleted { get; set; }
 }

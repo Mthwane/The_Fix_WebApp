@@ -1,0 +1,40 @@
+@using Microsoft.AspNetCore.Routing
+@model PagerModel
+@if (Model.TotalPages > 1)
+{
+    // Shows: Prev, 1 2 3 ... (window of 2 either side of the current page, always first/last), Next.
+    var pages = new List<int>();
+    for (var p = 1; p <= Model.TotalPages; p++)
+    {
+        if (p == 1 || p == Model.TotalPages || Math.Abs(p - Model.Page) <= 2) pages.Add(p);
+    }
+    string UrlFor(int p)
+    {
+        var rv = new RouteValueDictionary();
+        foreach (var kv in Model.RouteValues)
+            if (!string.IsNullOrWhiteSpace(kv.Value)) rv[kv.Key] = kv.Value;
+        rv["page"] = p;
+        return Url.Action(Model.Action, Model.Controller, rv) ?? "#";
+    }
+    var store = Model.Theme == "store";
+    var baseStyle = "display:inline-flex;align-items:center;justify-content:center;min-width:34px;height:34px;padding:0 10px;border-radius:" + (store ? "999px" : "8px") + ";font-size:0.82rem;text-decoration:none;border:1px solid " + (store ? "var(--ffs-border)" : "var(--stf-outline-variant)") + ";color:inherit;";
+    var activeStyle = store ? "background:var(--ffs-forest);color:#fff;border-color:var(--ffs-forest);" : "background:var(--stf-primary);color:#fff;border-color:var(--stf-primary);";
+    var disabledStyle = "opacity:.4;pointer-events:none;";
+    <nav aria-label="Pagination" style="display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap;margin-top:20px;">
+        <a href="@UrlFor(Math.Max(1, Model.Page - 1))" style="@baseStyle @(Model.Page == 1 ? disabledStyle : "")">&lsaquo; Prev</a>
+        @{ var last = 0; }
+        @foreach (var p in pages)
+        {
+            if (last != 0 && p - last > 1)
+            {
+                <span style="color:inherit;opacity:.5;">&hellip;</span>
+            }
+            <a href="@UrlFor(p)" style="@baseStyle @(p == Model.Page ? activeStyle : "")" aria-current="@(p == Model.Page ? "page" : null)">@p</a>
+            last = p;
+        }
+        <a href="@UrlFor(Math.Min(Model.TotalPages, Model.Page + 1))" style="@baseStyle @(Model.Page == Model.TotalPages ? disabledStyle : "")">Next &rsaquo;</a>
+    </nav>
+    <p style="text-align:center;font-size:0.76rem;opacity:.65;margin-top:8px;">
+        Showing @(((Model.Page - 1) * Model.PageSize) + 1)&ndash;@(Math.Min(Model.Page * Model.PageSize, Model.TotalItems)) of @Model.TotalItems
+    </p>
+}

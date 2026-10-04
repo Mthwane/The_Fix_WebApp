@@ -145,6 +145,7 @@ builder.Services.Configure<PaystackOptions>(
 builder.Services.AddHttpClient<IPaymentService, PaystackPaymentService>();
 
 builder.Services.AddScoped<IOrderFulfillmentService, OrderFulfillmentService>();
+builder.Services.AddScoped<IOrderCancellationService, OrderCancellationService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
 
 // Registered as a singleton so the same instance can also be injected into controllers

@@ -61,6 +61,13 @@ public class ProductVariant
     public ICollection<OrderItem> OrderItems { get; set; } = new List<OrderItem>();
     public ICollection<InventoryTransaction> InventoryTransactions { get; set; } = new List<InventoryTransaction>();
 
+    /// <summary>The size as shown to people. Footwear always reads "UK 7" (even for a row saved as a bare "7"), so use this
+    /// instead of Size anywhere a size is displayed. Falls back to Size when the parent Product isn't loaded.</summary>
+    [NotMapped]
+    public string? DisplaySize => Product is not null
+        ? FashionFix.Web.Models.ViewModels.ProductViewModel.DisplaySize(Product.Category, Size)
+        : Size;
+
     /// <summary>The price actually charged for this variant - falls back to the parent style's price when there's no override.</summary>
     [NotMapped]
     public decimal EffectivePrice => PriceOverride ?? Product?.SellingPrice ?? 0;

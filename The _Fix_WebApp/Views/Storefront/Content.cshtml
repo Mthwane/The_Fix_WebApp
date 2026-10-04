@@ -2,68 +2,163 @@
 @{
     ViewData["Title"] = "Homepage Content";
     Layout = "_StaffLayout";
+    var discounts = (ViewBag.Discounts as List<Discount>) ?? new List<Discount>();
+    string L = "font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;";
+    string F = "width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:9px 14px;font-size:0.9rem;font-family:inherit;";
+    string H = "font-size:0.75rem;color:var(--stf-on-surface-variant);margin-top:4px;";
+    string SEC = "font-family:'Newsreader',serif;font-size:1.15rem;margin:0;";
 }
-<div class="stf-content" style="max-width:800px;">
+<div class="stf-content" style="max-width:860px;">
     <span class="stf-eyebrow">Storefront</span>
     <h1 style="margin-bottom:6px;">Homepage Content</h1>
-    <p style="color:var(--stf-on-surface-variant);margin-bottom:10px;">Editable copy for the storefront homepage's hero banner and Style Box section.</p>
-    <div class="stf-card" style="background:var(--stf-surface-container);border:none;margin-bottom:20px;">
-        <p style="margin:0;font-size:0.82rem;color:var(--stf-on-surface-variant);">
-            Scope note: this covers the hero banner and Style Box headline/subheadline only for now. The feature-strip captions, ethics/story block, and boutique visit banner are still fixed text in the page template - a follow-up item, not part of this screen yet.
-        </p>
-    </div>
+    <p style="color:var(--stf-on-surface-variant);margin-bottom:16px;">Everything on the customer homepage is editable here, top to bottom. Clear a text box and save to restore its original wording. Use the switches to hide a whole section.</p>
 
-    <form asp-action="Content" method="post" enctype="multipart/form-data" class="stf-card">
+    <form asp-action="Content" method="post" enctype="multipart/form-data">
         <input type="hidden" asp-for="Id" />
         <div asp-validation-summary="ModelOnly" style="color:var(--stf-error);margin-bottom:10px;"></div>
-        @{ string L = "font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;"; string F = "width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:9px 14px;font-size:0.9rem;"; }
 
-        <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:0 0 14px;">Hero Banner</h5>
-        <div style="margin-bottom:14px;">
-            <label asp-for="HeroEyebrow" style="@L"></label>
-            <input asp-for="HeroEyebrow" style="@F" />
-        </div>
-        <div style="margin-bottom:14px;">
-            <label asp-for="HeroHeadline" style="@L"></label>
-            <input asp-for="HeroHeadline" style="@F" />
-        </div>
-        <div style="margin-bottom:14px;">
-            <label asp-for="HeroSubheadline" style="@L"></label>
-            <textarea asp-for="HeroSubheadline" rows="2" style="@F"></textarea>
-        </div>
-        <div style="margin-bottom:14px;">
-            <label style="@L">Hero Image</label>
-            @if (!string.IsNullOrWhiteSpace(Model.HeroImageUrl))
-            {
-                <img src="@Model.HeroImageUrl.Sized(400)" alt="" style="height:90px;max-width:100%;object-fit:cover;border-radius:8px;display:block;margin-bottom:8px;border:1px solid var(--stf-outline-variant);" />
-            }
-            <input type="file" name="heroFile" accept="image/jpeg,image/png,image/webp,image/gif" style="@F" />
-            <input asp-for="HeroImageUrl" style="@F margin-top:6px;" placeholder="...or paste an image URL (blank uses a placeholder)" />
-            <span asp-validation-for="HeroImageUrl" style="color:var(--stf-error);font-size:0.8rem;"></span>
-            <div style="font-size:0.75rem;color:var(--stf-on-surface-variant);margin-top:4px;">JPG, PNG or WebP, max 5 MB. An uploaded file takes priority over the link.</div>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px;">
-            <div>
-                <label asp-for="HeroPrimaryCtaText" style="@L"></label>
-                <input asp-for="HeroPrimaryCtaText" style="@F" />
+        @* ============ Promo banner ============ *@
+        <details open class="stf-card" style="margin-bottom:14px;">
+            <summary style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;"><h5 style="@SEC">Promo banner (top of every page)</h5></summary>
+            <p style="@H margin-bottom:14px;">Not fixed any more: link it to a discount and it shows that discount's banner text, code and end date automatically, and disappears with it. Or switch off the link and write your own message.</p>
+            <label style="font-size:0.85rem;display:flex;gap:8px;align-items:center;margin-bottom:14px;"><input type="checkbox" asp-for="HidePromoStrip" /> Hide the promo banner completely</label>
+
+            <div style="margin-bottom:14px;">
+                <label asp-for="PromoStripDiscountId" style="@L">Linked discount</label>
+                <select asp-for="PromoStripDiscountId" style="@F">
+                    <option value="">-- None (use the message below) --</option>
+                    @foreach (var d in discounts)
+                    {
+                        <option value="@d.DiscountId">@d.Name (@d.Code) - @d.ValueLabel()@(d.ExpiresAt.HasValue ? " - ends " + d.ExpiresAt.Value.ToLocalTime().ToString("dd MMM yyyy") : "")</option>
+                    }
+                </select>
+                <label style="font-size:0.82rem;display:flex;gap:8px;align-items:center;margin-top:8px;"><input type="checkbox" asp-for="HidePromoStripWhenDiscountEnds" /> Hide the banner when the linked discount isn't live (otherwise it falls back to the message below)</label>
+                <div style="@H">Create or edit discounts under <a asp-controller="Discounts" asp-action="Index">Discounts</a>.</div>
             </div>
-            <div>
-                <label asp-for="HeroSecondaryCtaText" style="@L"></label>
-                <input asp-for="HeroSecondaryCtaText" style="@F" />
+            <div style="margin-bottom:14px;">
+                <label asp-for="PromoStripText" style="@L">Message (when not linked, or as fallback)</label>
+                <input asp-for="PromoStripText" style="@F" />
             </div>
-        </div>
+            <div style="display:grid;grid-template-columns:1fr 2fr;gap:14px;margin-bottom:14px;">
+                <div><label asp-for="PromoStripLinkText" style="@L">Button text</label><input asp-for="PromoStripLinkText" style="@F" /></div>
+                <div><label asp-for="PromoStripLinkUrl" style="@L">Button link</label><input asp-for="PromoStripLinkUrl" style="@F" placeholder="/Shop or https://..." /></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+                <div><label asp-for="PromoStripBgColor" style="@L">Background colour</label><input type="color" asp-for="PromoStripBgColor" value="@(Model.PromoStripBgColor ?? "#D8C7A9")" style="height:40px;width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:2px;" /></div>
+                <div><label asp-for="PromoStripTextColor" style="@L">Text colour</label><input type="color" asp-for="PromoStripTextColor" value="@(Model.PromoStripTextColor ?? "#24211B")" style="height:40px;width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:2px;" /></div>
+            </div>
+        </details>
 
-        <hr style="border-color:var(--stf-outline-variant);margin:16px 0;" />
-        <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:0 0 14px;">Style Box Section</h5>
-        <div style="margin-bottom:14px;">
-            <label asp-for="StyleBoxHeadline" style="@L"></label>
-            <input asp-for="StyleBoxHeadline" style="@F" />
-        </div>
-        <div style="margin-bottom:20px;">
-            <label asp-for="StyleBoxSubheadline" style="@L"></label>
-            <textarea asp-for="StyleBoxSubheadline" rows="2" style="@F"></textarea>
-        </div>
+        @* ============ Utility bar ============ *@
+        <details class="stf-card" style="margin-bottom:14px;">
+            <summary style="cursor:pointer;"><h5 style="@SEC;display:inline;">Top information bar</h5></summary>
+            <label style="font-size:0.85rem;display:flex;gap:8px;align-items:center;margin:14px 0;"><input type="checkbox" asp-for="HideUtilityBar" /> Hide this bar</label>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+                <div><label asp-for="UtilityLeftText" style="@L">Left side (one item per line)</label><textarea asp-for="UtilityLeftText" rows="3" style="@F"></textarea></div>
+                <div><label asp-for="UtilityRightText" style="@L">Right side (one item per line)</label><textarea asp-for="UtilityRightText" rows="3" style="@F"></textarea></div>
+            </div>
+        </details>
 
-        <button type="submit" class="stf-btn stf-btn-primary">Save Homepage Content</button>
+        @* ============ Hero ============ *@
+        <details open class="stf-card" style="margin-bottom:14px;">
+            <summary style="cursor:pointer;"><h5 style="@SEC;display:inline;">Hero</h5></summary>
+            <div style="margin:14px 0;"><label asp-for="HeroEyebrow" style="@L"></label><input asp-for="HeroEyebrow" style="@F" /></div>
+            <div style="margin-bottom:14px;"><label asp-for="HeroHeadline" style="@L"></label><input asp-for="HeroHeadline" style="@F" /></div>
+            <div style="margin-bottom:14px;"><label asp-for="HeroSubheadline" style="@L"></label><textarea asp-for="HeroSubheadline" rows="2" style="@F"></textarea></div>
+            <div style="margin-bottom:14px;">
+                <label style="@L">Hero image</label>
+                @if (!string.IsNullOrWhiteSpace(Model.HeroImageUrl))
+                {
+                    <img src="@Model.HeroImageUrl.Sized(400)" alt="" style="height:90px;max-width:100%;object-fit:cover;border-radius:8px;display:block;margin-bottom:8px;border:1px solid var(--stf-outline-variant);" />
+                }
+                <input type="file" name="heroFile" accept="image/jpeg,image/png,image/webp,image/gif" style="@F" />
+                <input asp-for="HeroImageUrl" style="@F margin-top:6px;" placeholder="...or paste an image URL (blank uses a placeholder)" />
+                <span asp-validation-for="HeroImageUrl" style="color:var(--stf-error);font-size:0.8rem;"></span>
+                <div style="@H">JPG, PNG or WebP, max 5 MB. An uploaded file takes priority over the link.</div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+                <div><label asp-for="HeroPrimaryCtaText" style="@L"></label><input asp-for="HeroPrimaryCtaText" style="@F" /></div>
+                <div><label asp-for="HeroSecondaryCtaText" style="@L"></label><input asp-for="HeroSecondaryCtaText" style="@F" /></div>
+            </div>
+            <label asp-for="HeroStatsText" style="@L">Highlight stats under the buttons (one per line: Value | Label)</label>
+            <textarea asp-for="HeroStatsText" rows="3" style="@F"></textarea>
+        </details>
+
+        @* ============ Features ============ *@
+        <details class="stf-card" style="margin-bottom:14px;">
+            <summary style="cursor:pointer;"><h5 style="@SEC;display:inline;">Feature strip</h5></summary>
+            <label style="font-size:0.85rem;display:flex;gap:8px;align-items:center;margin:14px 0;"><input type="checkbox" asp-for="HideFeatures" /> Hide the feature strip</label>
+            <label asp-for="FeaturesText" style="@L">One feature per line: Title | Description</label>
+            <textarea asp-for="FeaturesText" rows="6" style="@F"></textarea>
+            <div style="@H">The first four lines are shown. Icons are assigned in order.</div>
+        </details>
+
+        @* ============ Departments + Trending ============ *@
+        <details class="stf-card" style="margin-bottom:14px;">
+            <summary style="cursor:pointer;"><h5 style="@SEC;display:inline;">Department &amp; Trending headings</h5></summary>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:14px 0;">
+                <div><label asp-for="DepartmentsEyebrow" style="@L"></label><input asp-for="DepartmentsEyebrow" style="@F" /></div>
+                <div><label asp-for="DepartmentsHeadline" style="@L"></label><input asp-for="DepartmentsHeadline" style="@F" /></div>
+            </div>
+            <div style="margin-bottom:14px;"><label asp-for="DepartmentsSubtext" style="@L"></label><textarea asp-for="DepartmentsSubtext" rows="2" style="@F"></textarea></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+                <div><label asp-for="TrendingEyebrow" style="@L"></label><input asp-for="TrendingEyebrow" style="@F" /></div>
+                <div><label asp-for="TrendingHeadline" style="@L"></label><input asp-for="TrendingHeadline" style="@F" /></div>
+            </div>
+            <div style="@H">Which products appear in Trending is managed under <a asp-action="Trending">Trending</a>; department images under <a asp-controller="Departments" asp-action="Index">Departments</a>.</div>
+        </details>
+
+        @* ============ Style Box ============ *@
+        <details class="stf-card" style="margin-bottom:14px;">
+            <summary style="cursor:pointer;"><h5 style="@SEC;display:inline;">Style Box section</h5></summary>
+            <label style="font-size:0.85rem;display:flex;gap:8px;align-items:center;margin:14px 0;"><input type="checkbox" asp-for="HideStyleBox" /> Hide this section</label>
+            <div style="margin-bottom:14px;"><label asp-for="StyleBoxEyebrow" style="@L"></label><input asp-for="StyleBoxEyebrow" style="@F" /></div>
+            <div style="margin-bottom:14px;"><label asp-for="StyleBoxHeadline" style="@L"></label><input asp-for="StyleBoxHeadline" style="@F" /></div>
+            <div style="margin-bottom:14px;"><label asp-for="StyleBoxSubheadline" style="@L"></label><textarea asp-for="StyleBoxSubheadline" rows="2" style="@F"></textarea></div>
+            <div style="margin-bottom:14px;"><label asp-for="StyleBoxStepsText" style="@L">Steps (one per line: Title | Description)</label><textarea asp-for="StyleBoxStepsText" rows="4" style="@F"></textarea></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+                <div><label asp-for="StyleBoxPrimaryCtaText" style="@L"></label><input asp-for="StyleBoxPrimaryCtaText" style="@F" /></div>
+                <div><label asp-for="StyleBoxSecondaryCtaText" style="@L"></label><input asp-for="StyleBoxSecondaryCtaText" style="@F" /></div>
+            </div>
+        </details>
+
+        @* ============ Story ============ *@
+        <details class="stf-card" style="margin-bottom:14px;">
+            <summary style="cursor:pointer;"><h5 style="@SEC;display:inline;">Story / ethos block</h5></summary>
+            <label style="font-size:0.85rem;display:flex;gap:8px;align-items:center;margin:14px 0;"><input type="checkbox" asp-for="HideStory" /> Hide this section</label>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+                <div><label asp-for="StoryEyebrow" style="@L"></label><input asp-for="StoryEyebrow" style="@F" /></div>
+                <div><label asp-for="StoryHeadline" style="@L"></label><input asp-for="StoryHeadline" style="@F" /></div>
+            </div>
+            <div style="margin-bottom:14px;"><label asp-for="StoryBody" style="@L"></label><textarea asp-for="StoryBody" rows="4" style="@F"></textarea></div>
+            <div style="margin-bottom:14px;"><label asp-for="StoryChecklistText" style="@L">Tick list (one per line: Title | Description)</label><textarea asp-for="StoryChecklistText" rows="5" style="@F"></textarea></div>
+            <div style="margin-bottom:14px;">
+                <label style="@L">Story image</label>
+                @if (!string.IsNullOrWhiteSpace(Model.StoryImageUrl))
+                {
+                    <img src="@Model.StoryImageUrl.Sized(400)" alt="" style="height:90px;max-width:100%;object-fit:cover;border-radius:8px;display:block;margin-bottom:8px;border:1px solid var(--stf-outline-variant);" />
+                }
+                <input type="file" name="storyFile" accept="image/jpeg,image/png,image/webp,image/gif" style="@F" />
+                <input asp-for="StoryImageUrl" style="@F margin-top:6px;" placeholder="...or paste an image URL" />
+            </div>
+            <label asp-for="StoryCtaText" style="@L"></label><input asp-for="StoryCtaText" style="@F" />
+        </details>
+
+        @* ============ Boutique ============ *@
+        <details class="stf-card" style="margin-bottom:18px;">
+            <summary style="cursor:pointer;"><h5 style="@SEC;display:inline;">Boutique banner</h5></summary>
+            <label style="font-size:0.85rem;display:flex;gap:8px;align-items:center;margin:14px 0;"><input type="checkbox" asp-for="HideBoutique" /> Hide this banner</label>
+            <div style="margin-bottom:14px;"><label asp-for="BoutiqueHeadline" style="@L"></label><input asp-for="BoutiqueHeadline" style="@F" /></div>
+            <div style="margin-bottom:14px;"><label asp-for="BoutiqueText" style="@L"></label><textarea asp-for="BoutiqueText" rows="2" style="@F"></textarea></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+                <div><label asp-for="BoutiquePrimaryCtaText" style="@L"></label><input asp-for="BoutiquePrimaryCtaText" style="@F" /></div>
+                <div><label asp-for="BoutiqueSecondaryCtaText" style="@L"></label><input asp-for="BoutiqueSecondaryCtaText" style="@F" /></div>
+            </div>
+        </details>
+
+        <div style="display:flex;gap:12px;align-items:center;">
+            <button type="submit" class="stf-btn stf-btn-primary">Save Homepage Content</button>
+            <a href="/" target="_blank" style="font-size:0.85rem;color:var(--stf-on-surface-variant);">View homepage &nearr;</a>
+        </div>
     </form>
 </div>

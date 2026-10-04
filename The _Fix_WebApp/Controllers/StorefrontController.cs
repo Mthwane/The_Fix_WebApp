@@ -1,5 +1,6 @@
 using FashionFix.Web.Data;
 using FashionFix.Web.Models.Entities;
+using FashionFix.Web.Models.ViewModels;
 using FashionFix.Web.Security;
 using FashionFix.Web.Services.Images;
 using Microsoft.AspNetCore.Authorization;
@@ -139,17 +140,18 @@ public class StorefrontController : Controller
     [HttpGet]
     public async Task<IActionResult> Content()
     {
-        var settings = await _context.SiteSettings.FirstOrDefaultAsync(s => s.Id == 1)
-            ?? new SiteSettings ();
+        var settings = await _context.SiteSettings.AsNoTracking().FirstOrDefaultAsync(s => s.Id == 1) ?? new SiteSettings();
+        settings.ApplyDefaults();   // show the live defaults in the boxes so admins edit real text, not empty fields
+        await LoadDiscountChoicesAsync();
         return View(settings);
     }
 
     // POST: /Storefront/Content
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Content(SiteSettings model, IFormFile? heroFile, [FromServices] IImageStorage imageStorage)
+    public async Task<IActionResult> Content(SiteSettings model, IFormFile? heroFile, IFormFile? storyFile, [FromServices] IImageStorage imageStorage)
     {
-        if (!ModelState.IsValid) return View(model);
+        if (!ModelState.IsValid) { await LoadDiscountChoicesAsync(); return View(model); }
 
         var existingHero = (await _context.SiteSettings.AsNoTracking().FirstOrDefaultAsync(s => s.Id == 1))?.HeroImageUrl;
         if (heroFile is { Length: > 0 })
@@ -162,26 +164,26 @@ public class StorefrontController : Controller
             }
             model.HeroImageUrl = up.Url; // a chosen file wins over the pasted URL
         }
+        if (storyFile is { Length: > 0 })
+        {
+            var up = await imageStorage.UploadAsync(storyFile, "homepage");
+            if (!up.Success)
+            {
+                ModelState.AddModelError(nameof(SiteSettings.StoryImageUrl), up.Error ?? "Image upload failed.");
+                await LoadDiscountChoicesAsync();
+                return View(model);
+            }
+            model.StoryImageUrl = up.Url;
+        }
 
         var settings = await _context.SiteSettings.FirstOrDefaultAsync(s => s.Id == 1);
         if (settings is null)
         {
-            
-            model.DateUpdated = DateTime.UtcNow;
-            _context.SiteSettings.Add(model);
+            settings = new SiteSettings { Id = 1 };
+            _context.SiteSettings.Add(settings);
         }
-        else
-        {
-            settings.HeroEyebrow = model.HeroEyebrow;
-            settings.HeroHeadline = model.HeroHeadline;
-            settings.HeroSubheadline = model.HeroSubheadline;
-            settings.HeroImageUrl = model.HeroImageUrl;
-            settings.HeroPrimaryCtaText = model.HeroPrimaryCtaText;
-            settings.HeroSecondaryCtaText = model.HeroSecondaryCtaText;
-            settings.StyleBoxHeadline = model.StyleBoxHeadline;
-            settings.StyleBoxSubheadline = model.StyleBoxSubheadline;
-            settings.DateUpdated = DateTime.UtcNow;
-        }
+        CopyEditableFields(model, settings);
+        settings.DateUpdated = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
 
@@ -192,6 +194,54 @@ public class StorefrontController : Controller
         return RedirectToAction(nameof(Content));
     }
 
+    /// <summary>Copies every admin-editable homepage field. Blank text boxes are stored as null so the built-in default shows again.</summary>
+    /// <summary>Every discount that could drive the promo strip (online-valid, not yet expired), newest first.</summary>
+    private async Task LoadDiscountChoicesAsync()
+    {
+        var now = DateTime.UtcNow;
+        ViewBag.Discounts = await _context.Discounts.AsNoTracking()
+            .Where(d => d.IsActive && d.Channel != DiscountChannel.InStore && (d.ExpiresAt == null || d.ExpiresAt >= now))
+            .OrderByDescending(d => d.StartsAt).Take(100).ToListAsync();
+    }
+
+    private static void CopyEditableFields(SiteSettings m, SiteSettings t)
+    {
+        static string? N(string? v) => string.IsNullOrWhiteSpace(v) ? null : v.Trim();
+        static string R(string? v, string d) => string.IsNullOrWhiteSpace(v) ? d : v.Trim();
+        static string? Color(string? v) => System.Text.RegularExpressions.Regex.IsMatch(v ?? "", "^#[0-9A-Fa-f]{6}$") ? v : null;
+
+        t.HideUtilityBar = m.HideUtilityBar; t.UtilityLeftText = N(m.UtilityLeftText); t.UtilityRightText = N(m.UtilityRightText);
+
+        t.HidePromoStrip = m.HidePromoStrip; t.PromoStripText = N(m.PromoStripText);
+        t.PromoStripLinkText = N(m.PromoStripLinkText); t.PromoStripLinkUrl = N(m.PromoStripLinkUrl);
+        t.PromoStripBgColor = Color(m.PromoStripBgColor); t.PromoStripTextColor = Color(m.PromoStripTextColor);
+        t.PromoStripDiscountId = m.PromoStripDiscountId; t.HidePromoStripWhenDiscountEnds = m.HidePromoStripWhenDiscountEnds;
+
+        t.HeroEyebrow = R(m.HeroEyebrow, new SiteSettings().HeroEyebrow);
+        t.HeroHeadline = R(m.HeroHeadline, new SiteSettings().HeroHeadline);
+        t.HeroSubheadline = R(m.HeroSubheadline, new SiteSettings().HeroSubheadline);
+        t.HeroImageUrl = N(m.HeroImageUrl);
+        t.HeroPrimaryCtaText = R(m.HeroPrimaryCtaText, "Shop The Fix");
+        t.HeroSecondaryCtaText = R(m.HeroSecondaryCtaText, "Explore Lookbook");
+        t.HeroStatsText = N(m.HeroStatsText);
+
+        t.HideFeatures = m.HideFeatures; t.FeaturesText = N(m.FeaturesText);
+
+        t.DepartmentsEyebrow = N(m.DepartmentsEyebrow); t.DepartmentsHeadline = N(m.DepartmentsHeadline); t.DepartmentsSubtext = N(m.DepartmentsSubtext);
+        t.TrendingEyebrow = N(m.TrendingEyebrow); t.TrendingHeadline = N(m.TrendingHeadline);
+
+        t.HideStyleBox = m.HideStyleBox; t.StyleBoxEyebrow = N(m.StyleBoxEyebrow);
+        t.StyleBoxHeadline = R(m.StyleBoxHeadline, new SiteSettings().StyleBoxHeadline);
+        t.StyleBoxSubheadline = R(m.StyleBoxSubheadline, new SiteSettings().StyleBoxSubheadline);
+        t.StyleBoxStepsText = N(m.StyleBoxStepsText); t.StyleBoxPrimaryCtaText = N(m.StyleBoxPrimaryCtaText); t.StyleBoxSecondaryCtaText = N(m.StyleBoxSecondaryCtaText);
+
+        t.HideStory = m.HideStory; t.StoryEyebrow = N(m.StoryEyebrow); t.StoryHeadline = N(m.StoryHeadline); t.StoryBody = N(m.StoryBody);
+        t.StoryImageUrl = N(m.StoryImageUrl); t.StoryChecklistText = N(m.StoryChecklistText); t.StoryCtaText = N(m.StoryCtaText);
+
+        t.HideBoutique = m.HideBoutique; t.BoutiqueHeadline = N(m.BoutiqueHeadline); t.BoutiqueText = N(m.BoutiqueText);
+        t.BoutiquePrimaryCtaText = N(m.BoutiquePrimaryCtaText); t.BoutiqueSecondaryCtaText = N(m.BoutiqueSecondaryCtaText);
+    }
+
     /// <summary>Deletes a stored image only if no product, gallery row, department, trending card or homepage setting still uses it.</summary>
     private async Task DeleteIfUnusedAsync(string url, IImageStorage imageStorage)
     {
@@ -199,33 +249,90 @@ public class StorefrontController : Controller
             || await _context.ProductImages.AnyAsync(i => i.ImageUrl == url)
             || await _context.Departments.AnyAsync(d => d.HeroImageUrl == url || d.TileImageUrl == url)
             || await _context.FeaturedProducts.AnyAsync(f => f.OverrideImageUrl == url)
-            || await _context.SiteSettings.AnyAsync(s => s.HeroImageUrl == url);
+            || await _context.SiteSettings.AnyAsync(s => s.HeroImageUrl == url || s.StoryImageUrl == url);
         if (!used) await imageStorage.DeleteAsync(url);
     }
 
     // ===================== Review moderation =====================
 
-    // GET: /Storefront/Reviews
-    // NOTE: deliberately no filter/search UI here yet (product, rating, date range) - flagged
-    // as a backlog item. This is a flat, most-recent-first list with a Delete action only.
+    private const int ReviewsPageSize = 10;
+
+    // GET: /Storefront/Reviews?search=&rating=&verified=&photos=&from=&to=&sort=&page=
+    // Moderation list: filter by product / customer / comment text, star rating, verified purchases, reviews with photos
+    // and a date range; sort newest, oldest, lowest or highest rating. 10 per page. The filters ride along on every page
+    // link and on the Delete button, so deleting a review returns you to the same filtered page.
     [HttpGet]
-    public async Task<IActionResult> Reviews()
+    public async Task<IActionResult> Reviews(string? search, int? rating, bool? verified, bool? photos, DateTime? from, DateTime? to, string? sort, int? page)
     {
-        var reviews = await _context.ProductReviews
-            .AsNoTracking()
+        var query = _context.ProductReviews.AsNoTracking()
             .Include(r => r.Product)
             .Include(r => r.Customer)
-            .OrderByDescending(r => r.DateCreated)
-            .Take(200)
-            .ToListAsync();
+            .AsQueryable();
 
-        return View(reviews);
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            query = query.Where(r => r.Product.Name.Contains(term)
+                || r.Product.SKU.Contains(term)
+                || (r.Customer != null && r.Customer.FullName.Contains(term))
+                || (r.Comment != null && r.Comment.Contains(term)));
+        }
+        if (rating is >= 1 and <= 5) query = query.Where(r => r.Rating == rating);
+        if (verified == true) query = query.Where(r => r.IsVerifiedPurchase);
+        if (photos == true) query = query.Where(r => r.PhotoUrls != null && r.PhotoUrls != "");
+        if (from.HasValue) query = query.Where(r => r.DateCreated >= from.Value.Date);
+        if (to.HasValue) query = query.Where(r => r.DateCreated < to.Value.Date.AddDays(1));
+
+        query = sort switch
+        {
+            "oldest" => query.OrderBy(r => r.DateCreated),
+            "lowest" => query.OrderBy(r => r.Rating).ThenByDescending(r => r.DateCreated),
+            "highest" => query.OrderByDescending(r => r.Rating).ThenByDescending(r => r.DateCreated),
+            _ => query.OrderByDescending(r => r.DateCreated)
+        };
+
+        var total = await query.CountAsync();
+        var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)ReviewsPageSize));
+        var current = PagerModel.ClampPage(page, totalPages);
+
+        var items = await query.Skip((current - 1) * ReviewsPageSize).Take(ReviewsPageSize).ToListAsync();
+
+        // Headline numbers for the whole catalogue (not just the filtered page).
+        var summary = await _context.ProductReviews.AsNoTracking()
+            .GroupBy(r => 1)
+            .Select(g => new { Count = g.Count(), Avg = g.Average(r => (double)r.Rating) })
+            .FirstOrDefaultAsync();
+
+        var rv = new Dictionary<string, string?>
+        {
+            ["search"] = search,
+            ["rating"] = rating?.ToString(),
+            ["verified"] = verified == true ? "true" : null,
+            ["photos"] = photos == true ? "true" : null,
+            ["from"] = from?.ToString("yyyy-MM-dd"),
+            ["to"] = to?.ToString("yyyy-MM-dd"),
+            ["sort"] = sort
+        };
+
+        ViewBag.Search = search; ViewBag.Rating = rating; ViewBag.Verified = verified == true; ViewBag.Photos = photos == true;
+        ViewBag.From = from; ViewBag.To = to; ViewBag.Sort = sort ?? "newest";
+        ViewBag.TotalAll = summary?.Count ?? 0;
+        ViewBag.AverageAll = summary?.Avg ?? 0d;
+        ViewBag.TotalFiltered = total;
+        ViewBag.Filters = rv;
+        ViewBag.Pager = new PagerModel
+        {
+            Page = current, TotalPages = totalPages, TotalItems = total, PageSize = ReviewsPageSize,
+            Action = nameof(Reviews), RouteValues = rv
+        };
+
+        return View(items);
     }
 
     // POST: /Storefront/DeleteReview/5
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> DeleteReview(int id)
+    public async Task<IActionResult> DeleteReview(int id, string? returnQuery)
     {
         var review = await _context.ProductReviews.FindAsync(id);
         if (review is null) return NotFound();
@@ -243,6 +350,9 @@ public class StorefrontController : Controller
         await _context.SaveChangesAsync();
 
         this.ToastSuccess("Review removed.");
+        // Back to the same filtered page (only ever a local query string - never an arbitrary URL).
+        if (!string.IsNullOrEmpty(returnQuery) && returnQuery.StartsWith('?'))
+            return LocalRedirect(Url.Action(nameof(Reviews)) + returnQuery);
         return RedirectToAction(nameof(Reviews));
     }
 }

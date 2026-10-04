@@ -24,7 +24,7 @@
                         @item.Product?.Name
                         @if (item.ProductVariant != null)
                         {
-                            <span style="color:var(--ffs-ink-muted);">(@item.ProductVariant.Size/@item.ProductVariant.Color)</span>
+                            <span style="color:var(--ffs-ink-muted);">(@item.ProductVariant.DisplaySize/@item.ProductVariant.Color)</span>
                         }
                         <span style="color:var(--ffs-ink-muted);">&times;@item.Quantity</span>
                     </div>
@@ -35,7 +35,12 @@
 
         <div style="text-align:left;background:var(--ffs-cream-alt);border-radius:var(--ffs-radius);padding:16px 20px;margin-bottom:28px;">
             <div style="display:flex;justify-content:space-between;font-size:0.88rem;margin-bottom:6px;"><span>Subtotal</span><span>@Model.SubTotal.ToString("C")</span></div>
-            <div style="display:flex;justify-content:space-between;font-size:0.85rem;color:var(--ffs-ink-muted);margin-bottom:10px;"><span>VAT (15%)</span><span>@Model.TaxTotal.ToString("C")</span></div>
+            @if (Model.DiscountTotal > 0)
+            {
+                <div style="display:flex;justify-content:space-between;font-size:0.88rem;margin-bottom:6px;color:var(--ffs-forest);"><span>Discount@(string.IsNullOrEmpty(Model.DiscountCode) ? "" : " (" + Model.DiscountCode + ")")</span><span>-@Model.DiscountTotal.ToString("C")</span></div>
+            }
+            <div style="display:flex;justify-content:space-between;font-size:0.85rem;color:var(--ffs-ink-muted);margin-bottom:6px;"><span>VAT (15%)</span><span>@Model.TaxTotal.ToString("C")</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:0.88rem;margin-bottom:10px;"><span>Delivery</span><span>@(Model.DeliveryFee > 0 ? Model.DeliveryFee.ToString("C") : "Free")</span></div>
             <div style="display:flex;justify-content:space-between;border-top:1px solid var(--ffs-border);padding-top:10px;font-size:1.05rem;font-weight:600;font-family:'Fraunces',serif;"><span>Total</span><span>@Model.GrandTotal.ToString("C")</span></div>
         </div>
 

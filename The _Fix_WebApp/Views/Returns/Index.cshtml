@@ -2,6 +2,22 @@
 @{
     ViewData["Title"] = "Returns";
     Layout = "_StaffLayout";
+
+    var filter = (string)ViewBag.Filter;
+    var pager = (PagerModel)ViewBag.Pager;
+    var allCount = (int)ViewBag.AllCount;
+    var completedCount = (int)ViewBag.CompletedCount;
+    var inProgressCount = (int)ViewBag.InProgressCount;
+
+    string Tab(string key, string label, int count)
+    {
+        var active = filter == key;
+        var style = active
+            ? "background:var(--stf-primary);color:#fff;border-color:var(--stf-primary);"
+            : "background:transparent;color:inherit;border-color:var(--stf-outline-variant);";
+        var href = Url.Action("Index", new { filter = key }) ?? "#";
+        return $"<a href=\"{href}\" style=\"display:inline-flex;gap:6px;align-items:center;padding:7px 16px;border-radius:999px;border:1px solid;font-size:0.82rem;font-weight:600;text-decoration:none;{style}\">{label} <span style=\"opacity:.75;font-weight:500;\">({count})</span></a>";
+    }
 }
 
 <div class="stf-content">
@@ -9,16 +25,36 @@
         <div>
             <span class="stf-eyebrow">Supply Chain</span>
             <h1>Returns</h1>
-            <p>Most recent returns processed at the counter, newest first.</p>
+            <p>Returns processed at the counter, newest first, 10 per page.</p>
         </div>
         <a asp-action="Lookup" class="stf-btn stf-btn-primary">+ Process a Return</a>
     </div>
 
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px;">
+        @Html.Raw(Tab("all", "All", allCount))
+        @Html.Raw(Tab("completed", "Completed", completedCount))
+        @Html.Raw(Tab("inprogress", "In progress", inProgressCount))
+    </div>
+
+    @if (filter == "inprogress" && inProgressCount > 0)
+    {
+        <p style="font-size:0.8rem;color:var(--stf-on-surface-variant);margin:-6px 0 14px;">
+            In progress means a refund (FixCash credit or card refund) did not go through automatically. Refund the customer manually, then press <strong>Mark completed</strong>.
+        </p>
+    }
+
     @if (Model.Count == 0)
     {
         <div class="stf-card" style="text-align:center;padding:40px 20px;color:var(--stf-on-surface-variant);">
-            <p style="margin-bottom:16px;">No returns processed yet.</p>
-            <a asp-action="Lookup" class="stf-btn stf-btn-primary">+ Process a Return</a>
+            @if (filter == "all")
+            {
+                <p style="margin-bottom:16px;">No returns processed yet.</p>
+                <a asp-action="Lookup" class="stf-btn stf-btn-primary">+ Process a Return</a>
+            }
+            else
+            {
+                <p style="margin:0;">No @(filter == "completed" ? "completed" : "in-progress") returns.</p>
+            }
         </div>
     }
     else
@@ -33,20 +69,22 @@
                     <th>Condition</th>
                     <th>Refund</th>
                     <th>Method</th>
+                    <th>Status</th>
                     <th>Processed By</th>
+                    <th></th>
                 </tr>
             </thead>
             <tbody>
                 @foreach (var r in Model)
                 {
                     <tr>
-                        <td>@r.DateProcessed.ToString("dd MMM yyyy, HH:mm")</td>
+                        <td>@r.DateProcessed.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</td>
                         <td><a asp-action="Lookup" asp-route-orderNumber="@r.Order.OrderNumber">@r.Order.OrderNumber</a></td>
                         <td>
                             @(r.OrderItem?.Product?.Name ?? "-")
                             @if (r.ProductVariant is not null)
                             {
-                                <span style="color:var(--stf-on-surface-variant);"> (@r.ProductVariant.Size/@r.ProductVariant.Color)</span>
+                                <span style="color:var(--stf-on-surface-variant);"> (@r.ProductVariant.DisplaySize/@r.ProductVariant.Color)</span>
                             }
                         </td>
                         <td>@r.QuantityReturned</td>
@@ -62,10 +100,31 @@
                         </td>
                         <td>@r.RefundAmount.ToString("C")</td>
                         <td>@r.RefundMethod</td>
+                        <td>
+                            @if (r.Status == ReturnStatus.InProgress)
+                            {
+                                <span class="stf-badge stf-badge-danger">In progress</span>
+                            }
+                            else
+                            {
+                                <span class="stf-badge stf-badge-active">Completed</span>
+                            }
+                        </td>
                         <td>@(r.ProcessedByUser?.FullName ?? "-")</td>
+                        <td>
+                            @if (r.Status == ReturnStatus.InProgress)
+                            {
+                                <form asp-action="MarkCompleted" asp-route-id="@r.ReturnId" asp-route-filter="@filter" asp-route-page="@pager.Page" method="post" style="display:inline;">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="stf-btn stf-btn-outline" style="padding:5px 12px;font-size:0.76rem;" onclick="return confirm('Confirm the customer has received this refund?');">Mark completed</button>
+                                </form>
+                            }
+                        </td>
                     </tr>
                 }
             </tbody>
         </table>
+
+        <partial name="_Pager" model="pager" />
     }
 </div>

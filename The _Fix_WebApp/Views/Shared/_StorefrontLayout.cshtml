@@ -6,6 +6,19 @@
     // The seasonal promo banner: shown only while a discount with its banner switched ON is live (started, not expired,
     // not used up). Staff turn it on/off from the Discounts screen - nothing to edit here.
     var promoDiscount = await DiscountService.GetActiveBannerAsync();
+    // The homepage content screen owns the strip's wording, colours, link and (optionally) the discount it follows.
+    var site = ((await DbContext.SiteSettings.AsNoTracking().FirstOrDefaultAsync(x => x.Id == 1)) ?? new FashionFix.Web.Models.Entities.SiteSettings()).ApplyDefaults();
+    FashionFix.Web.Models.Entities.Discount? stripDiscount = null;
+    if (site.PromoStripDiscountId.HasValue)
+    {
+        var now = DateTime.UtcNow;
+        stripDiscount = await DbContext.Discounts.AsNoTracking().FirstOrDefaultAsync(d => d.DiscountId == site.PromoStripDiscountId
+            && d.IsActive && d.StartsAt <= now && (d.ExpiresAt == null || d.ExpiresAt >= now)
+            && (d.MaxRedemptions == null || d.RedemptionCount < d.MaxRedemptions) && d.Channel != FashionFix.Web.Models.Entities.DiscountChannel.InStore);
+    }
+    var showStrip = !site.HidePromoStrip && !(site.PromoStripDiscountId.HasValue && stripDiscount is null && site.HidePromoStripWhenDiscountEnds);
+    var stripLink = site.PromoStripLinkUrl ?? "/Shop";
+    if (!(stripLink.StartsWith("/") && !stripLink.StartsWith("//")) && !stripLink.StartsWith("https://") && !stripLink.StartsWith("http://")) stripLink = "/Shop";
     // Department nav links + cart badge are shared by every storefront page, so they live
     // here in the layout instead of being re-queried/re-populated by every controller action.
     var navDepartments = DbContext.Departments.AsNoTracking().Where(d => d.IsActive).OrderBy(d => d.DisplayOrder).ToList();
@@ -29,34 +42,44 @@
 </head>
 <body class="ffs-page">
 
-    @if (promoDiscount is not null)
+    @if (showStrip)
     {
-        <div class="ffs-promo-banner" role="region" aria-label="Promotion">
-            @if (!string.IsNullOrWhiteSpace(promoDiscount.BannerText))
+        <div class="ffs-promo-strip" role="region" aria-label="Promotion" style="background:@site.PromoStripBgColor;color:@site.PromoStripTextColor;">
+            @if (stripDiscount is not null)
             {
-                <strong>@promoDiscount.BannerText</strong>
+                if (!string.IsNullOrWhiteSpace(stripDiscount.BannerText))
+                {
+                    <b>@stripDiscount.BannerText</b>
+                }
+                else
+                {
+                    <b>@stripDiscount.ValueLabel()</b><span> - use code</span> <code>@stripDiscount.Code</code>
+                }
+                @if (stripDiscount.ExpiresAt.HasValue)
+                {
+                    <span style="opacity:.75;margin-left:8px;">Ends @stripDiscount.ExpiresAt.Value.ToLocalTime().ToString("dd MMM")</span>
+                }
             }
             else
             {
-                <strong>@promoDiscount.ValueLabel()</strong>
-                <span> - use code</span> <code>@promoDiscount.Code</code>
+                <b>@site.PromoStripText</b>
             }
-            @if (promoDiscount.ExpiresAt.HasValue)
+            @if (!string.IsNullOrWhiteSpace(site.PromoStripLinkText))
             {
-                <span style="opacity:.75;margin-left:8px;">Ends @promoDiscount.ExpiresAt.Value.ToLocalTime().ToString("dd MMM")</span>
+                <a href="@stripLink">@site.PromoStripLinkText</a>
             }
-            <a asp-controller="Shop" asp-action="Index">Shop now</a>
         </div>
     }
 
+    @if (!site.HideUtilityBar)
+    {
     <div class="ffs-utility-bar">
         <div class="ffs-container">
             <div class="ffs-utility-left">
-                <span>Cape Town Waterfront &bull; Sandton City</span>
-                <span>Customer Care: +27 21 000 4499</span>
+                @foreach (var item in FashionFix.Web.Models.Entities.SiteSettings.ParsePlain(site.UtilityLeftText)) { <span>@item</span> }
             </div>
             <div class="ffs-utility-right">
-                <span>FixRewards: Earn 5% Back</span>
+                @foreach (var item in FashionFix.Web.Models.Entities.SiteSettings.ParsePlain(site.UtilityRightText)) { <span>@item</span> }
                 <a asp-controller="Support" asp-action="Faq">Help</a>
                 @if (User.Identity?.IsAuthenticated == true)
                 {
@@ -75,6 +98,7 @@
             </div>
         </div>
     </div>
+    }
 
     <header class="ffs-header">
         <div class="ffs-container">
@@ -113,10 +137,6 @@
             </div>
         </div>
     </header>
-
-    <div class="ffs-promo-strip">
-        <b>Complimentary Express Delivery</b> on orders exceeding R500 &bull; Members unlock 15% seasonal archive privileges
-    </div>
 
     <main>
         @RenderBody()

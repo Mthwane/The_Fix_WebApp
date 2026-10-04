@@ -1,100 +1,69 @@
-@model List<PurchaseOrder>
+@model List<Product>
 @{
-    ViewData["Title"] = "Purchase Orders";
+    ViewData["Title"] = "Products";
     Layout = "_StaffLayout";
-    var counts = ViewBag.StatusCounts as Dictionary<PurchaseOrderStatus, int> ?? new();
-    var selected = ViewBag.SelectedStatus as PurchaseOrderStatus?;
-    int CountFor(PurchaseOrderStatus? s) => s is null ? counts.Values.Sum() : (counts.TryGetValue(s.Value, out var c) ? c : 0);
-
-    (string cls, string? bg, string? fg) BadgeFor(PurchaseOrderStatus s) => s switch
-    {
-        PurchaseOrderStatus.Draft => ("stf-badge stf-badge-muted", null, null),
-        PurchaseOrderStatus.AwaitingApproval => ("stf-badge", "var(--stf-secondary-container)", "var(--stf-secondary)"),
-        PurchaseOrderStatus.Approved => ("stf-badge stf-badge-active", null, null),
-        PurchaseOrderStatus.Rejected => ("stf-badge stf-badge-danger", null, null),
-        PurchaseOrderStatus.Shipped => ("stf-badge", "var(--stf-primary-container)", "var(--stf-on-primary-container)"),
-        PurchaseOrderStatus.Received => ("stf-badge stf-badge-active", null, null),
-        PurchaseOrderStatus.Cancelled => ("stf-badge stf-badge-danger", null, null),
-        _ => ("stf-badge stf-badge-muted", null, null)
-    };
+    var filter = ViewBag.Filter as ProductFilterViewModel ?? new ProductFilterViewModel();
 }
-
 <div class="stf-content">
     <div class="stf-page-head">
         <div>
-            <span class="stf-eyebrow">Supply Chain</span>
-            <h1>Purchase Orders</h1>
-            <p>Raise, approve, book and receive restock requests. Stock only moves once an order is actually received.</p>
+            <span class="stf-eyebrow">Catalogue</span>
+            <h1>Master Catalogue</h1>
         </div>
-        @if (User.IsInRole("Manager") || User.IsInRole("Administrator"))
-        {
-            <a asp-action="Create" class="stf-btn stf-btn-primary">+ New Purchase Order</a>
-        }
+        <a asp-controller="Products" asp-action="Create" class="stf-btn stf-btn-primary">+ Add Product</a>
     </div>
 
-    @{
-        int lowStockCount = ViewBag.LowStockCount ?? 0;
-        int outOfStockCount = ViewBag.OutOfStockCount ?? 0;
-    }
-    @if (lowStockCount > 0)
-    {
-        <a asp-action="LowStock" class="stf-card" style="display:flex;justify-content:space-between;align-items:center;gap:16px;background:var(--stf-secondary-container);border:none;margin-bottom:20px;">
-            <div>
-                <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--stf-secondary);font-weight:600;">Low Stock Alert</div>
-                <div style="font-size:0.95rem;margin-top:4px;"><strong>@lowStockCount</strong> item@(lowStockCount == 1 ? " is" : "s are") running low@(outOfStockCount > 0 ? $" ({outOfStockCount} out of stock)" : "") - see what needs ordering</div>
-            </div>
-            <span class="stf-btn stf-btn-primary" style="white-space:nowrap;">View Low Stock &rarr;</span>
-        </a>
-    }
+    <form asp-controller="Products" asp-action="Index" method="get" class="stf-card" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:20px;">
+        @{ string F = "border:1px solid var(--stf-outline-variant);border-radius:8px;padding:8px 12px;font-size:0.85rem;"; }
+        <input type="text" name="SearchTerm" value="@filter.SearchTerm" placeholder="Search name or SKU" style="@F flex:1;min-width:180px;" />
+        <input type="text" name="Category" value="@filter.Category" placeholder="Category" style="@F width:140px;" />
+        <input type="text" name="Size" value="@filter.Size" placeholder="Size" style="@F width:100px;" />
+        <input type="text" name="Color" value="@filter.Color" placeholder="Colour" style="@F width:120px;" />
+        <label style="font-size:0.82rem;display:flex;align-items:center;gap:6px;">
+            <input type="checkbox" name="InStockOnly" value="true" checked="@(filter.InStockOnly == true)" /> In stock only
+        </label>
+        <button type="submit" class="stf-btn stf-btn-outline">Filter</button>
+    </form>
 
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;">
-        <a asp-action="Index" class="stf-chip" style="@(selected is null ? "background:var(--stf-primary);color:#fff;" : "")">All <strong style="margin-left:4px;">@CountFor(null)</strong></a>
-        @foreach (var s in Enum.GetValues<PurchaseOrderStatus>())
-        {
-            <a asp-action="Index" asp-route-status="@s" class="stf-chip" style="@(selected == s ? "background:var(--stf-primary);color:#fff;" : "")">@s <strong style="margin-left:4px;">@CountFor(s)</strong></a>
-        }
-    </div>
-
-    @if (Model.Count == 0)
+    @if (!Model.Any())
     {
-        <div class="stf-card" style="text-align:center;padding:40px 20px;color:var(--stf-on-surface-variant);">
-            <p style="margin-bottom:16px;">No purchase orders @(selected is null ? "yet" : $"with status {selected}").</p>
-            @if (User.IsInRole("Manager") || User.IsInRole("Administrator"))
-            {
-                <a asp-action="Create" class="stf-btn stf-btn-primary">+ New Purchase Order</a>
-            }
-        </div>
+        <div class="stf-card" style="text-align:center;padding:40px 20px;color:var(--stf-on-surface-variant);">No products match your search.</div>
     }
     else
     {
         <table class="stf-table">
             <thead>
-                <tr>
-                    <th>PO Number</th>
-                    <th>Supplier</th>
-                    <th>Lines</th>
-                    <th>Total Cost</th>
-                    <th>Status</th>
-                    <th>Raised By</th>
-                    <th>Date</th>
-                    <th></th>
-                </tr>
+                <tr><th>Product</th><th>Style Code</th><th>Category</th><th>Variants &amp; SKUs</th><th>Price</th><th>Stock</th><th></th></tr>
             </thead>
             <tbody>
-                @foreach (var po in Model)
-                {
-                    var (cls, bg, fg) = BadgeFor(po.Status);
-                    <tr>
-                        <td style="font-weight:600;"><a asp-action="Details" asp-route-id="@po.PurchaseOrderId">@po.PONumber</a></td>
-                        <td>@po.Supplier.Name</td>
-                        <td>@po.Items.Count</td>
-                        <td>@po.TotalCost.ToString("C")</td>
-                        <td><span class="@cls" style="@(bg is null ? "" : $"background:{bg};color:{fg};")">@po.Status</span></td>
-                        <td>@(po.CreatedByUser?.FullName ?? "-")</td>
-                        <td>@po.DateCreated.ToString("dd MMM yyyy")</td>
-                        <td style="text-align:right;"><a asp-action="Details" asp-route-id="@po.PurchaseOrderId" class="stf-btn stf-btn-outline" style="padding:6px 14px;font-size:0.78rem;">View</a></td>
-                    </tr>
-                }
+            @foreach (var p in Model)
+            {
+                <tr style="@(p.HasLowStockVariant ? "background:var(--stf-secondary-container);" : "")">
+                    <td style="font-weight:600;">@p.Name <div style="font-size:0.78rem;color:var(--stf-on-surface-variant);font-weight:400;">@p.Brand</div></td>
+                    <td><code>@p.SKU</code></td>
+                    <td>@p.Category</td>
+                    <td>
+                        @foreach (var v in p.Variants.Where(v => v.IsActive).OrderBy(v => v.Size).ThenBy(v => v.Color))
+                        {
+                            <div style="font-size:0.78rem;white-space:nowrap;">
+                                @v.Size/@v.Color &mdash; <code>@v.SKU</code>
+                                <span style="color:var(--stf-on-surface-variant);">(@v.StockQuantity)</span>
+                            </div>
+                        }
+                    </td>
+                    <td>@p.SellingPrice.ToString("C")</td>
+                    <td>
+                        @p.TotalStockQuantity
+                        @if (p.HasLowStockVariant)
+                        {
+                            <span class="stf-badge" style="background:var(--stf-secondary-container);color:var(--stf-secondary);margin-left:4px;">Low</span>
+                        }
+                    </td>
+                    <td style="text-align:right;">
+                        <a asp-controller="Products" asp-action="Edit" asp-route-id="@p.ProductId" class="stf-btn stf-btn-outline" style="padding:6px 14px;font-size:0.78rem;">Edit</a>
+                    </td>
+                </tr>
+            }
             </tbody>
         </table>
     }

@@ -53,7 +53,8 @@ public class OrderFulfillmentService : IOrderFulfillmentService
         // The two savings stack, but together can never exceed the basket.
         var discount = Math.Min(codeSaving + pointsSaving, cart.SubTotal);
         var vat = TaxSettings.CalculateVat(cart.SubTotal, discount);
-        var grand = cart.SubTotal - discount + vat;
+        var deliveryFee = DeliverySettings.CalculateFee(cart.SubTotal); // flat R100 under R500, free from R500
+        var grand = cart.SubTotal - discount + vat + deliveryFee;
         var walletPart = Math.Round(Math.Min(Math.Max(walletAmount, 0m), grand), 2, MidpointRounding.AwayFromZero);
 
         var (order, createdNow) = await PersistWithRetryAsync(customer, cart, paymentMethod, reference, deliveryAddress, discount, vat, grand, walletPart, discountCode, codeSaving);
@@ -126,6 +127,7 @@ public class OrderFulfillmentService : IOrderFulfillmentService
             DiscountTotal = discount,
             DiscountCode = discountCode,
             TaxTotal = vat,
+            DeliveryFee = DeliverySettings.CalculateFee(cart.SubTotal),
             GrandTotal = grand,
             WalletAmountApplied = walletPart,
 

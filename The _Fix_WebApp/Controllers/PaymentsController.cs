@@ -169,7 +169,8 @@ public class PaymentsController : Controller
         }
 
         var expectedVat = TaxSettings.CalculateVat(cart.SubTotal, pendingPointsDiscount + pendingDiscountAmount);
-        var expectedOrderTotal = cart.SubTotal - pendingPointsDiscount - pendingDiscountAmount + expectedVat;
+        var expectedOrderTotal = cart.SubTotal - pendingPointsDiscount - pendingDiscountAmount + expectedVat
+                                 + DeliverySettings.CalculateFee(cart.SubTotal); // same flat-fee rule the checkout used
         var expectedCardTotal = expectedOrderTotal - pendingWallet; // what Paystack should have charged: the CARD portion only
 
         if (Math.Abs(expectedCardTotal - cardCharged) > 0.01m)

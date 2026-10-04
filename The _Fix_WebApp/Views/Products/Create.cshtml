@@ -132,7 +132,7 @@
                 @for (var i = 0; i < Model.Variants.Count; i++)
                 {
                     <tr class="variant-row">
-                        <td><input name="Variants[@i].Size" value="@Model.Variants[i].Size" style="@F" list="sizeOptions" autocomplete="off" placeholder="e.g. M" /></td>
+                        <td><input class="variant-size-input" name="Variants[@i].Size" value="@Model.Variants[i].Size" style="@F" list="sizeOptions" autocomplete="off" placeholder="e.g. M" /></td>
                         <td>
                             <select name="Variants[@i].Color" style="@F">
                                 <option value="">-- Colour --</option>
@@ -157,6 +157,10 @@
 </div>
 
 @section Scripts {
+    <script>
+        window.FFFootwear = { category: '@ViewBag.FootwearCategory', sizes: @Html.Raw(Json.Serialize(ViewBag.FootwearSizes)) };
+    </script>
+    <script src="~/js/variant-sizes.js" asp-append-version="true"></script>
     <script>
         // Brand <-> Supplier link: choosing a supplier fills the brand with the supplier's name
         // (unless the user has typed a different brand); typing a brand that matches a supplier selects them.
@@ -242,7 +246,7 @@
                 var row = document.createElement('tr');
                 row.className = 'variant-row';
                 row.innerHTML =
-                    '<td><input name="Variants[' + rowIndex + '].Size" style="' + fieldStyle + '" list="sizeOptions" autocomplete="off" placeholder="e.g. M" /></td>' +
+                    '<td><input class="variant-size-input" name="Variants[' + rowIndex + '].Size" style="' + fieldStyle + '" list="sizeOptions" autocomplete="off" placeholder="e.g. M" /></td>' +
                     '<td><select name="Variants[' + rowIndex + '].Color" style="' + fieldStyle + '">' + colorSelectOptions + '</select></td>' +
                     '<td><input name="Variants[' + rowIndex + '].ColorHex" style="' + fieldStyle + '" placeholder="#000000" /></td>' +
                     '<td><input type="number" name="Variants[' + rowIndex + '].StockQuantity" value="0" style="' + fieldStyle + '" min="0" /></td>' +

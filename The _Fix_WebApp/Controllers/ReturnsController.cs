@@ -1,5 +1,6 @@
 using FashionFix.Web.Data;
 using FashionFix.Web.Models.Entities;
+using FashionFix.Web.Models.ViewModels;
 using FashionFix.Web.Security;
 using FashionFix.Web.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -46,21 +47,80 @@ public class ReturnsController : Controller
         _logger = logger;
     }
 
-    // GET: /Returns - recent returns, newest first.
+    private const int ReturnsPageSize = 10;
+
+    // GET: /Returns?filter=all|completed|inprogress&page=2 - newest first, 10 per page.
+    // Completed = refund fully back with the customer. In progress = a refund leg failed or still needs a manual
+    // follow-up (see ReturnStatus). The tab counts always reflect the whole table, not just the current filter.
     [HttpGet]
-    public async Task<IActionResult> Index()
+    public async Task<IActionResult> Index(string? filter, int? page)
     {
-        var returns = await _context.ReturnTransactions
-            .AsNoTracking()
+        var f = (filter ?? "all").Trim().ToLowerInvariant();
+        if (f != "completed" && f != "inprogress") f = "all";
+
+        var all = _context.ReturnTransactions.AsNoTracking();
+        var query = f switch
+        {
+            "completed" => all.Where(r => r.Status == ReturnStatus.Completed),
+            "inprogress" => all.Where(r => r.Status == ReturnStatus.InProgress),
+            _ => all
+        };
+
+        var totalItems = await query.CountAsync();
+        var totalPages = Math.Max(1, (int)Math.Ceiling(totalItems / (double)ReturnsPageSize));
+        var currentPage = PagerModel.ClampPage(page, totalPages);
+
+        var returns = await query
             .Include(r => r.Order)
             .Include(r => r.OrderItem).ThenInclude(i => i.Product)
             .Include(r => r.ProductVariant)
             .Include(r => r.ProcessedByUser)
             .OrderByDescending(r => r.DateProcessed)
-            .Take(100)
+            .Skip((currentPage - 1) * ReturnsPageSize)
+            .Take(ReturnsPageSize)
             .ToListAsync();
 
+        ViewBag.Filter = f;
+        ViewBag.AllCount = await all.CountAsync();
+        ViewBag.CompletedCount = await all.CountAsync(r => r.Status == ReturnStatus.Completed);
+        ViewBag.InProgressCount = await all.CountAsync(r => r.Status == ReturnStatus.InProgress);
+        ViewBag.Pager = new PagerModel
+        {
+            Page = currentPage,
+            TotalPages = totalPages,
+            TotalItems = totalItems,
+            PageSize = ReturnsPageSize,
+            Action = nameof(Index),
+            RouteValues = new Dictionary<string, string?> { ["filter"] = f }
+        };
+
         return View(returns);
+    }
+
+    // POST: /Returns/MarkCompleted/5 - staff confirm the customer has now actually received their money
+    // (for a return left In progress because a refund leg failed and was settled by hand).
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> MarkCompleted(int id, string? filter, int? page)
+    {
+        var txn = await _context.ReturnTransactions.Include(r => r.Order).FirstOrDefaultAsync(r => r.ReturnId == id);
+        if (txn is null) return NotFound();
+
+        if (txn.Status != ReturnStatus.Completed)
+        {
+            txn.Status = ReturnStatus.Completed;
+            txn.DateCompleted = DateTime.UtcNow;
+            _context.AuditLogs.Add(new AuditLog
+            {
+                UserId = _userManager.GetUserId(User),
+                Action = "ReturnMarkedCompleted",
+                Details = $"Return {id} on {txn.Order?.OrderNumber} marked completed (refund settled)."
+            });
+            await _context.SaveChangesAsync();
+        }
+
+        this.ToastSuccess("Return marked as completed.");
+        return RedirectToAction(nameof(Index), new { filter, page });
     }
 
     // GET: /Returns/Lookup?orderNumber=WEB-123 - find the order to return against.
@@ -297,6 +357,18 @@ public class ReturnsController : Controller
                 problems.Add($"the {toCard:C} card refund failed - refund it manually");
             }
         }
+
+        // A refund leg that failed leaves the return In progress until staff settle it by hand and mark it completed.
+        if (problems.Count > 0)
+        {
+            returnTxn.Status = ReturnStatus.InProgress;
+        }
+        else
+        {
+            returnTxn.Status = ReturnStatus.Completed;
+            returnTxn.DateCompleted = DateTime.UtcNow;
+        }
+        await _context.SaveChangesAsync();
 
         if (toWallet > 0 || toCard > 0)
         {

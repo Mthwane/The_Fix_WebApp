@@ -1,0 +1,156 @@
+@model PurchaseOrder
+@{
+    ViewData["Title"] = $"Goods received - {Model.PONumber}";
+    Layout = "_StaffLayout";
+
+    var receivedItems = Model.Items.Where(i => i.QuantityReceived > 0).OrderBy(i => i.ProductVariant.Product.Name).ToList();
+    var complete = Model.Items.All(i => i.QuantityOutstanding == 0);
+    var unitsOrdered = Model.Items.Sum(i => i.QuantityOrdered);
+    var unitsReceived = Model.Items.Sum(i => i.QuantityReceived);
+    var unitsOutstanding = Model.Items.Sum(i => i.QuantityOutstanding);
+    var valueReceived = Model.Items.Sum(i => i.QuantityReceived * i.UnitCost);
+    var valueOutstanding = Model.Items.Sum(i => i.QuantityOutstanding * i.UnitCost);
+    var receiptNo = "GRN-" + Model.PONumber;
+}
+
+<style>
+    .rc-wrap { max-width: 780px; margin: 0 auto; }
+    .rc-card {
+        background: #fff; border: 1px solid var(--stf-outline-variant); border-radius: 12px;
+        padding: 30px 30px; box-shadow: 0 6px 24px rgba(0,0,0,.06); position: relative;
+        font-variant-numeric: tabular-nums;
+    }
+    .rc-brand { text-align: center; font-family: 'Newsreader', serif; font-size: 1.6rem; font-weight: 600; letter-spacing: .02em; margin: 0; }
+    .rc-sub { text-align: center; font-size: .78rem; color: var(--stf-on-surface-variant); margin: 2px 0 0; }
+    .rc-stamp { display: inline-block; border: 2px solid; border-radius: 6px; padding: 2px 12px; font-size: .78rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+    .rc-meta { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: .82rem; margin: 6px 0 4px; }
+    .rc-meta dt { color: var(--stf-on-surface-variant); }
+    .rc-meta dd { margin: 0; text-align: right; font-weight: 600; }
+    .rc-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin: 20px 0 4px; }
+    .rc-cols h6 { font-size: .7rem; letter-spacing: .1em; text-transform: uppercase; color: var(--stf-on-surface-variant); margin: 0 0 6px; }
+    .rc-rule { border: 0; border-top: 1px dashed var(--stf-outline-variant); margin: 16px 0; }
+    .rc-table { width: 100%; border-collapse: collapse; font-size: .84rem; }
+    .rc-table th { text-align: left; font-size: .7rem; letter-spacing: .06em; text-transform: uppercase; color: var(--stf-on-surface-variant); padding: 6px 6px; border-bottom: 1px solid var(--stf-outline-variant); }
+    .rc-table td { padding: 8px 6px; border-bottom: 1px solid var(--stf-outline-variant); vertical-align: top; }
+    .rc-table .num { text-align: right; white-space: nowrap; }
+    .rc-table small { display: block; color: var(--stf-on-surface-variant); font-size: .74rem; }
+    .rc-totals { font-size: .88rem; margin-left: auto; max-width: 320px; }
+    .rc-totals > div { display: flex; justify-content: space-between; padding: 3px 0; }
+    .rc-totals .muted { color: var(--stf-on-surface-variant); }
+    .rc-grand { display: flex; justify-content: space-between; align-items: baseline; font-size: 1.2rem; font-weight: 700; padding-top: 8px; margin-top: 6px; border-top: 2px solid var(--stf-on-surface); }
+    .rc-sign { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 34px; font-size: .76rem; color: var(--stf-on-surface-variant); }
+    .rc-sign div { border-top: 1px solid var(--stf-on-surface-variant); padding-top: 6px; }
+    .rc-foot { text-align: center; font-size: .74rem; color: var(--stf-on-surface-variant); margin: 22px 0 0; line-height: 1.5; }
+    .rc-actions { display: flex; gap: 10px; justify-content: center; margin-top: 18px; flex-wrap: wrap; }
+    @@media print {
+        .stf-sidebar, .stf-topbar, .rc-actions, .sn-sidebar, nav { display: none !important; }
+        .stf-content { padding: 0 !important; margin: 0 !important; }
+        .rc-card { border: 0; box-shadow: none; padding: 0; }
+        body { background: #fff !important; }
+        @@page { margin: 14mm; }
+    }
+</style>
+
+<div class="stf-content">
+    <div class="rc-wrap">
+        <div class="rc-card">
+            <h1 class="rc-brand">Fashion Fix</h1>
+            <p class="rc-sub">Goods received note / receiving receipt</p>
+            <p style="text-align:center;margin:10px 0 0;">
+                <span class="rc-stamp" style="color:@(complete ? "#2f5943" : "#b8703e");">@(complete ? "Fully received" : "Partially received")</span>
+            </p>
+
+            <hr class="rc-rule" />
+
+            <div class="rc-cols">
+                <div>
+                    <h6>Supplier</h6>
+                    <div style="font-weight:600;">@Model.Supplier.Name</div>
+                    @if (!string.IsNullOrWhiteSpace(Model.Supplier.ContactName)) { <div style="font-size:.82rem;">@Model.Supplier.ContactName</div> }
+                    @if (!string.IsNullOrWhiteSpace(Model.Supplier.StreetAddress)) { <div style="font-size:.82rem;color:var(--stf-on-surface-variant);">@Model.Supplier.StreetAddress</div> }
+                    @if (!string.IsNullOrWhiteSpace(Model.Supplier.City)) { <div style="font-size:.82rem;color:var(--stf-on-surface-variant);">@Model.Supplier.City@(string.IsNullOrWhiteSpace(Model.Supplier.PostalCode) ? "" : " " + Model.Supplier.PostalCode)</div> }
+                </div>
+                <dl class="rc-meta">
+                    <dt>Receipt no.</dt><dd>@receiptNo</dd>
+                    <dt>Purchase order</dt><dd>@Model.PONumber</dd>
+                    <dt>Raised</dt><dd>@Model.DateCreated.ToLocalTime().ToString("dd MMM yyyy")</dd>
+                    @if (Model.DateExpected.HasValue) { <dt>Expected</dt><dd>@Model.DateExpected.Value.ToLocalTime().ToString("dd MMM yyyy")</dd> }
+                    <dt>@(Model.DateReceived.HasValue ? "Fully received" : "Printed")</dt><dd>@((Model.DateReceived ?? DateTime.UtcNow).ToLocalTime().ToString("dd MMM yyyy, HH:mm"))</dd>
+                    @if (Model.CreatedByUser is not null) { <dt>Raised by</dt><dd>@Model.CreatedByUser.FullName</dd> }
+                </dl>
+            </div>
+
+            <hr class="rc-rule" />
+
+            <table class="rc-table">
+                <thead>
+                    <tr>
+                        <th>Item</th>
+                        <th class="num">Ordered</th>
+                        <th class="num">Received</th>
+                        <th class="num">Outstanding</th>
+                        <th class="num">Unit cost</th>
+                        <th class="num">Value received</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in receivedItems)
+                    {
+                        <tr>
+                            <td>
+                                @item.ProductVariant.Product.Name
+                                <small>@item.ProductVariant.Size / @item.ProductVariant.Color &bull; @item.ProductVariant.SKU</small>
+                            </td>
+                            <td class="num">@item.QuantityOrdered</td>
+                            <td class="num"><strong>@item.QuantityReceived</strong></td>
+                            <td class="num">@(item.QuantityOutstanding == 0 ? "-" : item.QuantityOutstanding.ToString())</td>
+                            <td class="num">@item.UnitCost.ToString("C")</td>
+                            <td class="num">@((item.QuantityReceived * item.UnitCost).ToString("C"))</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            @if (Model.Items.Any(i => i.QuantityReceived == 0))
+            {
+                <p style="font-size:.78rem;color:var(--stf-on-surface-variant);margin:10px 0 0;">
+                    @Model.Items.Count(i => i.QuantityReceived == 0) line(s) on this order have not been received yet and are not listed above.
+                </p>
+            }
+
+            <hr class="rc-rule" />
+
+            <div class="rc-totals">
+                <div><span class="muted">Units ordered</span><span>@unitsOrdered</span></div>
+                <div><span class="muted">Units received</span><span>@unitsReceived</span></div>
+                <div><span class="muted">Units outstanding</span><span>@unitsOutstanding</span></div>
+                @if (valueOutstanding > 0)
+                {
+                    <div><span class="muted">Value still outstanding</span><span>@valueOutstanding.ToString("C")</span></div>
+                }
+                <div class="rc-grand"><span>Value received</span><span>@valueReceived.ToString("C")</span></div>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(Model.Notes))
+            {
+                <p style="font-size:.8rem;margin:16px 0 0;"><strong>Notes:</strong> @Model.Notes</p>
+            }
+
+            <div class="rc-sign">
+                <div>Received by (name &amp; signature)</div>
+                <div>Date</div>
+            </div>
+
+            <p class="rc-foot">
+                Stock has been booked into inventory for the quantities received above.<br />
+                Prepared @DateTime.Now.ToString("dd MMM yyyy, HH:mm")@(string.IsNullOrWhiteSpace((string?)ViewBag.PrintedBy) ? "" : " by " + (string?)ViewBag.PrintedBy).
+            </p>
+        </div>
+
+        <div class="rc-actions">
+            <button type="button" class="stf-btn stf-btn-primary" onclick="document.title='@receiptNo'; window.print();">Download / print PDF</button>
+            <a asp-action="Details" asp-route-id="@Model.PurchaseOrderId" class="stf-btn stf-btn-outline">Back to purchase order</a>
+        </div>
+        <p style="text-align:center;font-size:.74rem;color:var(--stf-on-surface-variant);margin-top:8px;">In the print window choose "Save as PDF" as the destination to download it.</p>
+    </div>
+</div>

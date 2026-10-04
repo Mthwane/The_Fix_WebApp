@@ -24,7 +24,7 @@
                     var isOutOfStock = v.StockQuantity == 0;
                     <tr style="@(isOutOfStock ? "background:var(--stf-error-container);" : "background:var(--stf-secondary-container);")">
                         <td style="font-weight:600;">@v.Product.Name</td>
-                        <td>@v.Size / @v.Color</td>
+                        <td>@v.DisplaySize / @v.Color</td>
                         <td><code>@v.SKU</code></td>
                         <td>@v.Product.Category</td>
                         <td>

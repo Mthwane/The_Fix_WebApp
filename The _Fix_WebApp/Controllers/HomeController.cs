@@ -101,6 +101,7 @@ public class HomeController : Controller
 
         var siteSettings = await _context.SiteSettings.AsNoTracking().FirstOrDefaultAsync(s => s.Id == 1)
             ?? new SiteSettings();
+        siteSettings.ApplyDefaults(); // blank/new fields fall back to the built-in wording
 
         return View(new StorefrontLandingViewModel
         {

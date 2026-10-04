@@ -37,7 +37,7 @@
         @foreach (var item in Model.OrderItems)
         {
             <tr>
-                <td>@item.Product?.Name @if (item.ProductVariant != null) { <span style="color:var(--stf-on-surface-variant);font-size:0.82rem;">(@item.ProductVariant.Size/@item.ProductVariant.Color)</span> }</td>
+                <td>@item.Product?.Name @if (item.ProductVariant != null) { <span style="color:var(--stf-on-surface-variant);font-size:0.82rem;">(@item.ProductVariant.DisplaySize/@item.ProductVariant.Color)</span> }</td>
                 <td>@item.Quantity</td>
                 <td>@item.UnitPrice.ToString("C")</td>
                 <td>@item.LineTotal.ToString("C")</td>

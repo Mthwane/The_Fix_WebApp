@@ -19,9 +19,10 @@
                     <a href="#trending" class="ffs-btn ffs-btn-outline">@settings.HeroSecondaryCtaText</a>
                 </div>
                 <div class="ffs-hero-stats">
-                    <div><b>100%</b><span>Certified Regenerative</span></div>
-                    <div><b>0%</b><span>Synthetic Plastics</span></div>
-                    <div><b>R500+</b><span>Free Express Logistics</span></div>
+                    @foreach (var st in SiteSettings.ParseLines(settings.HeroStatsText).Take(4))
+                    {
+                        <div><b>@st.Title</b><span>@st.Text</span></div>
+                    }
                 </div>
             </div>
             <div class="ffs-hero-image">
@@ -29,24 +30,20 @@
             </div>
         </div>
 
-        <div class="ffs-features">
-            <div class="ffs-feature">
-                <div class="ffs-feature-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></div>
-                <div><h4>Free Express Delivery</h4><p>Complimentary nationwide courier dispatch on orders exceeding R500.</p></div>
+        @if (!settings.HideFeatures)
+        {
+            var featureIcons = new[] { "<svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><rect x=\"1\" y=\"3\" width=\"15\" height=\"13\"/><path d=\"M16 8h4l3 3v5h-7V8z\"/><circle cx=\"5.5\" cy=\"18.5\" r=\"2.5\"/><circle cx=\"18.5\" cy=\"18.5\" r=\"2.5\"/></svg>", "<svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M12 2 3 7v6c0 5 4 9 9 9s9-4 9-9V7l-9-5Z\"/></svg>", "<svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M21 12a9 9 0 1 1-6.2-8.6\"/><path d=\"M21 3v6h-6\"/></svg>", "<svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M12 7v5l3 3\"/></svg>" };
+            var features = SiteSettings.ParseLines(settings.FeaturesText).Take(4).ToList();
+            <div class="ffs-features">
+                @for (var i = 0; i < features.Count; i++)
+                {
+                    <div class="ffs-feature">
+                        <div class="ffs-feature-icon">@Html.Raw(featureIcons[i % featureIcons.Length])</div>
+                        <div><h4>@features[i].Title</h4><p>@features[i].Text</p></div>
+                    </div>
+                }
             </div>
-            <div class="ffs-feature">
-                <div class="ffs-feature-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 3 7v6c0 5 4 9 9 9s9-4 9-9V7l-9-5Z"/></svg></div>
-                <div><h4>Ethical Craftsmanship</h4><p>Regenerative botanical textiles and closed-loop herbal dyes.</p></div>
-            </div>
-            <div class="ffs-feature">
-                <div class="ffs-feature-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.2-8.6"/><path d="M21 3v6h-6"/></svg></div>
-                <div><h4>60-Day Easy Returns</h4><p>Effortless doorstep exchanges with carbon-neutral parcel returns.</p></div>
-            </div>
-            <div class="ffs-feature">
-                <div class="ffs-feature-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></div>
-                <div><h4>24/7 Style Concierge</h4><p>Personalized sizing matrix and wardrobe curation on call.</p></div>
-            </div>
-        </div>
+        }
     </div>
 </section>
 
@@ -54,10 +51,10 @@
     <div class="ffs-container">
         <div class="ffs-section-head">
             <div>
-                <span class="ffs-eyebrow">Atelier Departments</span>
-                <h2>Curated Department Portals</h2>
+                <span class="ffs-eyebrow">@settings.DepartmentsEyebrow</span>
+                <h2>@settings.DepartmentsHeadline</h2>
             </div>
-            <p>Explore intentional wardrobes categorized by tactile performance, botanical composition, and versatile ease.</p>
+            <p>@settings.DepartmentsSubtext</p>
         </div>
 
         <div class="ffs-dept-grid">
@@ -85,8 +82,8 @@
     <div class="ffs-container">
         <div class="ffs-section-head">
             <div>
-                <span class="ffs-eyebrow">Weekly Botanical Laboratory</span>
-                <h2>Trending This Week</h2>
+                <span class="ffs-eyebrow">@settings.TrendingEyebrow</span>
+                <h2>@settings.TrendingHeadline</h2>
             </div>
         </div>
 
@@ -159,68 +156,74 @@
     </div>
 </section>
 
+@if (!settings.HideStyleBox)
+{
 <section class="ffs-section">
     <div class="ffs-container">
         <div class="ffs-banner-dark">
             <div style="max-width:640px;">
-                <span class="ffs-eyebrow">The Curated Fix Experience</span>
+                <span class="ffs-eyebrow">@settings.StyleBoxEyebrow</span>
                 <h2 style="font-size:2rem;margin-bottom:14px;">@settings.StyleBoxHeadline</h2>
                 <p>@settings.StyleBoxSubheadline</p>
                 <div class="ffs-steps">
-                    <div class="ffs-step"><b class="ffs-step-num">01</b><h5>Take the Quiz</h5><p>Define silhouettes, fabric weights, and weekly rituals.</p></div>
-                    <div class="ffs-step"><b class="ffs-step-num">02</b><h5>Atelier Curates</h5><p>5 tailored garments hand-inspected in Cape Town.</p></div>
-                    <div class="ffs-step"><b class="ffs-step-num">03</b><h5>Keep or Swap</h5><p>7 days to trial at home with 20% bundle reduction.</p></div>
+                    @{ var steps = SiteSettings.ParseLines(settings.StyleBoxStepsText).Take(4).ToList(); }
+                    @for (var i = 0; i < steps.Count; i++)
+                    {
+                        <div class="ffs-step"><b class="ffs-step-num">@((i + 1).ToString("00"))</b><h5>@steps[i].Title</h5><p>@steps[i].Text</p></div>
+                    }
                 </div>
                 <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;">
-                    <a asp-controller="Shop" asp-action="Index" class="ffs-btn ffs-btn-sage">Take the Style Quiz</a>
-                    <a href="#" class="ffs-btn-outline-light ffs-btn">View Sample Autumn Box &nearr;</a>
+                    <a asp-controller="Shop" asp-action="Index" class="ffs-btn ffs-btn-sage">@settings.StyleBoxPrimaryCtaText</a>
+                    <a href="#" class="ffs-btn-outline-light ffs-btn">@settings.StyleBoxSecondaryCtaText &nearr;</a>
                 </div>
             </div>
         </div>
     </div>
 </section>
+}
 
+@if (!settings.HideStory)
+{
 <section class="ffs-section">
     <div class="ffs-container">
         <div class="ffs-story-grid">
             <div class="ffs-story-img">
-                <img src="@Ph("Garment Ecosystem", 700, 520)" alt="Botanical fashion laboratory" />
+                <img src="@((settings.StoryImageUrl ?? Ph("Garment Ecosystem", 700, 520)).Sized(900))" alt="@settings.StoryHeadline" />
             </div>
             <div>
-                <span class="ffs-eyebrow">Our Scientific Ethos</span>
-                <h2 style="margin-bottom:16px;">Garments Conceived as Living Ecosystems</h2>
-                <p style="color:var(--ffs-ink-muted);font-size:0.92rem;">Fashion Fix was founded on a singular botanical conviction: human dermal layers absorb the essence of what touches them. By abandoning petrochemical synthetics in favour of bio-fermented enzymes, raw flax, and plant-derived pigments, our garments support both personal well-being and ecological longevity.</p>
+                <span class="ffs-eyebrow">@settings.StoryEyebrow</span>
+                <h2 style="margin-bottom:16px;">@settings.StoryHeadline</h2>
+                <p style="color:var(--ffs-ink-muted);font-size:0.92rem;">@settings.StoryBody</p>
                 <ul class="ffs-checklist">
-                    <li>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>
-                        <span><b>Microbiome-Safe Fabric Treatments</b><span>Finished exclusively with probiotic cleansers rather than heavy formaldehyde stabilizers.</span></span>
-                    </li>
-                    <li>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>
-                        <span><b>Regenerative African Agriculture</b><span>Sourced through regional partner conservancies across Southern Africa replenishing topsoil integrity.</span></span>
-                    </li>
-                    <li>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>
-                        <span><b>Lifetime Mend &amp; Rewear Program</b><span>Return any piece at year three for natural re-dyeing or atelier re-stitching at no charge.</span></span>
-                    </li>
+                    @foreach (var item in SiteSettings.ParseLines(settings.StoryChecklistText))
+                    {
+                        <li>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>
+                            <span><b>@item.Title</b><span>@item.Text</span></span>
+                        </li>
+                    }
                 </ul>
-                <a href="#" class="ffs-btn ffs-btn-forest">Read The Transparency Ledger &rarr;</a>
+                <a href="#" class="ffs-btn ffs-btn-forest">@settings.StoryCtaText &rarr;</a>
             </div>
         </div>
     </div>
 </section>
+}
 
+@if (!settings.HideBoutique)
+{
 <section class="ffs-section">
     <div class="ffs-container">
         <div class="ffs-boutique-banner">
             <div>
-                <h4>Visit Our Boutiques in Cape Town &amp; Sandton</h4>
-                <p>Experience the tactile linen weight and bespoke sizing consultations in person.</p>
+                <h4>@settings.BoutiqueHeadline</h4>
+                <p>@settings.BoutiqueText</p>
             </div>
             <div class="ffs-boutique-actions">
-                <a href="#" class="ffs-btn ffs-btn-outline">Book Fitting Session</a>
-                <a href="#" class="ffs-btn ffs-btn-forest">Find Stores</a>
+                <a href="#" class="ffs-btn ffs-btn-outline">@settings.BoutiquePrimaryCtaText</a>
+                <a href="#" class="ffs-btn ffs-btn-forest">@settings.BoutiqueSecondaryCtaText</a>
             </div>
         </div>
     </div>
 </section>
+}

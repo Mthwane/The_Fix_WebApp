@@ -6,6 +6,8 @@
     var appliedCode = ViewBag.DiscountCode as string;
     var codeDiscount = appliedCode is null ? 0m : (decimal)ViewBag.DiscountAmount;
     var vat = FashionFix.Web.Security.TaxSettings.CalculateVat(Model.SubTotal, codeDiscount);
+    // Flat R100 delivery under R500, free from R500 (basket value before discounts).
+    var deliveryFee = FashionFix.Web.Security.DeliverySettings.CalculateFee(Model.SubTotal);
 }
 
 <section class="ffs-section" style="padding-top:32px;">
@@ -73,11 +75,18 @@
                             <span>Discount (@appliedCode)</span><span>-@codeDiscount.ToString("C")</span>
                         </div>
                     }
-                    <div style="display:flex;justify-content:space-between;font-size:0.85rem;color:var(--ffs-ink-muted);margin-bottom:14px;">
+                    <div style="display:flex;justify-content:space-between;font-size:0.85rem;color:var(--ffs-ink-muted);margin-bottom:8px;">
                         <span>VAT (15%)</span><span>@vat.ToString("C")</span>
                     </div>
+                    <div style="display:flex;justify-content:space-between;font-size:0.9rem;margin-bottom:@(deliveryFee > 0 ? "4px" : "14px");">
+                        <span>Delivery</span><span>@(deliveryFee > 0 ? deliveryFee.ToString("C") : "Free")</span>
+                    </div>
+                    @if (deliveryFee > 0)
+                    {
+                        <div style="font-size:0.76rem;color:var(--ffs-forest);margin-bottom:14px;">Add @FashionFix.Web.Security.DeliverySettings.AmountToFreeDelivery(Model.SubTotal).ToString("C") more to get free delivery.</div>
+                    }
                     <div style="display:flex;justify-content:space-between;border-top:1px solid var(--ffs-border);padding-top:12px;margin-bottom:18px;font-size:1.1rem;font-family:'Fraunces',serif;font-weight:600;">
-                        <span>Total</span><span>@((Model.SubTotal - codeDiscount + vat).ToString("C"))</span>
+                        <span>Total</span><span>@((Model.SubTotal - codeDiscount + vat + deliveryFee).ToString("C"))</span>
                     </div>
 
                     @if (appliedCode is null)

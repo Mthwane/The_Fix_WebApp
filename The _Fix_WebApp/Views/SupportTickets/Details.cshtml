@@ -36,19 +36,64 @@
         <span style="background:@badgeBg;color:@badgeFg;font-size:0.8rem;font-weight:600;padding:6px 14px;border-radius:999px;white-space:nowrap;">@Model.Status</span>
     </div>
 
-    @if (Model.Category is TicketCategory.RefundRequest or TicketCategory.CancelOrder && Model.Order is not null)
+    @if (Model.Status != TicketStatus.Closed)
     {
-        <div class="stf-card" style="margin-bottom:16px;display:flex;gap:10px;align-items:center;">
-            <strong style="font-size:0.85rem;">Quick action:</strong>
-            @if (Model.Category == TicketCategory.RefundRequest)
+        var hasOrder = Model.Order is not null;
+        var cancellable = hasOrder && Model.Order!.Status is OrderStatus.Pending or OrderStatus.Processing or OrderStatus.Shipped;
+        <form asp-action="QuickAction" asp-route-id="@Model.SupportTicketId" method="post" id="quickActionForm" class="stf-card" style="margin-bottom:16px;">
+            @Html.AntiForgeryToken()
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+                <strong style="font-size:0.85rem;">Quick actions</strong>
+                <select name="action" id="qaAction" required style="flex:1 1 280px;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:8px 12px;font-size:0.85rem;">
+                    <option value="">-- Choose an action --</option>
+                    <optgroup label="Order">
+                        <option value="cancel_order" disabled="@(!cancellable)">Cancel order and refund to original payment@(hasOrder && !cancellable ? $" (order is {Model.Order!.Status})" : "")@(!hasOrder ? " (no order linked)" : "")</option>
+                        <option value="process_return" disabled="@(!hasOrder)">Issue refund / process a return&hellip;@(!hasOrder ? " (no order linked)" : "")</option>
+                        <option value="refund_wallet" disabled="@(!hasOrder)">Goodwill refund to FixCash wallet@(!hasOrder ? " (no order linked)" : "")</option>
+                    </optgroup>
+                    <optgroup label="Conversation">
+                        <option value="request_info">Ask the customer for more information</option>
+                        <option value="mark_resolved">Mark as resolved</option>
+                        <option value="close_ticket">Resolve and close (save to history)</option>
+                    </optgroup>
+                </select>
+                <button type="submit" class="stf-btn stf-btn-primary" style="padding:8px 18px;font-size:0.82rem;">Apply</button>
+                @if (hasOrder)
+                {
+                    <a asp-controller="Orders" asp-action="Details" asp-route-id="@Model.Order!.OrderId" class="stf-btn stf-btn-outline" style="padding:8px 14px;font-size:0.8rem;">View order #@Model.Order.OrderNumber</a>
+                }
+            </div>
+            <div id="qaExtra" style="display:none;margin-top:10px;gap:10px;flex-wrap:wrap;">
+                <input type="number" step="0.01" min="0.01" name="amount" id="qaAmount" placeholder="Amount (R)" style="display:none;width:150px;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:8px 12px;font-size:0.85rem;" />
+                <input type="text" name="note" id="qaNote" maxlength="250" placeholder="Reason / note (shown to the customer where relevant)" style="flex:1 1 280px;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:8px 12px;font-size:0.85rem;" />
+            </div>
+            @if (hasOrder)
             {
-                <a asp-controller="Returns" asp-action="Lookup" asp-route-orderNumber="@Model.Order.OrderNumber" class="stf-btn stf-btn-outline" style="padding:6px 14px;font-size:0.78rem;">Process Refund for This Order</a>
+                <p style="font-size:0.75rem;color:var(--stf-on-surface-variant);margin:10px 0 0;">
+                    Cancelling restocks the items and returns the money to the way the customer paid: the FixCash part back to their wallet and the card part back to their card (the delivery fee included).
+                </p>
             }
-            else
-            {
-                <a asp-controller="Orders" asp-action="Details" asp-route-id="@Model.Order.OrderId" class="stf-btn stf-btn-outline" style="padding:6px 14px;font-size:0.78rem;">Go Cancel This Order</a>
-            }
-        </div>
+        </form>
+        <script>
+            (function () {
+                var sel = document.getElementById('qaAction');
+                var extra = document.getElementById('qaExtra');
+                var amount = document.getElementById('qaAmount');
+                var note = document.getElementById('qaNote');
+                var form = document.getElementById('quickActionForm');
+                var needsNote = ['cancel_order', 'refund_wallet', 'request_info'];
+                sel.addEventListener('change', function () {
+                    extra.style.display = needsNote.indexOf(sel.value) !== -1 ? 'flex' : 'none';
+                    amount.style.display = sel.value === 'refund_wallet' ? '' : 'none';
+                    note.placeholder = sel.value === 'request_info' ? 'Message to the customer (leave blank for the standard request)' : 'Reason / note';
+                });
+                form.addEventListener('submit', function (e) {
+                    if (sel.value === 'cancel_order' && !confirm('Cancel this order and refund the customer to their original payment? This cannot be undone.')) e.preventDefault();
+                    if (sel.value === 'close_ticket' && !confirm('Close this ticket? The conversation will be locked.')) e.preventDefault();
+                    if (sel.value === 'refund_wallet' && !amount.value) { alert('Enter the refund amount.'); e.preventDefault(); }
+                });
+            })();
+        </script>
     }
 
     <div class="stf-card" style="margin-bottom:16px;">

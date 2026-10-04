@@ -31,11 +31,15 @@
         Model.Cart.SubTotal,
         pointsDiscount + appliedDiscountAmount);
 
+    // Flat R100 delivery under R500, free from R500 (measured on the basket before discounts) - see DeliverySettings.
+    var deliveryFee = DeliverySettings.CalculateFee(Model.Cart.SubTotal);
+
     var total =
         Model.Cart.SubTotal -
         pointsDiscount -
         appliedDiscountAmount +
-        vat;
+        vat +
+        deliveryFee;
 }
 
 <section class="ffs-section" style="padding-top:32px;">
@@ -66,7 +70,12 @@
             {
                 <div style="display:flex;justify-content:space-between;font-size:0.88rem;margin-bottom:6px;color:var(--ffs-forest);"><span>Discount (@appliedDiscountCode)</span><span>-@appliedDiscountAmount.ToString("C")</span></div>
             }
-            <div style="display:flex;justify-content:space-between;font-size:0.85rem;color:var(--ffs-ink-muted);margin-bottom:10px;"><span>VAT (15%)</span><span>@vat.ToString("C")</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:0.85rem;color:var(--ffs-ink-muted);margin-bottom:6px;"><span>VAT (15%)</span><span>@vat.ToString("C")</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:0.88rem;margin-bottom:6px;"><span>Delivery</span><span>@(deliveryFee > 0 ? deliveryFee.ToString("C") : "Free")</span></div>
+            @if (deliveryFee > 0)
+            {
+                <div style="font-size:0.76rem;color:var(--ffs-forest);margin:0 0 10px;">Add @DeliverySettings.AmountToFreeDelivery(Model.Cart.SubTotal).ToString("C") more to get free delivery.</div>
+            }
             <div style="display:flex;justify-content:space-between;border-top:1px solid var(--ffs-border);padding-top:10px;font-size:1.05rem;font-weight:600;font-family:'Fraunces',serif;"><span>Total</span><span>@total.ToString("C")</span></div>
         </div>
 
@@ -140,7 +149,7 @@
         {
             var pointsOff = Math.Min(rewardsQuote.MaxDiscount, Math.Max(0m, Model.Cart.SubTotal - appliedDiscountAmount));
             var vatAfterPoints = TaxSettings.CalculateVat(Model.Cart.SubTotal, pointsOff + appliedDiscountAmount);
-            var totalAfterPoints = Model.Cart.SubTotal - pointsOff - appliedDiscountAmount + vatAfterPoints;
+            var totalAfterPoints = Model.Cart.SubTotal - pointsOff - appliedDiscountAmount + vatAfterPoints + deliveryFee;
             <h5 style="font-family:'Fraunces',serif;font-size:1.1rem;margin-bottom:12px;">FixRewards</h5>
             <label style="display:flex;gap:10px;align-items:flex-start;border:1px solid var(--ffs-border);border-radius:var(--ffs-radius);padding:12px 14px;cursor:pointer;margin-bottom:20px;">
                 <input type="checkbox" asp-for="UsePoints" style="margin-top:3px;" />
