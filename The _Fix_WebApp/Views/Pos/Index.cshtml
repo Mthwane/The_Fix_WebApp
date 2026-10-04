@@ -60,7 +60,11 @@
             @if (currentShift is not null)
             {
                 <div style="font-family:'Newsreader',serif;font-size:1.3rem;margin-top:6px;">Open</div>
-                <div style="font-size:0.78rem;color:var(--stf-on-surface-variant);margin-top:4px;">Since @currentShift.DateOpened.ToLocalTime().ToString("HH:mm") &middot; Float @currentShift.OpeningFloat.ToString("C")</div>
+                <div style="font-size:0.78rem;color:var(--stf-on-surface-variant);margin-top:4px;">Since @FashionFix.Web.Services.Audit.AuditTime.ShiftStamp(currentShift.DateOpened) &middot; Float @currentShift.OpeningFloat.ToString("C")</div>
+                @if (FashionFix.Web.Services.Audit.AuditTime.IsStaleShift(currentShift.DateOpened))
+                {
+                    <div style="font-size:0.78rem;color:var(--stf-error);margin-top:6px;">This shift was opened on an earlier day and never closed. End it, then start a fresh one so today's cash reconciles.</div>
+                }
             }
             else
             {
@@ -89,7 +93,7 @@
                 <div id="scanError" style="color:var(--stf-error);font-size:0.82rem;margin-top:6px;"></div>
             </div>
 
-            <table class="stf-table" id="cartTable">
+            <table class="stf-table" id="cartTable" data-user="@User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value">
                 <thead>
                     <tr><th>Item</th><th>SKU</th><th>Qty</th><th>Unit Price</th><th>Line Total</th><th></th></tr>
                 </thead>
@@ -136,10 +140,11 @@
                             </details>
                         }
                     </div>
-                    <div id="discountRow" style="display:none;justify-content:space-between;font-size:0.9rem;margin-bottom:10px;color:var(--stf-secondary);">
-                        <span id="discountRowLabel">Discount</span><strong id="discountAmountDisplay">-R0.00</strong>
-                    </div>
                 }
+                @* Outside the permission block on purpose: automatic discounts show for every cashier. *@
+                <div id="discountRow" style="display:none;justify-content:space-between;font-size:0.9rem;margin-bottom:10px;color:var(--stf-secondary);">
+                    <span id="discountRowLabel">Discount</span><strong id="discountAmountDisplay">-R0.00</strong>
+                </div>
                 <div style="display:flex;justify-content:space-between;font-size:0.85rem;color:var(--stf-on-surface-variant);margin-bottom:10px;">
                     <span>VAT (15%)</span><span id="vatDisplay">R0.00</span>
                 </div>
@@ -157,16 +162,16 @@
                 </div>
 
                 <div style="margin-bottom:12px;">
-                    <label style="font-size:0.82rem;display:block;margin-bottom:4px;">Customer ID (optional)</label>
+                    <label style="font-size:0.82rem;display:block;margin-bottom:4px;">Customer ID <span style="color:var(--stf-error);">*</span></label>
                     <input type="text" name="CustomerId" placeholder="Link this sale to a customer account"
                            style="width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:9px 12px;font-size:0.9rem;" />
                 </div>
 
                 <div style="margin-bottom:16px;">
-                    <label style="font-size:0.82rem;display:block;margin-bottom:4px;">Email receipt to (optional)</label>
+                    <label style="font-size:0.82rem;display:block;margin-bottom:4px;">Customer email <span style="color:var(--stf-error);">*</span></label>
                     <input type="email" name="ReceiptEmail" placeholder="customer@example.com"
                            style="width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:9px 12px;font-size:0.9rem;" />
-                    <div style="font-size:0.75rem;color:var(--stf-on-surface-variant);margin-top:4px;">Overrides the linked customer's email if both are filled in - handy for walk-in customers with no account.</div>
+                    <div style="font-size:0.75rem;color:var(--stf-on-surface-variant);margin-top:4px;">Enter the customer ID <strong>or</strong> an email - one of the two is required. The receipt goes to this email (it overrides the linked customer's email), which also covers walk-in customers with no account.</div>
                 </div>
 
                 <button type="submit" id="checkoutBtn" class="stf-btn stf-btn-primary" style="width:100%;justify-content:center;" disabled>Complete Sale</button>

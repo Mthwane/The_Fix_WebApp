@@ -95,7 +95,7 @@
     </form>
 </div>
 
-<script id="variantData" type="application/json">@Html.Raw(Json.Serialize(variants.Select(v => new { id = v.ProductVariantId, label = $"{v.Product.Name} - {v.Size}/{v.Color} ({v.SKU})" })))</script>
+<script id="variantData" type="application/json">@Html.Raw(Json.Serialize(variants.Select(v => new { id = v.ProductVariantId, label = $"{v.Product.Name} - {v.DisplaySize}/{v.Color} ({v.SKU})", stock = v.StockQuantity, low = v.IsLowStock })))</script>
 <script id="existingLines" type="application/json">@Html.Raw(Json.Serialize(Model.Items.OrderBy(i => i.DisplayOrder).Select(i => new { variantId = i.ProductVariantId, qty = i.DefaultQuantity, cost = i.DefaultUnitCost })))</script>
 <script>
     (function () {
@@ -111,16 +111,38 @@
                 }).join('');
         }
 
+
+        // Low-stock hint shown under the chosen variant, so the raiser can see what is actually running out.
+        function stockBadge(v) {
+            if (!v) return '';
+            if (v.stock <= 0) return '<span class="stf-badge stf-badge-danger" style="margin-top:4px;">Out of stock</span>';
+            if (v.low) return '<span class="stf-badge" style="margin-top:4px;background:var(--stf-secondary-container);color:var(--stf-secondary);">Low stock &middot; ' + v.stock + ' left</span>';
+            return '<span style="display:block;margin-top:4px;font-size:0.72rem;color:var(--stf-on-surface-variant);">' + v.stock + ' in stock</span>';
+        }
+        function wireStock(row) {
+            var sel = row.querySelector('select[name="variantIds"]');
+            var out = row.querySelector('.stock-badge');
+            if (!sel || !out) return;
+            var pool = (typeof allVariants !== 'undefined') ? allVariants : variants;
+            function upd() {
+                var id = parseInt(sel.value, 10);
+                out.innerHTML = stockBadge(pool.find(function (x) { return x.id === id; }));
+            }
+            sel.addEventListener('change', upd);
+            upd();
+        }
+
         function addRow(line) {
             var row = document.createElement('tr');
             var qty = line ? line.qty : 1;
             var cost = line && line.cost !== null && line.cost !== undefined ? line.cost : '';
             row.innerHTML =
-                '<td><select name="variantIds" style="width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:7px 10px;">' + optionsHtml(line ? line.variantId : null) + '</select></td>' +
+                '<td><select name="variantIds" style="width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:7px 10px;">' + optionsHtml(line ? line.variantId : null) + '</select><div class="stock-badge"></div></td>' +
                 '<td><input type="number" name="defaultQuantities" min="1" value="' + qty + '" style="width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:7px 10px;" /></td>' +
                 '<td><input type="number" name="defaultUnitCosts" step="0.01" min="0" value="' + cost + '" placeholder="current cost" style="width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:7px 10px;" /></td>' +
                 '<td><button type="button" class="stf-btn stf-btn-danger-outline remove-line" style="padding:6px 10px;font-size:0.75rem;">Remove</button></td>';
             body.appendChild(row);
+            wireStock(row);
             row.querySelector('.remove-line').addEventListener('click', function () {
                 if (document.querySelectorAll('#lineBody tr').length > 1) row.remove();
             });

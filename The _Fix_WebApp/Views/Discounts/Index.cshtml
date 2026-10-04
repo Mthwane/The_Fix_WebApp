@@ -85,6 +85,7 @@
                         </td>
                         <td>
                             <strong>@d.ValueLabel()</strong>
+                            @if (d.AutoApply) { <div style="font-size:0.72rem;color:var(--stf-secondary);font-weight:600;">AUTO-APPLIES</div> }
                             @if (d.MaxDiscountAmount.HasValue) { <div style="font-size:0.75rem;color:var(--stf-on-surface-variant);">max R@(d.MaxDiscountAmount.Value.ToString("0.##"))</div> }
                             @if (d.MinimumSpend.HasValue) { <div style="font-size:0.75rem;color:var(--stf-on-surface-variant);">min spend R@(d.MinimumSpend.Value.ToString("0.##"))</div> }
                         </td>

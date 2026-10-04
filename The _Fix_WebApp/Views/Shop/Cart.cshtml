@@ -4,6 +4,7 @@
     Layout = "_StorefrontLayout";
     var fallbackImage = "https://placehold.co/160x160/E4DEC9/24211B?text=No+Image";
     var appliedCode = ViewBag.DiscountCode as string;
+    var discountIsAuto = ViewBag.DiscountAuto == true;
     var codeDiscount = appliedCode is null ? 0m : (decimal)ViewBag.DiscountAmount;
     var vat = FashionFix.Web.Security.TaxSettings.CalculateVat(Model.SubTotal, codeDiscount);
     // Flat R100 delivery under R500, free from R500 (basket value before discounts).
@@ -72,7 +73,7 @@
                     @if (appliedCode is not null)
                     {
                         <div style="display:flex;justify-content:space-between;font-size:0.9rem;margin-bottom:8px;color:var(--ffs-forest);">
-                            <span>Discount (@appliedCode)</span><span>-@codeDiscount.ToString("C")</span>
+                            <span>Discount (@(appliedCode + (discountIsAuto ? " - applied automatically" : "")))</span><span>-@codeDiscount.ToString("C")</span>
                         </div>
                     }
                     <div style="display:flex;justify-content:space-between;font-size:0.85rem;color:var(--ffs-ink-muted);margin-bottom:8px;">
@@ -89,7 +90,7 @@
                         <span>Total</span><span>@((Model.SubTotal - codeDiscount + vat + deliveryFee).ToString("C"))</span>
                     </div>
 
-                    @if (appliedCode is null)
+                    @if (appliedCode is null || discountIsAuto)
                     {
                         <form asp-controller="Shop" asp-action="ApplyDiscountCode" method="post" style="display:flex;gap:6px;margin-bottom:16px;">
                             @Html.AntiForgeryToken()

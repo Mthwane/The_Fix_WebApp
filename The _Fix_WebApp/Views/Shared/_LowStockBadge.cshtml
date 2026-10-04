@@ -1,0 +1,11 @@
+@* Low-stock / out-of-stock badge for one product variant. Needs variant.Product loaded (the threshold lives on the style).
+   Usage: <partial name="_LowStockBadge" model="item.ProductVariant" /> *@
+@model ProductVariant
+@if (Model.StockQuantity <= 0)
+{
+    <span class="stf-badge stf-badge-danger" title="No stock left">Out of stock</span>
+}
+else if (Model.IsLowStock)
+{
+    <span class="stf-badge" style="background:var(--stf-secondary-container);color:var(--stf-secondary);" title="At or below the low-stock threshold of @Model.Product.LowStockThreshold">Low stock &middot; @Model.StockQuantity left</span>
+}

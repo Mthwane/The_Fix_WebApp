@@ -25,13 +25,15 @@
         <div>
             <table class="stf-table" style="margin-bottom:20px;">
                 <thead>
-                    <tr><th>Variant</th><th style="width:110px;">Default Qty</th><th style="width:130px;">Default Cost</th></tr>
+                    <tr><th>Variant</th><th>SKU</th><th style="width:130px;">Stock</th><th style="width:110px;">Default Qty</th><th style="width:130px;">Default Cost</th></tr>
                 </thead>
                 <tbody>
                     @foreach (var item in Model.Items.OrderBy(i => i.DisplayOrder))
                     {
                         <tr>
-                            <td>@item.ProductVariant.Product.Name (@item.ProductVariant.Size/@item.ProductVariant.Color)</td>
+                            <td>@item.ProductVariant.Product.Name (@item.ProductVariant.DisplaySize/@item.ProductVariant.Color)</td>
+                            <td><code>@item.ProductVariant.SKU</code></td>
+                            <td>@item.ProductVariant.StockQuantity <partial name="_LowStockBadge" model="item.ProductVariant" /></td>
                             <td>@item.DefaultQuantity</td>
                             <td>@(item.DefaultUnitCost.HasValue ? item.DefaultUnitCost.Value.ToString("C") : "current cost")</td>
                         </tr>
@@ -40,6 +42,7 @@
                 <tfoot>
                     <tr>
                         <td style="font-weight:600;">Estimate</td>
+                        <td></td><td></td>
                         <td style="font-weight:600;">@Model.TotalUnits units</td>
                         <td style="font-weight:600;">@Model.EstimatedCost.ToString("C")</td>
                     </tr>
@@ -91,7 +94,7 @@
                     {
                         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
                             <input type="hidden" name="itemIds" value="@item.RestockBundleItemId" />
-                            <span style="flex:1;font-size:0.8rem;">@item.ProductVariant.Product.Name (@item.ProductVariant.Size/@item.ProductVariant.Color)</span>
+                            <span style="flex:1;font-size:0.8rem;">@item.ProductVariant.Product.Name (@item.ProductVariant.DisplaySize/@item.ProductVariant.Color) <partial name="_LowStockBadge" model="item.ProductVariant" /></span>
                             <input type="number" name="quantities" min="0" value="@item.DefaultQuantity" style="width:70px;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:6px 8px;font-size:0.82rem;" />
                         </div>
                     }

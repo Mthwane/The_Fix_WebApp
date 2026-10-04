@@ -2,8 +2,10 @@
 @{
     ViewData["Title"] = Model.PONumber;
     Layout = "_StaffLayout";
-    bool isManager = User.IsInRole("Manager") || User.IsInRole("Administrator");
-    bool canApprove = ViewBag.CanApprove && isManager;
+    // Access is by PERMISSION, never by role name: anyone whose role has purchaseorders.manage can raise/submit/cancel; only
+    // purchaseorders.approve unlocks Approve/Reject. (The controller enforces both - these just decide what is shown.)
+    bool isManager = User.HasClaim(FashionFix.Web.Security.Permissions.ClaimType, FashionFix.Web.Security.Permissions.PurchaseOrdersManage);
+    bool canApprove = ViewBag.CanApprove;
     var shipment = ViewBag.Shipment as CourierShipment;
     bool courierConfigured = ViewBag.CourierConfigured;
 
@@ -65,7 +67,7 @@
                     @foreach (var item in Model.Items)
                     {
                         <tr>
-                            <td>@item.ProductVariant.Product.Name <span style="color:var(--stf-on-surface-variant);">(@item.ProductVariant.DisplaySize/@item.ProductVariant.Color)</span></td>
+                            <td>@item.ProductVariant.Product.Name <span style="color:var(--stf-on-surface-variant);">(@item.ProductVariant.DisplaySize/@item.ProductVariant.Color)</span> <partial name="_LowStockBadge" model="item.ProductVariant" /></td>
                             <td><code>@item.ProductVariant.SKU</code></td>
                             <td>@item.QuantityOrdered</td>
                             <td>@item.QuantityReceived @(item.QuantityOutstanding > 0 ? $"({item.QuantityOutstanding} outstanding)" : "")</td>

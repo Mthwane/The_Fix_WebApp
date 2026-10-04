@@ -86,6 +86,11 @@ public class Discount
     /// <summary>Master switch - an inactive code can't be redeemed anywhere, whatever its dates say.</summary>
     public bool IsActive { get; set; } = true;
 
+    /// <summary>When true the discount is applied automatically (online and at the till, per Channel) to any basket that
+    /// qualifies - no code needs typing. A typed code always wins over an automatic discount; if several automatic
+    /// discounts qualify, the one that saves the most is used (they never stack).</summary>
+    public bool AutoApply { get; set; }
+
     /// <summary>Show a promotional banner on the storefront while this discount is live.</summary>
     public bool ShowBanner { get; set; }
 

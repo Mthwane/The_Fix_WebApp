@@ -59,7 +59,7 @@ public static class Permissions
         [RolesManage] = "Manage Roles & Permissions",
         [OrdersManage] = "Manage Orders (update status, cancel, fulfill)",
         [SuppliersManage] = "Manage Suppliers (contacts, lead times, collection addresses)",
-        [PurchaseOrdersManage] = "Manage Purchase Orders (raise restock requests & receive stock)",
+        [PurchaseOrdersManage] = "Manage Purchase Orders (create, submit & cancel restock requests, receive stock)",
         [PurchaseOrdersApprove] = "Approve Purchase Orders (authorise spend before an order is placed)",
         [RewardsManage] = "Manage Rewards (points earn rate, cash-back %, redemption rules)",
         [ReturnsProcess] = "Process Returns & Refunds",

@@ -224,6 +224,7 @@ public class DiscountsController : Controller
             ValidForDays = d.ValidForDays,
             ExpiresOn = d.ExpiresAt?.ToLocalTime().Date,
             IsActive = d.IsActive,
+            AutoApply = d.AutoApply,
             ShowBanner = d.ShowBanner,
             BannerText = d.BannerText,
             RedemptionCount = d.RedemptionCount,
@@ -384,6 +385,7 @@ public class DiscountsController : Controller
         d.MaxUsesPerCustomer = m.MaxUsesPerCustomer;
         d.Channel = m.Channel;
         d.IsActive = m.IsActive;
+        d.AutoApply = m.AutoApply;
         d.ShowBanner = m.ShowBanner;
         d.BannerText = string.IsNullOrWhiteSpace(m.BannerText) ? null : m.BannerText.Trim();
         // (A blank banner text is fine: the storefront falls back to "15% off - use code ABC" itself.)

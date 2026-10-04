@@ -314,7 +314,7 @@
                         <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--stf-surface-container);">
                             <div>
                                 <div style="font-weight:600;font-size:0.88rem;">@(shift.User?.FullName ?? "Unknown")</div>
-                                <div style="font-size:0.78rem;color:var(--stf-on-surface-variant);">Since @shift.DateOpened.ToLocalTime().ToString("HH:mm") &middot; Float @Money(shift.OpeningFloat)</div>
+                                <div style="font-size:0.78rem;color:var(--stf-on-surface-variant);">Since @FashionFix.Web.Services.Audit.AuditTime.ShiftStamp(shift.DateOpened) &middot; Float @Money(shift.OpeningFloat)</div>
                             </div>
                             <span class="stf-badge stf-badge-active">Open</span>
                         </div>
@@ -358,7 +358,7 @@
                 <div class="stf-card" style="margin-bottom:20px;">
                     @if (Model.CurrentShift is not null)
                     {
-                        <div style="font-size:0.85rem;">Opened @Model.CurrentShift.DateOpened.ToLocalTime().ToString("HH:mm") with @Money(Model.CurrentShift.OpeningFloat)</div>
+                        <div style="font-size:0.85rem;">Opened @FashionFix.Web.Services.Audit.AuditTime.ShiftStamp(Model.CurrentShift.DateOpened) with @Money(Model.CurrentShift.OpeningFloat)</div>
                         <div style="font-size:0.85rem;margin-top:4px;">Expected cash now: <strong>@Money(Model.CurrentShiftExpectedCash ?? 0)</strong></div>
                         <div style="display:flex;gap:8px;margin-top:10px;">
                             <a asp-controller="Pos" asp-action="Index" class="stf-btn stf-btn-primary" style="padding:6px 14px;font-size:0.78rem;">Open Till</a>

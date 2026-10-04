@@ -42,6 +42,46 @@ public class DiscountService : IDiscountService
         if (discount is null || !discount.IsActive)
             return DiscountResult.Fail("That discount code isn't valid.");
 
+        return await EvaluateLoadedAsync(discount, lines, channel, customerId);
+    }
+
+    public async Task<DiscountResult> EvaluateBestAutoAsync(
+        IReadOnlyCollection<DiscountLine> lines,
+        DiscountChannel channel,
+        string? customerId)
+    {
+        if (lines.Count == 0)
+            return DiscountResult.Fail("Nothing in the basket.");
+
+        var now = DateTime.UtcNow;
+        var candidates = await _context.Discounts
+            .AsNoTracking()
+            .Include(d => d.Targets)
+            .Where(d => d.AutoApply
+                        && d.IsActive
+                        && d.StartsAt <= now
+                        && (d.ExpiresAt == null || d.ExpiresAt >= now)
+                        && (d.MaxRedemptions == null || d.RedemptionCount < d.MaxRedemptions)
+                        && (d.Channel == DiscountChannel.Both || d.Channel == channel))
+            .ToListAsync();
+
+        DiscountResult? best = null;
+        foreach (var candidate in candidates)
+        {
+            var result = await EvaluateLoadedAsync(candidate, lines, channel, customerId);
+            if (result.IsValid && (best is null || result.Amount > best.Amount))
+                best = result;
+        }
+
+        return best ?? DiscountResult.Fail("No automatic discount applies.");
+    }
+
+    private async Task<DiscountResult> EvaluateLoadedAsync(
+        Discount discount,
+        IReadOnlyCollection<DiscountLine> lines,
+        DiscountChannel channel,
+        string? customerId)
+    {
         var now = DateTime.UtcNow;
 
         if (discount.Channel != DiscountChannel.Both && discount.Channel != channel)

@@ -22,6 +22,7 @@
     }
 
     var appliedDiscountCode = ViewBag.DiscountCode as string;
+    var discountIsAuto = ViewBag.DiscountAuto == true;
     var appliedDiscountAmount = appliedDiscountCode is null ? 0m : (decimal)ViewBag.DiscountAmount;
 
     // Reward points can't push the combined savings past the basket value.
@@ -68,7 +69,7 @@
             <div style="display:flex;justify-content:space-between;font-size:0.88rem;margin-bottom:6px;"><span>Subtotal</span><span>@Model.Cart.SubTotal.ToString("C")</span></div>
             @if (appliedDiscountCode is not null)
             {
-                <div style="display:flex;justify-content:space-between;font-size:0.88rem;margin-bottom:6px;color:var(--ffs-forest);"><span>Discount (@appliedDiscountCode)</span><span>-@appliedDiscountAmount.ToString("C")</span></div>
+                <div style="display:flex;justify-content:space-between;font-size:0.88rem;margin-bottom:6px;color:var(--ffs-forest);"><span>Discount (@(appliedDiscountCode + (discountIsAuto ? " - applied automatically" : "")))</span><span>-@appliedDiscountAmount.ToString("C")</span></div>
             }
             <div style="display:flex;justify-content:space-between;font-size:0.85rem;color:var(--ffs-ink-muted);margin-bottom:6px;"><span>VAT (15%)</span><span>@vat.ToString("C")</span></div>
             <div style="display:flex;justify-content:space-between;font-size:0.88rem;margin-bottom:6px;"><span>Delivery</span><span>@(deliveryFee > 0 ? deliveryFee.ToString("C") : "Free")</span></div>
@@ -80,7 +81,7 @@
         </div>
 
         <div style="margin-bottom:28px;">
-            @if (appliedDiscountCode is null)
+            @if (appliedDiscountCode is null || discountIsAuto)
             {
                 <form asp-controller="Shop" asp-action="ApplyDiscountCode" asp-route-returnTo="checkout" method="post" style="display:flex;gap:8px;">
                     @Html.AntiForgeryToken()

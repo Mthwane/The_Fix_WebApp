@@ -85,3 +85,10 @@
         </div>
     </div>
 </div>
+
+@section Scripts {
+    <script>
+        // Sale completed - the till's saved cart (see wwwroot/js/site.js) must not come back on the next visit to /Pos.
+        try { sessionStorage.removeItem('ff.pos.till'); } catch (e) { }
+    </script>
+}

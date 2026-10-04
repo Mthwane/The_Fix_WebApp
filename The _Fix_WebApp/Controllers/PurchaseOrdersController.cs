@@ -84,7 +84,7 @@ public class PurchaseOrdersController : Controller
             .ThenBy(v => v.Product.Name)
             .ToListAsync();
 
-        ViewBag.CanRaise = User.IsInRole("Manager") || User.IsInRole("Administrator");
+        ViewBag.CanRaise = User.HasClaim(Permissions.ClaimType, Permissions.PurchaseOrdersManage);
         return View(variants);
     }
 
@@ -139,7 +139,6 @@ public class PurchaseOrdersController : Controller
 
     // GET: /PurchaseOrders/Create - a blank manual restock request.
     [HttpGet]
-    [Authorize(Roles = "Manager,Administrator")] // only managers raise, submit, approve or cancel purchase orders
     public async Task<IActionResult> Create()
     {
         await PopulateLookupsAsync();
@@ -149,7 +148,6 @@ public class PurchaseOrdersController : Controller
     // POST: /PurchaseOrders/Create
     [HttpPost]
     [ValidateAntiForgeryToken]
-    [Authorize(Roles = "Manager,Administrator")] // only managers raise, submit, approve or cancel purchase orders
     public async Task<IActionResult> Create(int supplierId, DateTime? dateExpected, string? notes, List<int> variantIds, List<int> quantities, List<decimal> unitCosts)
     {
         if (variantIds is null || variantIds.Count == 0)
@@ -212,7 +210,6 @@ public class PurchaseOrdersController : Controller
     // POST: /PurchaseOrders/Submit/5 - Draft -> AwaitingApproval.
     [HttpPost]
     [ValidateAntiForgeryToken]
-    [Authorize(Roles = "Manager,Administrator")] // only managers raise, submit, approve or cancel purchase orders
     public async Task<IActionResult> Submit(int id)
     {
         var order = await _context.PurchaseOrders.Include(p => p.Items).FirstOrDefaultAsync(p => p.PurchaseOrderId == id);
@@ -244,7 +241,6 @@ public class PurchaseOrdersController : Controller
     [HttpPost]
     [ValidateAntiForgeryToken]
     [Authorize(Policy = Permissions.PurchaseOrdersApprove)]
-    [Authorize(Roles = "Manager,Administrator")] // only managers raise, submit, approve or cancel purchase orders
     public async Task<IActionResult> Approve(int id, string? reviewNotes)
     {
         var order = await _context.PurchaseOrders.Include(p => p.Items).FirstOrDefaultAsync(p => p.PurchaseOrderId == id);
@@ -271,7 +267,6 @@ public class PurchaseOrdersController : Controller
     [HttpPost]
     [ValidateAntiForgeryToken]
     [Authorize(Policy = Permissions.PurchaseOrdersApprove)]
-    [Authorize(Roles = "Manager,Administrator")] // only managers raise, submit, approve or cancel purchase orders
     public async Task<IActionResult> Reject(int id, string? reviewNotes)
     {
         var order = await _context.PurchaseOrders.FindAsync(id);
@@ -395,7 +390,6 @@ public class PurchaseOrdersController : Controller
     // POST: /PurchaseOrders/Cancel/5
     [HttpPost]
     [ValidateAntiForgeryToken]
-    [Authorize(Roles = "Manager,Administrator")] // only managers raise, submit, approve or cancel purchase orders
     public async Task<IActionResult> Cancel(int id)
     {
         var order = await _context.PurchaseOrders.Include(p => p.Items).FirstOrDefaultAsync(p => p.PurchaseOrderId == id);

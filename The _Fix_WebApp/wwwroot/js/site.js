@@ -26,6 +26,7 @@
     var discountAmountDisplay = document.getElementById('discountAmountDisplay');
     var appliedDiscount = null;   // { code, amount, label }
     var appliedSig = '';
+    var autoSig = '';             // basket signature the last automatic-discount check was run for
     var vatDisplay = document.getElementById('vatDisplay');
     var checkoutBtn = document.getElementById('checkoutBtn');
     var VAT_RATE = 0.15; // preview only - the server recalculates this authoritatively at checkout
@@ -47,6 +48,41 @@
     function formatCurrency(value) {
         return 'R' + value.toFixed(2);
     }
+
+    // Till persistence: the cart used to live only in memory, so opening the catalogue (or any other page) and coming back
+    // wiped the sale. It's now mirrored into sessionStorage (this tab only, gone when the tab closes), keyed to the signed-in
+    // user so a different cashier on the same tab never inherits it. Cleared when the sale completes (Receipt page).
+    var TILL_KEY = 'ff.pos.till';
+    var tillUser = (document.getElementById('cartTable') || {}).getAttribute
+        ? document.getElementById('cartTable').getAttribute('data-user') || '' : '';
+    function tillField(name) {
+        var el = document.querySelector('#checkoutForm [name="' + name + '"]');
+        return el ? el.value : '';
+    }
+    function saveTill() {
+        try {
+            if (cart.length === 0) { sessionStorage.removeItem(TILL_KEY); return; }
+            sessionStorage.setItem(TILL_KEY, JSON.stringify({
+                user: tillUser,
+                cart: cart,
+                discountCode: appliedDiscount && !appliedDiscount.auto ? appliedDiscount.code : (discountCodeInput ? discountCodeInput.value : ''),
+                customerId: tillField('CustomerId'),
+                receiptEmail: tillField('ReceiptEmail'),
+                paymentMethod: tillField('PaymentMethod')
+            }));
+        } catch (e) { /* storage unavailable - the till still works, it just won't survive navigation */ }
+    }
+    function loadTill() {
+        try {
+            var saved = JSON.parse(sessionStorage.getItem(TILL_KEY) || 'null');
+            if (!saved || saved.user !== tillUser || !Array.isArray(saved.cart) || saved.cart.length === 0) return null;
+            return saved;
+        } catch (e) { return null; }
+    }
+    ['CustomerId', 'ReceiptEmail', 'PaymentMethod'].forEach(function (n) {
+        var el = document.querySelector('#checkoutForm [name="' + n + '"]');
+        if (el) { el.addEventListener('input', saveTill); el.addEventListener('change', saveTill); }
+    });
 
     function render() {
         cartBody.innerHTML = '';
@@ -93,19 +129,24 @@
 
         var sig = cart.map(function (l) { return l.variantId + 'x' + l.quantity; }).join(',');
         if (appliedDiscount && cart.length === 0) {
-            appliedDiscount = null; appliedSig = '';
+            appliedDiscount = null; appliedSig = ''; autoSig = '';
             setDiscountMessage('', false);
-        } else if (appliedDiscount && sig !== appliedSig) {
+        } else if (appliedDiscount && !appliedDiscount.auto && sig !== appliedSig) {
             appliedSig = sig;
             applyDiscount(true); // basket changed - re-check the code against the new basket
+        } else if (!appliedDiscount || appliedDiscount.auto) {
+            // No typed code in play: let the server say whether an automatic discount covers this basket.
+            if (cart.length === 0) autoSig = '';
+            else if (sig !== autoSig) { autoSig = sig; checkAutoDiscount(); }
         }
 
         var discount = appliedDiscount ? Math.min(appliedDiscount.amount, subtotal) : 0;
-        if (discountCodeHidden) discountCodeHidden.value = appliedDiscount ? appliedDiscount.code : '';
+        // An automatic discount is NOT posted as a code - the server re-finds it itself (any cashier, no permission needed).
+        if (discountCodeHidden) discountCodeHidden.value = appliedDiscount && !appliedDiscount.auto ? appliedDiscount.code : '';
         if (discountRow) {
             discountRow.style.display = appliedDiscount ? 'flex' : 'none';
             if (appliedDiscount) {
-                discountRowLabel.textContent = 'Discount (' + appliedDiscount.code + ')';
+                discountRowLabel.textContent = (appliedDiscount.auto ? 'Auto discount (' : 'Discount (') + appliedDiscount.code + ')';
                 discountAmountDisplay.textContent = '-' + formatCurrency(discount);
             }
         }
@@ -117,6 +158,7 @@
         vatDisplay.textContent = formatCurrency(vat);
         grandTotalDisplay.textContent = formatCurrency(grandTotal < 0 ? 0 : grandTotal);
         checkoutBtn.disabled = cart.length === 0;
+        saveTill();
 
         cartBody.querySelectorAll('.qty-input').forEach(function (input) {
             input.addEventListener('change', function () {
@@ -240,9 +282,39 @@
         discountMessage.style.color = ok ? 'var(--stf-primary)' : 'var(--stf-error)';
     }
 
+    // Asks the server for the best automatic discount for the current basket (no code involved).
+    function checkAutoDiscount() {
+        var form = document.getElementById('checkoutForm');
+        var token = form.querySelector('input[name="__RequestVerificationToken"]');
+        var body = new FormData();
+        if (token) body.append('__RequestVerificationToken', token.value);
+        var cust = form.querySelector('input[name="CustomerId"]');
+        if (cust && cust.value.trim()) body.append('customerId', cust.value.trim());
+        cart.forEach(function (l) { body.append('variantIds', l.variantId); body.append('quantities', l.quantity); });
+        var requestedSig = autoSig;
+
+        fetch('/Pos/AutoDiscount', { method: 'POST', body: body, credentials: 'same-origin' })
+            .then(function (r) { if (!r.ok) throw new Error(); return r.json(); })
+            .then(function (res) {
+                if (appliedDiscount && !appliedDiscount.auto) return;   // a typed code took over meanwhile
+                if (requestedSig !== autoSig) return;                   // basket changed again - a newer check is running
+                if (res.valid) {
+                    appliedDiscount = { code: res.code, amount: res.amount, label: res.label, auto: true };
+                    setDiscountMessage(res.name + ' - ' + res.label + ' applied automatically.', true);
+                    render();
+                } else if (appliedDiscount && appliedDiscount.auto) {
+                    appliedDiscount = null;
+                    setDiscountMessage('', false);
+                    render();
+                }
+            })
+            .catch(function () { /* best effort - the server applies any automatic discount at checkout regardless */ });
+    }
+
     function clearDiscount(message) {
         appliedDiscount = null;
         appliedSig = '';
+        autoSig = '';
         setDiscountMessage(message || '', false);
         render();
     }
@@ -287,7 +359,7 @@
         });
         discountCodeInput.addEventListener('input', function () {
             // Editing the code un-applies the previous one so a stale discount can't linger.
-            if (appliedDiscount && discountCodeInput.value.trim().toUpperCase() !== appliedDiscount.code) clearDiscount('');
+            if (appliedDiscount && !appliedDiscount.auto && discountCodeInput.value.trim().toUpperCase() !== appliedDiscount.code) clearDiscount('');
         });
         document.querySelectorAll('.discount-pick').forEach(function (btn) {
             btn.addEventListener('click', function () {
@@ -296,13 +368,21 @@
             });
         });
         var custField = document.querySelector('#checkoutForm input[name="CustomerId"]');
-        if (custField) custField.addEventListener('change', function () { if (appliedDiscount) applyDiscount(true); });
+        if (custField) custField.addEventListener('change', function () { if (appliedDiscount && !appliedDiscount.auto) applyDiscount(true); else { autoSig = ''; render(); } });
     }
 
     document.getElementById('checkoutForm').addEventListener('submit', function (e) {
         if (cart.length === 0) {
             e.preventDefault();
             scanError.textContent = 'Add at least one item before checking out.';
+            return;
+        }
+        // Mandatory: a customer ID or an email address. (The server enforces this too - this just saves the round trip.)
+        if (!tillField('CustomerId').trim() && !tillField('ReceiptEmail').trim()) {
+            e.preventDefault();
+            scanError.textContent = 'Enter the customer ID or an email address before completing the sale.';
+            var custInput = document.querySelector('#checkoutForm [name="CustomerId"]');
+            if (custInput) custInput.focus();
         }
     });
 
@@ -316,6 +396,19 @@
                 cart = restored;
             }
         } catch (e) { /* ignore malformed restore payload */ }
+    }
+
+    // Nothing posted back from the server -> come back to the till exactly as it was left (cart, customer, payment, code).
+    if (cart.length === 0) {
+        var saved = loadTill();
+        if (saved) {
+            cart = saved.cart;
+            var f = function (n, v) { var el = document.querySelector('#checkoutForm [name="' + n + '"]'); if (el && v) el.value = v; };
+            f('CustomerId', saved.customerId);
+            f('ReceiptEmail', saved.receiptEmail);
+            f('PaymentMethod', saved.paymentMethod);
+            if (discountCodeInput && saved.discountCode && !discountCodeInput.value) discountCodeInput.value = saved.discountCode;
+        }
     }
 
     render();

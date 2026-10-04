@@ -58,6 +58,9 @@ public class DiscountFormViewModel : IValidatableObject
 
     public bool IsActive { get; set; } = true;
 
+    /// <summary>Apply automatically to qualifying baskets (till and/or online) without a code being typed.</summary>
+    public bool AutoApply { get; set; }
+
     public bool ShowBanner { get; set; }
 
     [MaxLength(200)]
@@ -94,6 +97,9 @@ public class DiscountFormViewModel : IValidatableObject
 
         if (!ValidForDays.HasValue && ExpiresOn.HasValue && StartsOn.HasValue && ExpiresOn.Value.Date < StartsOn.Value.Date)
             yield return new ValidationResult("The expiry date can't be before the start date.", new[] { nameof(ExpiresOn) });
+
+        if (AutoApply && BulkCount > 1)
+            yield return new ValidationResult("An automatic discount is a single promotion - generate one code, not a batch.", new[] { nameof(AutoApply) });
 
         if (ShowBanner && Channel == DiscountChannel.InStore)
             yield return new ValidationResult("An in-store-only discount can't have a storefront banner. Change the channel to Online or Both.", new[] { nameof(ShowBanner) });

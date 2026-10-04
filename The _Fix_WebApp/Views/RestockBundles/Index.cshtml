@@ -53,7 +53,27 @@
                         <td>@b.Season</td>
                         <td>@(b.Supplier?.Name ?? "Varies")</td>
                         <td>@(b.Department?.Name ?? b.Brand ?? "-")</td>
-                        <td>@b.Items.Count (@b.TotalUnits units)</td>
+                        <td>
+                            @{ var lowLines = b.Items.Count(i => i.ProductVariant.IsLowStock); }
+                            <details>
+                                <summary style="cursor:pointer;">
+                                    @b.Items.Count line@(b.Items.Count == 1 ? "" : "s") (@b.TotalUnits units)
+                                    @if (lowLines > 0)
+                                    {
+                                        <span class="stf-badge" style="background:var(--stf-secondary-container);color:var(--stf-secondary);margin-left:4px;">@lowLines low</span>
+                                    }
+                                </summary>
+                                <ul style="margin:8px 0 0;padding-left:0;list-style:none;font-size:0.78rem;min-width:260px;">
+                                    @foreach (var line in b.Items.OrderBy(i => i.DisplayOrder))
+                                    {
+                                        <li style="display:flex;justify-content:space-between;gap:10px;align-items:center;padding:3px 0;">
+                                            <span>@line.ProductVariant.Product.Name <span style="color:var(--stf-on-surface-variant);">(@line.ProductVariant.DisplaySize/@line.ProductVariant.Color)</span> &times; @line.DefaultQuantity</span>
+                                            <partial name="_LowStockBadge" model="line.ProductVariant" />
+                                        </li>
+                                    }
+                                </ul>
+                            </details>
+                        </td>
                         <td>@b.EstimatedCost.ToString("C")</td>
                         <td>
                             @if (b.IsActive)

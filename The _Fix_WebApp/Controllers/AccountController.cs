@@ -4,6 +4,9 @@ using FashionFix.Web.Models.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.WebUtilities;
+using System.Text;
+using FashionFix.Web.Services;
 
 namespace FashionFix.Web.Controllers;
 
@@ -25,13 +28,16 @@ public class AccountController : Controller
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly ApplicationDbContext _context;
     private readonly ILogger<AccountController> _logger;
+    private readonly IEmailSender _email;
 
     public AccountController(
         SignInManager<ApplicationUser> signInManager,
         UserManager<ApplicationUser> userManager,
         ApplicationDbContext context,
-        ILogger<AccountController> logger)
+        ILogger<AccountController> logger,
+        IEmailSender email)
     {
+        _email = email;
         _signInManager = signInManager;
         _userManager = userManager;
         _context = context;
@@ -60,7 +66,10 @@ public class AccountController : Controller
         if (!ModelState.IsValid)
             return View(viewName, model);
 
+        // The form says "Username or Email", so accept either.
         var user = await _userManager.FindByNameAsync(model.Username);
+        if (user is null && model.Username.Contains('@'))
+            user = await _userManager.FindByEmailAsync(model.Username.Trim());
         if (user is not null && !user.IsActive)
         {
             await LogAuditAsync(user.Id, "LoginFailed", $"Sign-in refused for deactivated account '{user.UserName}'.");
@@ -69,7 +78,7 @@ public class AccountController : Controller
         }
 
         var result = await _signInManager.PasswordSignInAsync(
-            model.Username, model.Password, model.RememberMe, lockoutOnFailure: true);
+            user?.UserName ?? model.Username, model.Password, model.RememberMe, lockoutOnFailure: true);
 
         if (result.Succeeded && user is not null)
         {
@@ -233,6 +242,83 @@ public class AccountController : Controller
         this.ToastSuccess("Your password has been updated.");
         return RedirectToAction(nameof(ChangePassword));
     }
+
+    // ---- Forgot / reset password (customers; works for any account that has an email) ----
+
+    [HttpGet]
+    public IActionResult ForgotPassword() => View(new ForgotPasswordViewModel());
+
+    // POST: /Account/ForgotPassword - looks the account up by email and mails a reset link.
+    // Always shows the same confirmation whether or not the email exists, so this form can't
+    // be used to discover which emails are registered.
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ForgotPassword(ForgotPasswordViewModel model)
+    {
+        if (!ModelState.IsValid) return View(model);
+
+        var user = await _userManager.FindByEmailAsync(model.Email.Trim());
+        if (user is not null && user.IsActive)
+        {
+            var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+            var encoded = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
+            var link = Url.Action("ResetPassword", "Account",
+                new { userId = user.Id, token = encoded }, Request.Scheme)!;
+
+            var name = string.IsNullOrWhiteSpace(user.FullName) ? "there" : System.Net.WebUtility.HtmlEncode(user.FullName);
+            await _email.SendAsync(user.Email!, "Reset your Fashion Fix password",
+                $"<p>Hi {name},</p><p>We received a request to reset your password. " +
+                $"<a href=\"{link}\">Click here to choose a new password</a>.</p>" +
+                "<p>This link works once. If you didn't ask for this, you can ignore this email.</p>");
+            await LogAuditAsync(user.Id, "PasswordResetRequested", $"Password reset email requested for '{user.UserName}'.");
+        }
+
+        return RedirectToAction(nameof(ForgotPasswordConfirmation));
+    }
+
+    [HttpGet]
+    public IActionResult ForgotPasswordConfirmation() => View();
+
+    [HttpGet]
+    public IActionResult ResetPassword(string? userId, string? token)
+    {
+        if (string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(token))
+            return RedirectToAction(nameof(ForgotPassword));
+        return View(new ResetPasswordViewModel { UserId = userId, Token = token });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ResetPassword(ResetPasswordViewModel model)
+    {
+        if (!ModelState.IsValid) return View(model);
+
+        var user = await _userManager.FindByIdAsync(model.UserId);
+        if (user is null) return RedirectToAction(nameof(ResetPasswordConfirmation));
+
+        string token;
+        try { token = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(model.Token)); }
+        catch (FormatException)
+        {
+            ModelState.AddModelError(string.Empty, "This reset link is invalid. Please request a new one.");
+            return View(model);
+        }
+
+        var result = await _userManager.ResetPasswordAsync(user, token, model.Password);
+        if (!result.Succeeded)
+        {
+            foreach (var error in result.Errors)
+                ModelState.AddModelError(string.Empty, error.Description);
+            return View(model);
+        }
+
+        await _userManager.ResetAccessFailedCountAsync(user);
+        await LogAuditAsync(user.Id, "PasswordReset", $"'{user.UserName}' reset their password via email link.");
+        return RedirectToAction(nameof(ResetPasswordConfirmation));
+    }
+
+    [HttpGet]
+    public IActionResult ResetPasswordConfirmation() => View();
 
     private IActionResult RedirectAfterLogin(string? returnUrl, IList<string> roles, System.Security.Claims.ClaimsPrincipal principal)
     {

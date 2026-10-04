@@ -7,7 +7,7 @@
 <div class="stf-content" style="max-width:440px;">
     <span class="stf-eyebrow">Operations Core</span>
     <h1 style="margin-bottom:6px;">End Shift</h1>
-    <p style="color:var(--stf-on-surface-variant);margin-bottom:16px;">Opened @Model.DateOpened.ToLocalTime().ToString("dd MMM, HH:mm") with a float of @Model.OpeningFloat.ToString("C").</p>
+    <p style="color:var(--stf-on-surface-variant);margin-bottom:16px;">Opened @FashionFix.Web.Services.Audit.AuditTime.ToSast(Model.DateOpened).ToString("dd MMM, HH:mm") with a float of @Model.OpeningFloat.ToString("C").</p>
 
     <div class="stf-card" style="background:var(--stf-secondary-container);border:none;margin-bottom:20px;">
         <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--stf-secondary);font-weight:600;">Expected Cash in Drawer</div>

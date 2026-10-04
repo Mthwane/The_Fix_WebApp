@@ -161,6 +161,13 @@
 </div>
 <div style="@HINT margin-top:-6px;">Hold Ctrl (or Cmd) to pick several. Selected items are highlighted.</div>
 
+<h5 style="@SECTION">Automatic application</h5>
+<label style="display:flex;gap:8px;align-items:center;font-size:0.88rem;margin-bottom:4px;">
+    <input type="checkbox" asp-for="AutoApply" /> Apply automatically - customers and cashiers don't need to enter the code
+</label>
+<span asp-validation-for="AutoApply" style="@EV"></span>
+<div style="@HINT margin-bottom:12px;">Applies to any basket containing the linked products (or the whole basket if none are linked), in the channel chosen above, while the discount is live. A typed code always wins, and automatic discounts never stack - the one that saves most is used.</div>
+
 <h5 style="@SECTION">Storefront banner</h5>
 <label style="display:flex;gap:8px;align-items:center;font-size:0.88rem;margin-bottom:10px;">
     <input type="checkbox" asp-for="ShowBanner" id="showBanner" /> Show a promotional banner on the storefront while this discount is live

@@ -26,7 +26,7 @@
             <h1>Purchase Orders</h1>
             <p>Raise, approve, book and receive restock requests. Stock only moves once an order is actually received.</p>
         </div>
-        @if (User.IsInRole("Manager") || User.IsInRole("Administrator"))
+        @if (User.HasClaim(FashionFix.Web.Security.Permissions.ClaimType, FashionFix.Web.Security.Permissions.PurchaseOrdersManage))
         {
             <a asp-action="Create" class="stf-btn stf-btn-primary">+ New Purchase Order</a>
         }
@@ -44,7 +44,7 @@
     {
         <div class="stf-card" style="text-align:center;padding:40px 20px;color:var(--stf-on-surface-variant);">
             <p style="margin-bottom:16px;">No purchase orders @(selected is null ? "yet" : $"with status {selected}").</p>
-            @if (User.IsInRole("Manager") || User.IsInRole("Administrator"))
+            @if (User.HasClaim(FashionFix.Web.Security.Permissions.ClaimType, FashionFix.Web.Security.Permissions.PurchaseOrdersManage))
             {
                 <a asp-action="Create" class="stf-btn stf-btn-primary">+ New Purchase Order</a>
             }

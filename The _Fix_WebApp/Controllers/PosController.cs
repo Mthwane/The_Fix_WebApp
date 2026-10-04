@@ -107,6 +107,38 @@ public class PosController : Controller
             : Json(new { valid = false, message = result.Error });
     }
 
+    // POST: /Pos/AutoDiscount - AJAX preview of the best AUTOMATIC discount for the current basket. Automatic discounts are
+    // store promotions, so unlike a typed code every cashier gets them (no discounts.view needed). Same rule as ApplyDiscount:
+    // the browser only says which variants/quantities; prices come from the database and Checkout re-evaluates everything.
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> AutoDiscount([FromForm] string? customerId, [FromForm] List<int> variantIds, [FromForm] List<int> quantities)
+    {
+        variantIds ??= new(); quantities ??= new();
+        if (variantIds.Count == 0 || variantIds.Count != quantities.Count)
+            return Json(new { valid = false });
+
+        var ids = variantIds.Distinct().ToList();
+        var variants = await _context.ProductVariants.AsNoTracking()
+            .Include(v => v.Product)
+            .Where(v => ids.Contains(v.ProductVariantId))
+            .ToDictionaryAsync(v => v.ProductVariantId);
+
+        var lines = new List<DiscountLine>();
+        for (var i = 0; i < variantIds.Count; i++)
+        {
+            if (!variants.TryGetValue(variantIds[i], out var v) || quantities[i] < 1) continue;
+            lines.Add(new DiscountLine(v.ProductId, quantities[i], Math.Round(v.EffectivePrice, 2, MidpointRounding.AwayFromZero)));
+        }
+
+        var result = await _discountService.EvaluateBestAutoAsync(lines, DiscountChannel.InStore,
+            string.IsNullOrWhiteSpace(customerId) ? null : customerId.Trim());
+
+        return result.IsValid
+            ? Json(new { valid = true, amount = result.Amount, code = result.Discount!.Code, label = result.Discount.ValueLabel(), name = result.Discount.Name })
+            : Json(new { valid = false });
+    }
+
     // GET: /Pos/StartShift - opening float entry. Not a hard gate on using the till (POS
     // access isn't blocked without an open shift, to avoid a risky behavioural change to an
     // already-working screen) - this is opt-in, for stores that want the cash reconciliation.
@@ -254,6 +286,13 @@ public class PosController : Controller
             return View(nameof(Index), model);
         }
 
+        // Every sale must be traceable to someone: a customer account ID, or an email address for the receipt.
+        if (string.IsNullOrWhiteSpace(model.CustomerId) && string.IsNullOrWhiteSpace(model.ReceiptEmail))
+        {
+            this.ToastError("Enter the customer's ID or an email address before completing the sale.");
+            return View(nameof(Index), model);
+        }
+
         if (!ModelState.IsValid)
         {
             var errors = string.Join(" ", ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage));
@@ -362,6 +401,20 @@ public class PosController : Controller
             }
 
             model.DiscountTotal = evaluation.Amount;
+        }
+        else
+        {
+            // No code typed: if an automatic discount covers this basket, it applies on its own (any cashier, no code).
+            var auto = await _discountService.EvaluateBestAutoAsync(
+                model.CartItems.Select(l => new DiscountLine(l.ProductId, l.Quantity, l.UnitPrice)).ToList(),
+                DiscountChannel.InStore,
+                model.CustomerId);
+
+            if (auto.IsValid)
+            {
+                model.DiscountCode = auto.Discount!.Code;
+                model.DiscountTotal = auto.Amount;
+            }
         }
 
         // VAT is always recomputed here from the fixed rate - never trusted from the client.

@@ -37,6 +37,15 @@ public interface IDiscountService
         string? customerId);
 
     /// <summary>
+    /// The best automatic (AutoApply) discount for this basket and channel, or an invalid result when none qualifies.
+    /// Used when no code was typed; automatic discounts never stack, so the one saving the most wins.
+    /// </summary>
+    Task<DiscountResult> EvaluateBestAutoAsync(
+        IReadOnlyCollection<DiscountLine> lines,
+        DiscountChannel channel,
+        string? customerId);
+
+    /// <summary>
     /// Consumes one redemption and records it against the order. Must be called inside the same database
     /// transaction that creates the order (it joins the caller's transaction). Throws
     /// <see cref="DiscountUnavailableException"/> if the code ran out or was switched off in the meantime.

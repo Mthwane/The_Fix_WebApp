@@ -63,27 +63,38 @@ public class ShopController : Controller
             .ToArray();
     }
 
-    /// <summary>Re-checks the code in the session against the current cart. Drops it from the session if it no longer works.</summary>
-    private async Task<(string? Code, decimal Amount, string? Error)> ResolveAppliedDiscountAsync(CartViewModel cart)
+    /// <summary>Re-checks the typed code in the session against the current cart (dropping it if it no longer works). When no
+    /// typed code is in play, falls back to the best automatic discount for the basket - a typed code always wins.</summary>
+    private async Task<(string? Code, decimal Amount, string? Error, bool Auto)> ResolveAppliedDiscountAsync(CartViewModel cart)
     {
-        var code = SessionCart.GetDiscountCode(HttpContext.Session);
-        if (string.IsNullOrWhiteSpace(code) || cart.Lines.Count == 0) return (null, 0m, null);
+        if (cart.Lines.Count == 0) return (null, 0m, null, false);
 
-        var result = await _discounts.EvaluateAsync(code, await CartLinesAsync(cart), DiscountChannel.Online, CurrentCustomerId());
-        if (!result.IsValid)
+        var lines = await CartLinesAsync(cart);
+        string? error = null;
+
+        var code = SessionCart.GetDiscountCode(HttpContext.Session);
+        if (!string.IsNullOrWhiteSpace(code))
         {
+            var result = await _discounts.EvaluateAsync(code, lines, DiscountChannel.Online, CurrentCustomerId());
+            if (result.IsValid)
+                return (result.Discount!.Code, result.Amount, null, false);
+
             SessionCart.ClearDiscountCode(HttpContext.Session);
-            return (null, 0m, result.Error);
+            error = result.Error;
         }
 
-        return (result.Discount!.Code, result.Amount, null);
+        var auto = await _discounts.EvaluateBestAutoAsync(lines, DiscountChannel.Online, CurrentCustomerId());
+        return auto.IsValid
+            ? (auto.Discount!.Code, auto.Amount, error, true)
+            : (null, 0m, error, false);
     }
 
     private async Task LoadDiscountViewDataAsync(CartViewModel cart)
     {
-        var (code, amount, error) = await ResolveAppliedDiscountAsync(cart);
+        var (code, amount, error, auto) = await ResolveAppliedDiscountAsync(cart);
         ViewBag.DiscountCode = code;
         ViewBag.DiscountAmount = amount;
+        ViewBag.DiscountAuto = auto;
         if (error is not null) this.ToastWarning($"Your discount code was removed: {error}");
     }
 

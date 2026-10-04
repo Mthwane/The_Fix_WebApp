@@ -36,7 +36,7 @@ public class RestockBundlesController : Controller
             .AsNoTracking()
             .Include(b => b.Supplier)
             .Include(b => b.Department)
-            .Include(b => b.Items)
+            .Include(b => b.Items).ThenInclude(i => i.ProductVariant).ThenInclude(v => v.Product)
             .AsQueryable();
 
         if (season.HasValue) query = query.Where(b => b.Season == season.Value);
@@ -163,7 +163,6 @@ public class RestockBundlesController : Controller
     // to this run only and never write back to the template.
     [HttpPost]
     [ValidateAntiForgeryToken]
-    [Authorize(Roles = "Manager,Administrator")]
     public async Task<IActionResult> Generate(int id, int? supplierId, List<int> itemIds, List<int> quantities)
     {
         var bundle = await _context.RestockBundles
