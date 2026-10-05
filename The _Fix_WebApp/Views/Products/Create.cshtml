@@ -104,17 +104,19 @@
         </div>
 
         <label asp-for="DepartmentId" style="@L">Department</label>
-        <select asp-for="DepartmentId" style="@F">
-            <option value="">-- None --</option>
+        <select asp-for="DepartmentId" style="@F" required>
+            <option value="">-- Select --</option>
             @foreach (var d in (List<Department>)ViewBag.Departments) { <option value="@d.DepartmentId">@d.Name</option> }
         </select>
-        <div style="@HINT margin-bottom:20px;">Which storefront department (Women/Men/Kids/...) this style appears under. Optional - can be set later from the catalogue.</div>
+        <span asp-validation-for="DepartmentId" style="@EV"></span>
+        <div style="@HINT margin-bottom:20px;">Which storefront department (Women/Men/Kids/...) this style appears under.</div>
 
         <label asp-for="SupplierId" style="@L">Supplier</label>
-        <select asp-for="SupplierId" style="@F">
-            <option value="">-- None --</option>
+        <select asp-for="SupplierId" style="@F" required>
+            <option value="">-- Select --</option>
             @foreach (var sup in (List<Supplier>)ViewBag.Suppliers) { <option value="@sup.SupplierId">@sup.Name</option> }
         </select>
+        <span asp-validation-for="SupplierId" style="@EV"></span>
         <div style="@HINT margin-bottom:20px;">Who you buy this style from. Purchase orders only list a supplier's own products, so set this for anything you restock.</div>
 
         <hr style="border-color:var(--stf-outline-variant);margin:16px 0;" />

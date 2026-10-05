@@ -18,7 +18,7 @@ namespace FashionFix.Web.Controllers;
 /// PurchaseOrdersManage, but moving it past AwaitingApproval needs PurchaseOrdersApprove, which
 /// Employees deliberately don't have. Stock only ever moves on Receive, never on approval.
 /// </summary>
-[Authorize(Policy = Permissions.PurchaseOrdersManage)]
+[Authorize(Policy = Permissions.PurchaseOrdersAccessPolicy)] // manage OR approve can open the list; each action below demands its own permission
 public class PurchaseOrdersController : Controller
 {
     private readonly ApplicationDbContext _context;
@@ -71,22 +71,10 @@ public class PurchaseOrdersController : Controller
         return View(orders);
     }
 
-    // GET: /PurchaseOrders/LowStock - the low-stock queue on the employee side. One row per low size/colour, most urgent
-    // first, with its supplier so whoever raises the purchase order knows who to order from.
+    // GET: /PurchaseOrders/LowStock - kept so old bookmarks/links still work. The low-stock queue now lives at /LowStock
+    // (LowStockController) behind its own permission.
     [HttpGet]
-    public async Task<IActionResult> LowStock()
-    {
-        var variants = await _context.ProductVariants
-            .AsNoTracking()
-            .Include(v => v.Product).ThenInclude(p => p.Supplier)
-            .Where(v => v.IsActive && v.Product.IsActive && v.StockQuantity <= v.Product.LowStockThreshold)
-            .OrderBy(v => v.StockQuantity)
-            .ThenBy(v => v.Product.Name)
-            .ToListAsync();
-
-        ViewBag.CanRaise = User.HasClaim(Permissions.ClaimType, Permissions.PurchaseOrdersManage);
-        return View(variants);
-    }
+    public IActionResult LowStock() => RedirectToAction("Index", "LowStock");
 
     // GET: /PurchaseOrders/Details/5
     [HttpGet]
@@ -139,15 +127,35 @@ public class PurchaseOrdersController : Controller
 
     // GET: /PurchaseOrders/Create - a blank manual restock request.
     [HttpGet]
-    public async Task<IActionResult> Create()
+    [Authorize(Policy = Permissions.PurchaseOrdersManage)]
+    public async Task<IActionResult> Create(int? variantId)
     {
         await PopulateLookupsAsync();
+
+        // Arriving from the low-stock queue's Restock button: pre-select that item's supplier and line.
+        // The view reads this to set the supplier dropdown and add the first line.
+        if (variantId.HasValue)
+        {
+            var variant = await _context.ProductVariants.AsNoTracking()
+                .Include(v => v.Product)
+                .FirstOrDefaultAsync(v => v.ProductVariantId == variantId.Value);
+            if (variant is not null)
+            {
+                ViewBag.PrefillVariantId = variant.ProductVariantId;
+                ViewBag.PrefillSupplierId = variant.Product.SupplierId;
+                ViewBag.PrefillQuantity = Math.Max(1, variant.Product.LowStockThreshold + 5 - variant.StockQuantity);
+                if (variant.Product.SupplierId is null)
+                    this.ToastWarning($"{variant.Product.Name} has no supplier linked yet - ask someone with product access to set one, then it can be ordered.");
+            }
+        }
+
         return View(new PurchaseOrder { DateExpected = DateTime.UtcNow.AddDays(7) });
     }
 
     // POST: /PurchaseOrders/Create
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [Authorize(Policy = Permissions.PurchaseOrdersManage)]
     public async Task<IActionResult> Create(int supplierId, DateTime? dateExpected, string? notes, List<int> variantIds, List<int> quantities, List<decimal> unitCosts)
     {
         if (variantIds is null || variantIds.Count == 0)
@@ -210,6 +218,7 @@ public class PurchaseOrdersController : Controller
     // POST: /PurchaseOrders/Submit/5 - Draft -> AwaitingApproval.
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [Authorize(Policy = Permissions.PurchaseOrdersManage)]
     public async Task<IActionResult> Submit(int id)
     {
         var order = await _context.PurchaseOrders.Include(p => p.Items).FirstOrDefaultAsync(p => p.PurchaseOrderId == id);
@@ -293,6 +302,7 @@ public class PurchaseOrdersController : Controller
     // POST: /PurchaseOrders/BookCollection/5 - books The Courier Guy to collect from the supplier.
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [Authorize(Policy = Permissions.PurchaseOrdersManage)]
     public async Task<IActionResult> BookCollection(int id)
     {
         var order = await _context.PurchaseOrders
@@ -327,6 +337,7 @@ public class PurchaseOrdersController : Controller
     // received quantities so a partial delivery is recorded accurately rather than all-or-nothing.
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [Authorize(Policy = Permissions.PurchaseOrdersManage)]
     public async Task<IActionResult> Receive(int id, List<int> itemIds, List<int> receivedQuantities)
     {
         var order = await _context.PurchaseOrders
@@ -390,6 +401,7 @@ public class PurchaseOrdersController : Controller
     // POST: /PurchaseOrders/Cancel/5
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [Authorize(Policy = Permissions.PurchaseOrdersManage)]
     public async Task<IActionResult> Cancel(int id)
     {
         var order = await _context.PurchaseOrders.Include(p => p.Items).FirstOrDefaultAsync(p => p.PurchaseOrderId == id);

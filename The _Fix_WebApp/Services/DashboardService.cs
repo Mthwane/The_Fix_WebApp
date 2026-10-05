@@ -77,6 +77,98 @@ public class DashboardService : IDashboardService
         return model;
     }
 
+    public async Task<EmployeeDashboardViewModel> BuildEmployeeAsync(string currentUserId, bool showTill, bool showLowStock, bool canRaisePo, bool showReturns, bool showTickets)
+    {
+        var today = DateTime.UtcNow.Date;
+        var model = new EmployeeDashboardViewModel
+        {
+            ShowTill = showTill,
+            ShowLowStock = showLowStock,
+            CanRaisePurchaseOrder = canRaisePo,
+            ShowReturns = showReturns,
+            ShowTickets = showTickets
+        };
+
+        if (showTill)
+        {
+            model.CurrentShift = await _context.ShiftSessions.AsNoTracking()
+                .FirstOrDefaultAsync(s => s.UserId == currentUserId && s.Status == ShiftStatus.Open);
+
+            if (model.CurrentShift is not null)
+            {
+                var cashSinceOpen = await _context.Orders.AsNoTracking()
+                    .Where(o => o.ProcessedByUserId == currentUserId
+                        && o.PaymentMethod == PaymentMethod.Cash
+                        && o.DateCreated >= model.CurrentShift.DateOpened)
+                    .SumAsync(o => (decimal?)o.GrandTotal) ?? 0;
+                model.ExpectedCash = model.CurrentShift.OpeningFloat + cashSinceOpen;
+            }
+
+            // Own till only: orders this person rang up today.
+            var mine = await _context.Orders.AsNoTracking()
+                .Where(o => o.ProcessedByUserId == currentUserId && o.DateCreated >= today)
+                .Select(o => o.GrandTotal)
+                .ToListAsync();
+            model.MySalesToday = mine.Sum();
+            model.MyOrdersToday = mine.Count;
+        }
+
+        if (showLowStock)
+        {
+            var lowStock = _context.ProductVariants.AsNoTracking()
+                .Where(v => v.IsActive && v.Product.IsActive && v.StockQuantity <= v.Product.LowStockThreshold);
+
+            model.LowStockVariants = await lowStock
+                .Include(v => v.Product)
+                .OrderBy(v => v.StockQuantity)
+                .Take(10)
+                .ToListAsync();
+            model.LowStockCount = await lowStock.CountAsync();
+            model.OutOfStockCount = await lowStock.CountAsync(v => v.StockQuantity == 0);
+        }
+
+        if (showReturns)
+        {
+            model.MyReturnsToday = await _context.ReturnTransactions.AsNoTracking()
+                .CountAsync(r => r.ProcessedByUserId == currentUserId && r.DateProcessed >= today);
+            model.ReturnsInProgress = await _context.ReturnTransactions.AsNoTracking()
+                .CountAsync(r => r.Status == ReturnStatus.InProgress);
+        }
+
+        if (showTickets)
+        {
+            var openStatuses = new[] { TicketStatus.Open, TicketStatus.InProgress, TicketStatus.Escalated };
+
+            model.MyTickets = await _context.SupportTickets.AsNoTracking()
+                .Include(t => t.Customer)
+                .Where(t => t.AssignedEmployeeId == currentUserId && openStatuses.Contains(t.Status))
+                .OrderByDescending(t => t.Priority).ThenBy(t => t.DateCreated)
+                .Take(5)
+                .ToListAsync();
+
+            var queue = _context.SupportTickets.AsNoTracking()
+                .Where(t => t.AssignedEmployeeId == null && t.Status == TicketStatus.Open);
+            model.QueueTicketCount = await queue.CountAsync();
+            model.QueueTickets = await queue
+                .Include(t => t.Customer)
+                .OrderByDescending(t => t.Priority).ThenBy(t => t.DateCreated)
+                .Take(5)
+                .ToListAsync();
+        }
+
+        // Needs Your Attention
+        if (showLowStock && model.LowStockCount > 0)
+            model.AttentionItems.Add(new AttentionItem { Label = "Items low or out of stock", Count = model.LowStockCount, Url = "/LowStock", Severity = model.OutOfStockCount > 0 ? "danger" : "warning" });
+        if (showTickets && model.MyTickets.Count > 0)
+            model.AttentionItems.Add(new AttentionItem { Label = "Tickets assigned to you", Count = model.MyTickets.Count, Url = "/SupportTickets?assignedToMe=true", Severity = "info" });
+        if (showTickets && model.QueueTicketCount > 0)
+            model.AttentionItems.Add(new AttentionItem { Label = "Tickets waiting in the queue", Count = model.QueueTicketCount, Url = "/SupportTickets?unassigned=true", Severity = "info" });
+        if (showReturns && model.ReturnsInProgress > 0)
+            model.AttentionItems.Add(new AttentionItem { Label = "Returns still in progress", Count = model.ReturnsInProgress, Url = "/Returns", Severity = "info" });
+
+        return model;
+    }
+
     private async Task PopulateCoreKpisAsync(DashboardViewModel model, DateTime today, DateTime monthStart)
     {
         var todaysOrders = await _context.Orders.AsNoTracking()
@@ -372,7 +464,7 @@ public class DashboardService : IDashboardService
                 Label = "Items low or out of stock",
                 Count = model.LowStockCount,
                 // Catalogue managers go to the restock queue; employees (who raise restock requests) go to Purchase Orders.
-                Url = sections.HasFlag(DashboardSections.Inventory) ? "/Products/LowStock" : "/PurchaseOrders/LowStock",
+                Url = "/LowStock",
                 Severity = model.OutOfStockCount > 0 ? "danger" : "warning"
             });
 

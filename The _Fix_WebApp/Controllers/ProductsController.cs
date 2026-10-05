@@ -154,6 +154,7 @@ public class ProductsController : Controller
             ModelState.Remove($"{nameof(model.Variants)}[{i}].{nameof(ProductVariantInputViewModel.SKU)}");
 
         ValidateClosedLists(model);
+        ValidateRequiredProductInfo(model, imageFile);
 
         // Auto-calculate takes over the field entirely - whatever the client posted for
         // SellingPrice (even a live JS preview) is never trusted as the real number, same
@@ -307,6 +308,7 @@ public class ProductsController : Controller
             ModelState.Remove($"{nameof(model.Variants)}[{i}].{nameof(ProductVariantInputViewModel.SKU)}");
 
         ValidateClosedLists(model);
+        ValidateRequiredProductInfo(model, imageFile);
 
         if (model.AutoCalculatePrice)
         {
@@ -481,6 +483,39 @@ public class ProductsController : Controller
 
         var calculated = Math.Round(costPrice * (1 + markupPercentage / 100m), 2);
         return Math.Max(calculated, costPrice); // never let a 0% (or misconfigured negative) markup price below cost
+    }
+
+    /// <summary>
+    /// A product can't be saved half-finished: it needs a main image (an uploaded file or a link), and every size/colour row
+    /// must have BOTH a size and a colour. Department, supplier, brand, description and category are enforced by the
+    /// view-model's [Required] attributes.
+    /// </summary>
+    private void ValidateRequiredProductInfo(ProductViewModel model, IFormFile? imageFile)
+    {
+        if (imageFile is not { Length: > 0 } && string.IsNullOrWhiteSpace(model.ImageUrl))
+            ModelState.AddModelError(nameof(ProductViewModel.ImageUrl), "Please upload a product image or paste an image link.");
+
+        var rowMissing = false;
+        for (var i = 0; i < model.Variants.Count; i++)
+        {
+            var row = model.Variants[i];
+            if (row.Remove) continue;
+
+            if (string.IsNullOrWhiteSpace(row.Size))
+            {
+                var key = $"{nameof(model.Variants)}[{i}].{nameof(row.Size)}";
+                if (!ModelState.TryGetValue(key, out var e) || e.Errors.Count == 0)
+                    ModelState.AddModelError(key, "Choose a size for this row.");
+                rowMissing = true;
+            }
+            if (string.IsNullOrWhiteSpace(row.Color))
+            {
+                ModelState.AddModelError($"{nameof(model.Variants)}[{i}].{nameof(row.Color)}", "Choose a colour for this row.");
+                rowMissing = true;
+            }
+        }
+        if (rowMissing)
+            ModelState.AddModelError(string.Empty, "Every size/colour row needs both a size and a colour.");
     }
 
     private void ValidateClosedLists(ProductViewModel model)

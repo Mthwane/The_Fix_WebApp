@@ -1,0 +1,180 @@
+@model EmployeeDashboardViewModel
+@{
+    ViewData["Title"] = "My Dashboard";
+    Layout = "_StaffLayout";
+    string Money(decimal v) => v.ToString("C");
+    string Label = "font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--stf-secondary);font-weight:600;";
+    string Big = "font-family:'Newsreader',serif;font-size:1.7rem;margin-top:6px;";
+    string Head = "font-family:'Newsreader',serif;font-size:1.1rem;margin:0 0 12px;";
+    string Row = "display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--stf-surface-container);";
+    var onShift = Model.CurrentShift;
+    TimeSpan? elapsed = onShift is null ? null : DateTime.UtcNow - onShift.DateOpened;
+}
+
+<div class="stf-content">
+    <div class="stf-page-head">
+        <div>
+            <span class="stf-eyebrow">My Workday</span>
+            <h1>My Dashboard</h1>
+            <p>Your shift, your till, your queue.</p>
+        </div>
+    </div>
+
+    @if (Model.AttentionItems.Any())
+    {
+        <div class="stf-card" style="margin-bottom:24px;padding:0;overflow:hidden;">
+            <div style="padding:14px 20px;font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--stf-outline);border-bottom:1px solid var(--stf-surface-container);">Needs Your Attention</div>
+            @foreach (var item in Model.AttentionItems)
+            {
+                var color = item.Severity == "danger" ? "var(--stf-error)" : item.Severity == "warning" ? "var(--stf-secondary)" : "var(--stf-on-surface-variant)";
+                <a href="@item.Url" style="display:flex;justify-content:space-between;align-items:center;padding:12px 20px;border-bottom:1px solid var(--stf-surface-container);text-decoration:none;color:inherit;">
+                    <span style="font-size:0.88rem;">@item.Label</span>
+                    <span class="stf-badge" style="background:transparent;color:@color;border:1px solid @color;">@item.Count</span>
+                </a>
+            }
+        </div>
+    }
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px;">
+        @if (Model.ShowTill)
+        {
+            <div class="stf-card">
+                <div style="@Label">Time Clocked In</div>
+                @if (onShift is null)
+                {
+                    <div style="font-size:1.1rem;margin-top:6px;">Not clocked in</div>
+                    <a asp-controller="Pos" asp-action="StartShift" class="stf-btn stf-btn-primary" style="margin-top:8px;padding:6px 14px;font-size:0.78rem;">Start Shift</a>
+                }
+                else
+                {
+                    <div style="@Big">@((int)elapsed!.Value.TotalHours)h @elapsed.Value.Minutes.ToString("00")m</div>
+                    <div style="font-size:0.75rem;color:var(--stf-on-surface-variant);margin-top:4px;">Since @onShift.DateOpened.ToLocalTime().ToString("HH:mm")</div>
+                }
+            </div>
+            <div class="stf-card">
+                <div style="@Label">POS Money</div>
+                @if (onShift is null)
+                {
+                    <div style="font-size:1.1rem;margin-top:6px;">-</div>
+                    <div style="font-size:0.75rem;color:var(--stf-on-surface-variant);margin-top:4px;">Start a shift to open your till</div>
+                }
+                else
+                {
+                    <div style="@Big">@Money(Model.ExpectedCash ?? 0)</div>
+                    <div style="font-size:0.75rem;color:var(--stf-on-surface-variant);margin-top:4px;">Expected cash &middot; float @Money(onShift.OpeningFloat)</div>
+                }
+            </div>
+            <div class="stf-card">
+                <div style="@Label">Today's Sales (my till)</div>
+                <div style="@Big">@Money(Model.MySalesToday)</div>
+                <div style="font-size:0.75rem;color:var(--stf-on-surface-variant);margin-top:4px;">@Model.MyOrdersToday sale@(Model.MyOrdersToday == 1 ? "" : "s")</div>
+            </div>
+        }
+        @if (Model.ShowLowStock)
+        {
+            <a asp-controller="LowStock" asp-action="Index" class="stf-card" style="@(Model.LowStockCount > 0 ? "background:var(--stf-secondary-container);" : "") display:block;">
+                <div style="@Label">Low Stock Items</div>
+                <div style="@Big">@Model.LowStockCount</div>
+                <div style="font-size:0.75rem;color:var(--stf-on-surface-variant);margin-top:4px;">@Model.OutOfStockCount out of stock &rarr;</div>
+            </a>
+        }
+        @if (Model.ShowReturns)
+        {
+            <a asp-controller="Returns" asp-action="Index" class="stf-card" style="display:block;">
+                <div style="@Label">Returns</div>
+                <div style="@Big">@Model.MyReturnsToday</div>
+                <div style="font-size:0.75rem;color:var(--stf-on-surface-variant);margin-top:4px;">processed by me today &middot; @Model.ReturnsInProgress in progress &rarr;</div>
+            </a>
+        }
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px;align-items:start;">
+        @if (Model.ShowLowStock)
+        {
+            <div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                    <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:0;">Restock Watchlist</h5>
+                    @if (Model.LowStockVariants.Any())
+                    {
+                        <a asp-controller="LowStock" asp-action="Index" style="font-size:0.78rem;color:var(--stf-secondary);">View all &rarr;</a>
+                    }
+                </div>
+                @if (!Model.LowStockVariants.Any())
+                {
+                    <div class="stf-card" style="color:var(--stf-on-surface-variant);">Nothing is low on stock right now.</div>
+                }
+                else
+                {
+                    <div class="stf-card" style="padding:0;">
+                        @foreach (var v in Model.LowStockVariants.Take(6))
+                        {
+                            <div style="@Row">
+                                <div>
+                                    <div style="font-weight:600;font-size:0.88rem;">@v.Product.Name</div>
+                                    <div style="font-size:0.78rem;color:var(--stf-on-surface-variant);">@v.DisplaySize/@v.Color &middot; <span class="@(v.StockQuantity == 0 ? "stf-badge stf-badge-danger" : "")">@v.StockQuantity left</span></div>
+                                </div>
+                                @if (Model.CanRaisePurchaseOrder)
+                                {
+                                    <a asp-controller="PurchaseOrders" asp-action="Create" asp-route-variantId="@v.ProductVariantId" class="stf-btn stf-btn-danger-outline" style="padding:6px 14px;font-size:0.78rem;">Restock</a>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+
+        @if (Model.ShowTickets)
+        {
+            <div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                    <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:0;">My Tickets</h5>
+                    <a asp-controller="SupportTickets" asp-action="Index" asp-route-assignedToMe="true" style="font-size:0.78rem;color:var(--stf-secondary);">View all &rarr;</a>
+                </div>
+                @if (!Model.MyTickets.Any())
+                {
+                    <div class="stf-card" style="color:var(--stf-on-surface-variant);margin-bottom:20px;">No tickets assigned to you.</div>
+                }
+                else
+                {
+                    <div class="stf-card" style="padding:0;margin-bottom:20px;">
+                        @foreach (var t in Model.MyTickets)
+                        {
+                            <a asp-controller="SupportTickets" asp-action="Details" asp-route-id="@t.SupportTicketId" style="@Row text-decoration:none;color:inherit;">
+                                <div>
+                                    <div style="font-weight:600;font-size:0.88rem;">@t.Subject</div>
+                                    <div style="font-size:0.78rem;color:var(--stf-on-surface-variant);">@(t.Customer?.FullName ?? "Customer") &middot; @t.Priority</div>
+                                </div>
+                                <span class="stf-badge stf-badge-muted">@t.Status</span>
+                            </a>
+                        }
+                    </div>
+                }
+
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                    <h5 style="font-family:'Newsreader',serif;font-size:1.1rem;margin:0;">Ticket Queue</h5>
+                    <a asp-controller="SupportTickets" asp-action="Index" asp-route-unassigned="true" style="font-size:0.78rem;color:var(--stf-secondary);">View all (@Model.QueueTicketCount) &rarr;</a>
+                </div>
+                @if (!Model.QueueTickets.Any())
+                {
+                    <div class="stf-card" style="color:var(--stf-on-surface-variant);">The queue is empty.</div>
+                }
+                else
+                {
+                    <div class="stf-card" style="padding:0;">
+                        @foreach (var t in Model.QueueTickets)
+                        {
+                            <a asp-controller="SupportTickets" asp-action="Details" asp-route-id="@t.SupportTicketId" style="@Row text-decoration:none;color:inherit;">
+                                <div>
+                                    <div style="font-weight:600;font-size:0.88rem;">@t.Subject</div>
+                                    <div style="font-size:0.78rem;color:var(--stf-on-surface-variant);">@(t.Customer?.FullName ?? "Customer") &middot; @t.Priority</div>
+                                </div>
+                                <span class="stf-badge stf-badge-muted">Unassigned</span>
+                            </a>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</div>

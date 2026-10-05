@@ -121,6 +121,27 @@ public class HomeController : Controller
     [Authorize(Policy = Permissions.DashboardView)]
     public async Task<IActionResult> Dashboard()
     {
+        // Floor staff (no reporting, catalogue, supplier, staff, roles, storefront or approval powers) get the
+        // trimmed "my workday" dashboard instead of the business-wide one.
+        if (IsFloorStaff())
+        {
+            var emp = await _dashboardService.BuildEmployeeAsync(
+                _userManager.GetUserId(User)!,
+                showTill: Can(Permissions.PosUse),
+                showLowStock: Can(Permissions.LowStockView),
+                canRaisePo: Can(Permissions.PurchaseOrdersManage),
+                showReturns: Can(Permissions.ReturnsProcess),
+                showTickets: Can(Permissions.SupportTicketsManage));
+
+            if (emp.ShowLowStock && emp.LowStockCount > 0)
+            {
+                var names = string.Join(", ", emp.LowStockVariants.Take(3).Select(v => $"{v.Product.Name} ({v.DisplaySize}/{v.Color})"));
+                var suffix = emp.LowStockCount > 3 ? $" and {emp.LowStockCount - 3} more" : "";
+                this.ToastWarning($"Low stock: {names}{suffix}.");
+            }
+            return View("EmployeeDashboard", emp);
+        }
+
         var sections = BuildSectionsForCurrentUser();
         var model = await _dashboardService.BuildAsync(sections, _userManager.GetUserId(User));
 
@@ -153,6 +174,7 @@ public class HomeController : Controller
     [Authorize(Policy = Permissions.DashboardView)]
     public async Task<IActionResult> DashboardData()
     {
+        if (IsFloorStaff()) return Json(new { floorStaff = true }); // the trimmed dashboard has nothing to poll
         var sections = BuildSectionsForCurrentUser();
         var model = await _dashboardService.BuildAsync(sections, _userManager.GetUserId(User));
 
@@ -169,12 +191,17 @@ public class HomeController : Controller
         });
     }
 
+    private bool IsFloorStaff() =>
+        !Can(Permissions.ReportsView) && !Can(Permissions.ProductsManage) && !Can(Permissions.SuppliersManage)
+        && !Can(Permissions.EmployeesManage) && !Can(Permissions.RolesManage) && !Can(Permissions.StorefrontManage)
+        && !Can(Permissions.PurchaseOrdersApprove) && !Can(Permissions.AuditLogsView);
+
     private DashboardSections BuildSectionsForCurrentUser()
     {
         var sections = DashboardSections.CoreKpis; // everyone who can reach this page gets the base KPIs
 
         if (Can(Permissions.ProductsManage)) sections |= DashboardSections.Inventory;
-        else if (Can(Permissions.PurchaseOrdersManage)) sections |= DashboardSections.LowStock; // employees: low-stock alerts, restock via Purchase Orders
+        else if (Can(Permissions.LowStockView)) sections |= DashboardSections.LowStock; // low-stock alerts, restock via the Low Stock queue
         if (Can(Permissions.OrdersManage)) sections |= DashboardSections.Orders;
         if (Can(Permissions.ReturnsProcess)) sections |= DashboardSections.Returns;
         if (Can(Permissions.SuppliersManage) || Can(Permissions.PurchaseOrdersManage)) sections |= DashboardSections.SupplyChain;

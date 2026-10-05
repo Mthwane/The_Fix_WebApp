@@ -125,6 +125,18 @@ builder.Services.AddAuthorization(options =>
         options.AddPolicy(permission, policy =>
             policy.RequireClaim(Permissions.ClaimType, permission));
     }
+
+    // Raising/managing purchase orders and approving them are independent permissions. This policy lets EITHER holder
+    // open the PO list and details; each action then requires the specific permission it needs.
+    options.AddPolicy(Permissions.LowStockAccessPolicy, policy =>
+        policy.RequireAssertion(ctx =>
+            ctx.User.HasClaim(Permissions.ClaimType, Permissions.LowStockView) ||
+            ctx.User.HasClaim(Permissions.ClaimType, Permissions.ProductsManage)));
+
+    options.AddPolicy(Permissions.PurchaseOrdersAccessPolicy, policy =>
+        policy.RequireAssertion(ctx =>
+            ctx.User.HasClaim(Permissions.ClaimType, Permissions.PurchaseOrdersManage) ||
+            ctx.User.HasClaim(Permissions.ClaimType, Permissions.PurchaseOrdersApprove)));
 });
 
 // --- Application services ---

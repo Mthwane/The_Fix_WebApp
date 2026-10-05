@@ -1,0 +1,67 @@
+@model List<ProductVariant>
+@{
+    ViewData["Title"] = "Low Stock";
+    Layout = "_StaffLayout";
+    bool canRaise = ViewBag.CanRaise == true;
+    var outCount = Model.Count(v => v.StockQuantity == 0);
+}
+<div class="stf-content">
+    <a asp-controller="Home" asp-action="Dashboard" class="stf-btn stf-btn-outline" style="margin-bottom:16px;display:inline-flex;">&larr; Dashboard</a>
+
+    <div class="stf-page-head">
+        <div>
+            <span class="stf-eyebrow">Supply Chain</span>
+            <h1>Low Stock</h1>
+            <p>Every active size/colour at or below its restock threshold, most urgent first. Click Restock to start a purchase order for that item.</p>
+        </div>
+        @if (canRaise)
+        {
+            <a asp-controller="PurchaseOrders" asp-action="Create" class="stf-btn stf-btn-primary">+ New Purchase Order</a>
+        }
+    </div>
+
+    @if (Model.Any())
+    {
+        <div class="stf-card" style="background:var(--stf-secondary-container);border:none;margin-bottom:16px;font-size:0.88rem;">
+            <strong>@Model.Count item@(Model.Count == 1 ? "" : "s")</strong> need restocking@(outCount > 0 ? $", {outCount} already out of stock" : "").
+            @if (!canRaise)
+            {
+                <span> You can see what is running low here; someone with purchase order access raises the restock.</span>
+            }
+        </div>
+    }
+
+    @if (!Model.Any())
+    {
+        <div class="stf-card" style="text-align:center;padding:40px 20px;color:var(--stf-on-surface-variant);">Nothing is low on stock right now.</div>
+    }
+    else
+    {
+        <table class="stf-table">
+            <thead><tr><th>Product</th><th>Size/Colour</th><th>SKU</th><th>Supplier</th><th>Current Stock</th><th>Threshold</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var v in Model)
+                {
+                    var isOut = v.StockQuantity == 0;
+                    <tr style="@(isOut ? "background:var(--stf-error-container);" : "background:var(--stf-secondary-container);")">
+                        <td style="font-weight:600;">@v.Product.Name</td>
+                        <td>@v.DisplaySize / @v.Color</td>
+                        <td><code>@v.SKU</code></td>
+                        <td>@(v.Product.Supplier?.Name ?? "-")</td>
+                        <td>
+                            <strong>@v.StockQuantity</strong>
+                            @if (isOut) { <span class="stf-badge stf-badge-danger" style="margin-left:4px;">Out of stock</span> }
+                        </td>
+                        <td>@v.Product.LowStockThreshold</td>
+                        <td style="text-align:right;">
+                            @if (canRaise)
+                            {
+                                <a asp-controller="PurchaseOrders" asp-action="Create" asp-route-variantId="@v.ProductVariantId" class="stf-btn stf-btn-danger-outline" style="padding:6px 14px;font-size:0.78rem;">Restock</a>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>

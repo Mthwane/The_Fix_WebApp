@@ -110,16 +110,18 @@
         </div>
 
         <label asp-for="DepartmentId" style="@L">Department</label>
-        <select asp-for="DepartmentId" style="@F margin-bottom:20px;">
-            <option value="">-- None --</option>
+        <select asp-for="DepartmentId" style="@F margin-bottom:20px;" required>
+            <option value="">-- Select --</option>
             @foreach (var d in (List<Department>)ViewBag.Departments) { <option value="@d.DepartmentId" selected="@(Model.DepartmentId == d.DepartmentId)">@d.Name</option> }
         </select>
+        <span asp-validation-for="DepartmentId" style="@EV"></span>
 
         <label asp-for="SupplierId" style="@L">Supplier</label>
-        <select asp-for="SupplierId" style="@F margin-bottom:20px;">
-            <option value="">-- None --</option>
+        <select asp-for="SupplierId" style="@F margin-bottom:20px;" required>
+            <option value="">-- Select --</option>
             @foreach (var sup in (List<Supplier>)ViewBag.Suppliers) { <option value="@sup.SupplierId" selected="@(Model.SupplierId == sup.SupplierId)">@sup.Name</option> }
         </select>
+        <span asp-validation-for="SupplierId" style="@EV"></span>
 
         <hr style="border-color:var(--stf-outline-variant);margin:16px 0;" />
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">

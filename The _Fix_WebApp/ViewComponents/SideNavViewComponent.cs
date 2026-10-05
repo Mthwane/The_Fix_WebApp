@@ -70,13 +70,13 @@ public class SideNavViewComponent : ViewComponent
         return string.Concat(parts.Take(2).Select(p => char.ToUpperInvariant(p[0])));
     }
 
-    // Staff badges: a live low-stock count on Purchase Orders for anyone who can raise restock requests
+    // Staff badges: a live low-stock count on the Low Stock entry for anyone holding the low-stock permission
     // (that's how the Employee role sees what needs restocking, straight from the sidebar).
     private async Task<Dictionary<string, string>> StaffBadgesAsync(System.Security.Claims.ClaimsPrincipal principal)
     {
         var badges = new Dictionary<string, string>();
 
-        if (principal.HasClaim(Permissions.ClaimType, Permissions.PurchaseOrdersManage))
+        if (principal.HasClaim(Permissions.ClaimType, Permissions.LowStockView))
         {
             var low = await _context.ProductVariants.AsNoTracking()
                 .CountAsync(v => v.IsActive && v.Product.IsActive && v.StockQuantity <= v.Product.LowStockThreshold);
@@ -155,7 +155,8 @@ public class SideNavViewComponent : ViewComponent
         new SideNavSection("Supply Chain", new List<SideNavItem>
         {
             new("Suppliers",              "warehouse",            "Suppliers",        "Index",     Permissions.SuppliersManage),
-            new("Purchase Orders",        "receipt_long",         "PurchaseOrders",   "Index",     Permissions.PurchaseOrdersManage, null, "lowstock"),
+            new("Low Stock",              "warning",              "LowStock",         "Index",     Permissions.LowStockView, null, "lowstock"),
+            new("Purchase Orders",        "receipt_long",         "PurchaseOrders",   "Index",     Permissions.PurchaseOrdersManage),
             new("Restock Bundles",        "inventory",            "RestockBundles",   "Index",     Permissions.PurchaseOrdersManage),
             new("Returns",                "assignment_return",    "Returns",          "Index",     Permissions.ReturnsProcess),
         }),

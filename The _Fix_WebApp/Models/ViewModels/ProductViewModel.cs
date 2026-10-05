@@ -30,6 +30,7 @@ public class ProductViewModel
     [Required, MaxLength(150)]
     public string Name { get; set; } = string.Empty;
 
+    [Required(ErrorMessage = "Please add a description.")]
     [MaxLength(1000), Display(Name = "Description")]
     public string? Description { get; set; }
 
@@ -44,6 +45,7 @@ public class ProductViewModel
     [RegularExpression(AttributeWordPattern, ErrorMessage = "Category can only contain letters, spaces and hyphens - no numbers or symbols.")]
     public string Category { get; set; } = string.Empty;
 
+    [Required(ErrorMessage = "Please enter a brand.")]
     [MaxLength(50)]
     [Display(Name = "Brand")]
     public string? Brand { get; set; }
@@ -78,7 +80,7 @@ public class ProductViewModel
 
     public bool IsActive { get; set; } = true;
 
-    // --- Storefront / merchandising (optional - can be filled in later from the catalogue) ---
+    // --- Storefront / merchandising (sub-category, material, fit and badge stay optional) ---
     [MaxLength(50)]
     public string? SubCategory { get; set; }
 
@@ -91,9 +93,13 @@ public class ProductViewModel
     [MaxLength(30)]
     public string? Badge { get; set; }
 
+    [Required(ErrorMessage = "Please choose a department.")]
+    [Display(Name = "Department")]
     public int? DepartmentId { get; set; }
 
-    /// <summary>Which supplier this style is bought from (optional).</summary>
+    /// <summary>Which supplier this style is bought from. Required so every product can be restocked through a purchase order.</summary>
+    [Required(ErrorMessage = "Please choose a supplier.")]
+    [Display(Name = "Supplier")]
     public int? SupplierId { get; set; }
 
     /// <summary>

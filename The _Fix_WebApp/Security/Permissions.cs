@@ -30,7 +30,18 @@ public static class Permissions
     public const string SuppliersManage = "suppliers.manage";
     public const string PurchaseOrdersManage = "purchaseorders.manage";
     public const string PurchaseOrdersApprove = "purchaseorders.approve";
+    public const string LowStockView = "inventory.lowstock"; // see the low-stock queue / dashboard alerts (separate from raising or approving POs)
     public const string ReturnsProcess = "returns.process";
+
+    /// <summary>
+    /// Not a stored permission - an authorization policy (see Program.cs) satisfied by EITHER PurchaseOrdersManage OR
+    /// PurchaseOrdersApprove, so an approver who cannot raise orders (and vice versa) can still open the PO list.
+    /// Individual actions then demand the specific permission they need.
+    /// </summary>
+    public const string PurchaseOrdersAccessPolicy = "purchaseorders.access";
+
+    /// <summary>Policy for the low-stock queue: LowStockView, or ProductsManage (catalogue managers always see low stock).</summary>
+    public const string LowStockAccessPolicy = "inventory.lowstock.access";
 
     // Insight
     public const string DashboardView = "dashboard.view";
@@ -61,6 +72,7 @@ public static class Permissions
         [SuppliersManage] = "Manage Suppliers (contacts, lead times, collection addresses)",
         [PurchaseOrdersManage] = "Manage Purchase Orders (create, submit & cancel restock requests, receive stock)",
         [PurchaseOrdersApprove] = "Approve Purchase Orders (authorise spend before an order is placed)",
+        [LowStockView] = "View Low Stock (low-stock queue, dashboard alerts and watchlist)",
         [RewardsManage] = "Manage Rewards (points earn rate, cash-back %, redemption rules)",
         [ReturnsProcess] = "Process Returns & Refunds",
         [DashboardView] = "View Business Dashboard",
@@ -85,7 +97,7 @@ public static class Permissions
     /// list it in DefaultRolePermissions (so existing databases pick up the new screens), and a marker claim
     /// records that it was granted - so if an administrator later removes it from a role, it stays removed.
     /// </summary>
-    public static readonly IReadOnlySet<string> IntroducedLater = new HashSet<string> { DiscountsView, DiscountsManage };
+    public static readonly IReadOnlySet<string> IntroducedLater = new HashSet<string> { DiscountsView, DiscountsManage, LowStockView };
 
     /// <summary>Role-claim type used for the "this default was already offered to this role" marker.</summary>
     public const string SeededMarkerClaimType = "permission.seeded";
@@ -95,10 +107,10 @@ public static class Permissions
     {
         ["Administrator"] = All.Keys.ToArray(), // everything
         // Manager can raise AND approve purchase orders - they hold the restock budget.
-        ["Manager"] = new[] { ProductsManage, StorefrontManage, PosUse, DashboardView, ReportsView, OrdersManage, SuppliersManage, PurchaseOrdersManage, PurchaseOrdersApprove, ReturnsProcess, SupportTicketsManage, WalletView, WalletAdjust, DiscountsView, DiscountsManage },
+        ["Manager"] = new[] { ProductsManage, StorefrontManage, PosUse, DashboardView, ReportsView, OrdersManage, SuppliersManage, PurchaseOrdersManage, PurchaseOrdersApprove, LowStockView, ReturnsProcess, SupportTicketsManage, WalletView, WalletAdjust, DiscountsView, DiscountsManage },
         // Employee can raise a restock request and process returns at the till, but NOT approve
         // spend - that's the whole point of the approval gate.
-        ["Employee"] = new[] { PosUse, DashboardView, OrdersManage, PurchaseOrdersManage, ReturnsProcess, SupportTicketsManage, WalletView, DiscountsView },
+        ["Employee"] = new[] { PosUse, DashboardView, OrdersManage, PurchaseOrdersManage, LowStockView, ReturnsProcess, SupportTicketsManage, WalletView, DiscountsView },
         ["Owner"] = new[] { DashboardView, ReportsView, WalletView },
         ["Customer"] = Array.Empty<string>(), // customers use the self-service area, not permission-gated staff screens
     };
