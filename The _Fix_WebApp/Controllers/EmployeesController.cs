@@ -1,3 +1,4 @@
+using FashionFix.Web.Services;
 using FashionFix.Web.Data;
 using FashionFix.Web.Models.Entities;
 using FashionFix.Web.Models.ViewModels;
@@ -61,7 +62,7 @@ public class EmployeesController : Controller
         return View(employees);
     }
 
-    // GET: /Employees/ExportRoster - CSV download of the current staff directory.
+    // GET: /Employees/ExportRoster - Excel download of the current staff directory.
     [HttpGet]
     [Authorize(Policy = Permissions.EmployeesManage)]
     public async Task<IActionResult> ExportRoster()
@@ -77,18 +78,16 @@ public class EmployeesController : Controller
 
         var staff = allUsers.Where(u => rolesByUserId.TryGetValue(u.Id, out var roles) && roles.Any(r => r != "Customer"));
 
-        var csv = new System.Text.StringBuilder();
-        csv.AppendLine("FullName,Username,Email,Role,JobPosition,EmploymentStatus,DateHired,IsActive,TwoFactorEnabled");
-        foreach (var u in staff)
+        var rosterRows = staff.Select(u =>
         {
             var role = rolesByUserId.TryGetValue(u.Id, out var roles) ? string.Join("/", roles.Where(r => r != "Customer")) : "";
-            string Csv(string? s) => "\"" + (s ?? "").Replace("\"", "\"\"") + "\"";
-            csv.AppendLine(string.Join(",", Csv(u.FullName), Csv(u.UserName), Csv(u.Email), Csv(role),
-                Csv(u.JobPosition), Csv(u.EmploymentStatus), Csv(u.DateHired?.ToString("yyyy-MM-dd")), u.IsActive, u.TwoFactorEnabled));
-        }
+            return new object?[] { u.FullName, u.UserName, u.Email, role, u.JobPosition, u.EmploymentStatus, u.DateHired?.ToString("yyyy-MM-dd"), u.IsActive, u.TwoFactorEnabled };
+        }).ToList();
 
-        var bytes = System.Text.Encoding.UTF8.GetBytes(csv.ToString());
-        return File(bytes, "text/csv", $"staff-roster-{DateTime.UtcNow:yyyyMMdd}.csv");
+        var bytes = ExcelExport.Build("Staff roster",
+            new[] { "Full Name", "Username", "Email", "Role", "Job Position", "Employment Status", "Date Hired", "Active", "2FA Enabled" },
+            rosterRows);
+        return File(bytes, ExcelExport.ContentType, $"staff-roster-{DateTime.UtcNow:yyyyMMdd}.xlsx");
     }
 
     /// <summary>Suggestions for the Job Position combo box: a seed list plus whatever titles are already in use, so a new title typed once is offered next time.</summary>
@@ -471,7 +470,7 @@ public class EmployeesController : Controller
         return View(model);
     }
 
-    // GET: /Employees/ExportAuditLogs - CSV of whatever the current filters show (capped at 50,000 rows).
+    // GET: /Employees/ExportAuditLogs - Excel file of whatever the current filters show (capped at 50,000 rows).
     [Authorize(Policy = Permissions.AuditLogsView)]
     [HttpGet]
     public async Task<IActionResult> ExportAuditLogs(string? q, string? category, DateTime? from, DateTime? to)
@@ -483,42 +482,25 @@ public class EmployeesController : Controller
             .Take(cap)
             .ToListAsync();
 
-        // Cells starting with = + - @ are prefixed so Excel can't run them as formulas.
-        static string Csv(string? v)
-        {
-            v ??= string.Empty;
-            if (v.Length > 0 && "=+-@\t\r".IndexOf(v[0]) >= 0) v = "'" + v;
-            return "\"" + v.Replace("\"", "\"\"") + "\"";
-        }
-
-        var sb = new StringBuilder();
-        sb.AppendLine("Id,Timestamp (SAST),Actor,Username,Action,Category,Details,IP,PreviousHash,Hash");
-        foreach (var l in logs)
-        {
-            sb.AppendLine(string.Join(',',
-                l.AuditLogId,
-                Csv(AuditTime.ToSast(l.Timestamp).ToString("yyyy-MM-dd HH:mm:ss")),
-                Csv(l.User?.FullName),
-                Csv(l.User?.UserName),
-                Csv(l.Action),
-                Csv(AuditCategories.For(l.Action).Label),
-                Csv(l.Details),
-                Csv(l.IpAddress),
-                Csv(l.PreviousHash),
-                Csv(l.Hash)));
-        }
-
         _context.AuditLogs.Add(new AuditLog
         {
             UserId = _userManager.GetUserId(User),
             Action = "AuditExported",
-            Details = $"Exported {logs.Count} audit row(s) to CSV."
+            Details = $"Exported {logs.Count} audit row(s) to Excel."
         });
         await _context.SaveChangesAsync();
 
-        var bytes = new UTF8Encoding(encoderShouldEmitUTF8Identifier: true).GetPreamble()
-            .Concat(Encoding.UTF8.GetBytes(sb.ToString())).ToArray();
-        return File(bytes, "text/csv", $"fashionfix-audit-{DateTime.UtcNow:yyyyMMdd-HHmm}.csv");
+        var bytes = ExcelExport.Build("Audit log",
+            new[] { "Id", "Timestamp (SAST)", "Actor", "Username", "Action", "Category", "Details", "IP", "PreviousHash", "Hash" },
+            logs.Select(l => new object?[]
+            {
+                l.AuditLogId,
+                AuditTime.ToSast(l.Timestamp).ToString("yyyy-MM-dd HH:mm:ss"),
+                l.User?.FullName, l.User?.UserName, l.Action,
+                AuditCategories.For(l.Action).Label,
+                l.Details, l.IpAddress, l.PreviousHash, l.Hash
+            }));
+        return File(bytes, ExcelExport.ContentType, $"fashionfix-audit-{DateTime.UtcNow:yyyyMMdd-HHmm}.xlsx");
     }
 
     // GET: /Employees/VerifyAuditLedger - recomputes the SHA-256 chain; read-only, returns JSON for the page.

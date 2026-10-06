@@ -115,9 +115,9 @@
             </select>
         </div>
         <button type="submit" class="stf-btn stf-btn-primary">Update</button>
-        <a class="stf-btn stf-btn-outline" asp-controller="Reports" asp-action="Export" asp-route-format="csv"
+        <a class="stf-btn stf-btn-outline" asp-controller="Reports" asp-action="Export" asp-route-format="xlsx"
            asp-route-from="@from.ToString("yyyy-MM-dd")" asp-route-to="@to.ToString("yyyy-MM-dd")" asp-route-channel="@selectedChannel" asp-route-category="@selectedCategory">
-            Export CSV
+            Export Excel
         </a>
     </form>
 

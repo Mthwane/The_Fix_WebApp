@@ -1,3 +1,4 @@
+using FashionFix.Web.Services;
 using System.Text;
 using FashionFix.Web.Data;
 using FashionFix.Web.Models.Entities;
@@ -153,7 +154,7 @@ public class ReportsController : Controller
         return View(orders);
     }
 
-    // GET: /Reports/Export?format=csv - export the sales report for the given date range.
+    // GET: /Reports/Export?format=xlsx - export the sales report for the given date range.
     [HttpGet]
     public async Task<IActionResult> Export(string format, DateTime? from, DateTime? to, OrderType? channel, string? category)
     {
@@ -167,17 +168,10 @@ public class ReportsController : Controller
 
         var orders = await query.OrderBy(o => o.DateCreated).ToListAsync();
 
-        if (!string.Equals(format, "csv", StringComparison.OrdinalIgnoreCase))
-            return BadRequest("Only CSV export is currently supported.");
-
-        var sb = new StringBuilder();
-        sb.AppendLine("OrderNumber,Date,Type,Status,PaymentMethod,SubTotal,Discount,Tax,GrandTotal");
-        foreach (var o in orders)
-        {
-            sb.AppendLine($"{o.OrderNumber},{o.DateCreated:yyyy-MM-dd HH:mm},{o.OrderType},{o.Status},{o.PaymentMethod},{o.SubTotal},{o.DiscountTotal},{o.TaxTotal},{o.GrandTotal}");
-        }
-
-        var bytes = Encoding.UTF8.GetBytes(sb.ToString());
-        return File(bytes, "text/csv", $"sales-report-{start:yyyyMMdd}-{end:yyyyMMdd}.csv");
+        // "format" is kept so old links with format=csv still work; every export is now an Excel file.
+        var bytes = ExcelExport.Build("Sales report",
+            new[] { "Order Number", "Date", "Type", "Status", "Payment Method", "SubTotal", "Discount", "Tax", "Grand Total" },
+            orders.Select(o => new object?[] { o.OrderNumber, o.DateCreated, o.OrderType.ToString(), o.Status.ToString(), o.PaymentMethod.ToString(), o.SubTotal, o.DiscountTotal, o.TaxTotal, o.GrandTotal }));
+        return File(bytes, ExcelExport.ContentType, $"sales-report-{start:yyyyMMdd}-{end:yyyyMMdd}.xlsx");
     }
 }

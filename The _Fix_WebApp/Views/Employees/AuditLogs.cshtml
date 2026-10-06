@@ -29,7 +29,7 @@
         <h1>System &amp; Security Audit Logs</h1>
         <div class="aud-actions">
             <a class="stf-btn stf-btn-outline" asp-action="ExportAuditLogs" asp-route-q="@Model.Q" asp-route-category="@(Model.Category == "all" ? null : Model.Category)" asp-route-from="@Model.From?.ToString("yyyy-MM-dd")" asp-route-to="@Model.To?.ToString("yyyy-MM-dd")">
-                <span class="material-symbols-outlined">download</span> Export (.CSV)
+                <span class="material-symbols-outlined">download</span> Export (.xlsx)
             </a>
             <button type="button" class="stf-btn aud-btn-dark" id="verifyBtn">
                 <span class="material-symbols-outlined">verified</span> Verify SHA-256 ledger

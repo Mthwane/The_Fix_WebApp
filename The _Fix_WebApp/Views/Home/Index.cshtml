@@ -156,59 +156,6 @@
     </div>
 </section>
 
-@if (!settings.HideStyleBox)
-{
-<section class="ffs-section">
-    <div class="ffs-container">
-        <div class="ffs-banner-dark">
-            <div style="max-width:640px;">
-                <span class="ffs-eyebrow">@settings.StyleBoxEyebrow</span>
-                <h2 style="font-size:2rem;margin-bottom:14px;">@settings.StyleBoxHeadline</h2>
-                <p>@settings.StyleBoxSubheadline</p>
-                <div class="ffs-steps">
-                    @{ var steps = SiteSettings.ParseLines(settings.StyleBoxStepsText).Take(4).ToList(); }
-                    @for (var i = 0; i < steps.Count; i++)
-                    {
-                        <div class="ffs-step"><b class="ffs-step-num">@((i + 1).ToString("00"))</b><h5>@steps[i].Title</h5><p>@steps[i].Text</p></div>
-                    }
-                </div>
-                <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;">
-                    <a asp-controller="Shop" asp-action="Index" class="ffs-btn ffs-btn-sage">@settings.StyleBoxPrimaryCtaText</a>
-                    <a href="#" class="ffs-btn-outline-light ffs-btn">@settings.StyleBoxSecondaryCtaText &nearr;</a>
-                </div>
-            </div>
-        </div>
-    </div>
-</section>
-}
-
-@if (!settings.HideStory)
-{
-<section class="ffs-section">
-    <div class="ffs-container">
-        <div class="ffs-story-grid">
-            <div class="ffs-story-img">
-                <img src="@((settings.StoryImageUrl ?? Ph("Garment Ecosystem", 700, 520)).Sized(900))" alt="@settings.StoryHeadline" />
-            </div>
-            <div>
-                <span class="ffs-eyebrow">@settings.StoryEyebrow</span>
-                <h2 style="margin-bottom:16px;">@settings.StoryHeadline</h2>
-                <p style="color:var(--ffs-ink-muted);font-size:0.92rem;">@settings.StoryBody</p>
-                <ul class="ffs-checklist">
-                    @foreach (var item in SiteSettings.ParseLines(settings.StoryChecklistText))
-                    {
-                        <li>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>
-                            <span><b>@item.Title</b><span>@item.Text</span></span>
-                        </li>
-                    }
-                </ul>
-                <a href="#" class="ffs-btn ffs-btn-forest">@settings.StoryCtaText &rarr;</a>
-            </div>
-        </div>
-    </div>
-</section>
-}
 
 @if (!settings.HideBoutique)
 {

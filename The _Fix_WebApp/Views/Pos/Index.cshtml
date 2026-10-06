@@ -87,9 +87,10 @@
     <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:20px;align-items:start;">
         <div>
             <div class="stf-card" style="margin-bottom:16px;">
-                <label style="font-size:0.82rem;font-weight:600;display:block;margin-bottom:8px;">Scan or enter SKU</label>
-                <input type="text" id="barcodeInput" placeholder="Scan barcode or type SKU and press Enter" autofocus
+                <label style="font-size:0.82rem;font-weight:600;display:block;margin-bottom:8px;">Scan SKU or search by name</label>
+                <input type="text" id="barcodeInput" placeholder="Scan a barcode, or type a name, brand, colour or SKU" autocomplete="off" autofocus
                        style="width:100%;border:1px solid var(--stf-outline-variant);border-radius:8px;padding:12px 16px;font-size:1rem;" />
+                <div id="searchResults" style="display:none;border:1px solid var(--stf-outline-variant);border-radius:8px;margin-top:6px;max-height:320px;overflow-y:auto;background:var(--stf-surface, #fff);"></div>
                 <div id="scanError" style="color:var(--stf-error);font-size:0.82rem;margin-top:6px;"></div>
             </div>
 

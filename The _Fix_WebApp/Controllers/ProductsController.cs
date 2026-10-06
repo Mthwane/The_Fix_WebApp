@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
+
 namespace FashionFix.Web.Controllers;
 
 [Authorize(Policy = Permissions.ProductsManage)]

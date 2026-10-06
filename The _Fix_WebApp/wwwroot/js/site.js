@@ -250,29 +250,107 @@
         });
     }
 
+    // ---- Name search: typing shows matching items under the box; clicking one opens the same preview as a scan. ----
+    var searchResults = document.getElementById('searchResults');
+    var searchTimer = null;
+    var searchSeq = 0;
+
+    function hideSearchResults() {
+        if (!searchResults) return;
+        searchResults.style.display = 'none';
+        searchResults.innerHTML = '';
+    }
+
+    function pickProduct(product) {
+        hideSearchResults();
+        scanError.textContent = '';
+        if (product.stockQuantity <= 0) {
+            scanError.textContent = product.name + ' is out of stock.';
+            return;
+        }
+        showScanPreview(product);
+    }
+
+    function renderSearchResults(items) {
+        if (!searchResults) return;
+        searchResults.innerHTML = '';
+        if (!items.length) {
+            var none = document.createElement('div');
+            none.style.cssText = 'padding:10px 14px;font-size:0.85rem;color:var(--stf-on-surface-variant);';
+            none.textContent = 'No items match that search.';
+            searchResults.appendChild(none);
+            searchResults.style.display = 'block';
+            return;
+        }
+        items.forEach(function (item) {
+            var row = document.createElement('div');
+            row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--stf-surface-container);';
+            var left = document.createElement('div');
+            var title = document.createElement('div');
+            title.style.cssText = 'font-weight:600;font-size:0.9rem;';
+            title.textContent = item.name;
+            var sub = document.createElement('div');
+            sub.style.cssText = 'font-size:0.78rem;color:var(--stf-on-surface-variant);';
+            sub.textContent = [item.size, item.color, item.sku].filter(function (x) { return x; }).join(' \u00b7 ');
+            left.appendChild(title);
+            left.appendChild(sub);
+            var right = document.createElement('div');
+            right.style.cssText = 'text-align:right;font-size:0.82rem;white-space:nowrap;';
+            right.textContent = formatCurrency(item.sellingPrice) + ' \u00b7 ' + (item.stockQuantity > 0 ? item.stockQuantity + ' in stock' : 'Out of stock');
+            if (item.stockQuantity <= 0) right.style.color = 'var(--stf-error)';
+            row.appendChild(left);
+            row.appendChild(right);
+            row.addEventListener('mousedown', function (ev) { ev.preventDefault(); pickProduct(item); });
+            searchResults.appendChild(row);
+        });
+        searchResults.style.display = 'block';
+    }
+
+    barcodeInput.addEventListener('input', function () {
+        var q = barcodeInput.value.trim();
+        clearTimeout(searchTimer);
+        if (q.length < 2) { hideSearchResults(); return; }
+        searchTimer = setTimeout(function () {
+            var seq = ++searchSeq;
+            fetch('/Pos/Search?q=' + encodeURIComponent(q))
+                .then(function (res) { return res.ok ? res.json() : []; })
+                .then(function (items) { if (seq === searchSeq) renderSearchResults(items); })
+                .catch(function () { /* search is a convenience; scanning still works */ });
+        }, 250);
+    });
+
+    barcodeInput.addEventListener('blur', function () { setTimeout(hideSearchResults, 150); });
+
     barcodeInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') { hideSearchResults(); return; }
         if (e.key !== 'Enter') return;
         e.preventDefault();
 
         var sku = barcodeInput.value.trim();
         if (!sku) return;
 
+        clearTimeout(searchTimer);
+        searchSeq++; // drop any search still in flight; Enter decides now
+        hideSearchResults();
         scanError.textContent = '';
 
+        // Exact SKU first (what a barcode scanner sends). If that misses, treat the text as a name search:
+        // one match opens the preview straight away, several show the list to pick from.
         fetch('/Pos/Product?sku=' + encodeURIComponent(sku))
             .then(function (res) {
                 if (!res.ok) throw new Error('not found');
                 return res.json();
             })
-            .then(function (product) {
-                if (product.stockQuantity <= 0) {
-                    scanError.textContent = product.name + ' is out of stock.';
-                    return;
-                }
-                showScanPreview(product);
-            })
+            .then(function (product) { pickProduct(product); })
             .catch(function () {
-                scanError.textContent = 'No product found for SKU "' + sku + '".';
+                fetch('/Pos/Search?q=' + encodeURIComponent(sku))
+                    .then(function (res) { return res.ok ? res.json() : []; })
+                    .then(function (items) {
+                        if (items.length === 1) { pickProduct(items[0]); }
+                        else if (items.length > 1) { renderSearchResults(items); }
+                        else { scanError.textContent = 'No product found for "' + sku + '".'; }
+                    })
+                    .catch(function () { scanError.textContent = 'No product found for "' + sku + '".'; });
             });
     });
 

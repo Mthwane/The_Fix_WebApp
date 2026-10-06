@@ -269,7 +269,7 @@ public class WalletAdminController : Controller
         });
     }
 
-    // GET: /WalletAdmin/ExportBalances - every wallet holding money, as CSV for the accountant.
+    // GET: /WalletAdmin/ExportBalances - every wallet holding money, as an Excel file for the accountant.
     [HttpGet]
     public async Task<IActionResult> ExportBalances()
     {
@@ -285,27 +285,9 @@ public class WalletAdminController : Controller
             })
             .ToListAsync();
 
-        var sb = new StringBuilder();
-        sb.AppendLine("Customer,Email,Balance (ZAR),Last activity (UTC)");
-        foreach (var r in rows)
-        {
-            sb.Append(Csv(r.Name)).Append(',')
-              .Append(Csv(r.Email)).Append(',')
-              .Append(r.Balance.ToString("0.00", CultureInfo.InvariantCulture)).Append(',')
-              .Append(r.LastActivity?.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) ?? "")
-              .AppendLine();
-        }
-
-        var bytes = new UTF8Encoding(true).GetPreamble().Concat(Encoding.UTF8.GetBytes(sb.ToString())).ToArray();
-        return File(bytes, "text/csv", $"fixcash-balances-{DateTime.UtcNow:yyyyMMdd}.csv");
-    }
-
-    /// <summary>Quotes a CSV cell and neutralises spreadsheet formulas (a name starting with = + - @ would
-    /// otherwise be executed by Excel).</summary>
-    private static string Csv(string? value)
-    {
-        value ??= string.Empty;
-        if (value.Length > 0 && "=+-@\t\r".Contains(value[0])) value = "'" + value;
-        return "\"" + value.Replace("\"", "\"\"") + "\"";
+        var bytes = ExcelExport.Build("FixCash balances",
+            new[] { "Customer", "Email", "Balance (ZAR)", "Last activity (UTC)" },
+            rows.Select(r => new object?[] { r.Name, r.Email, r.Balance, r.LastActivity }));
+        return File(bytes, ExcelExport.ContentType, $"fixcash-balances-{DateTime.UtcNow:yyyyMMdd}.xlsx");
     }
 }

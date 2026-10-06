@@ -182,14 +182,14 @@ public class PosController : Controller
 
         // Clocking on: if stock is running low and this person can raise restock requests, take them straight to
         // Purchase Orders (the low-stock queue) so the day starts with what needs ordering.
-        if (User.HasClaim(Permissions.ClaimType, Permissions.PurchaseOrdersManage))
+        if (User.HasClaim(Permissions.ClaimType, Permissions.LowStockView))
         {
             var lowCount = await _context.ProductVariants.AsNoTracking()
                 .CountAsync(v => v.IsActive && v.Product.IsActive && v.StockQuantity <= v.Product.LowStockThreshold);
             if (lowCount > 0)
             {
                 this.ToastWarning($"{lowCount} item{(lowCount == 1 ? " is" : "s are")} low on stock - review and raise a restock request below.");
-                return RedirectToAction("LowStock", "PurchaseOrders");
+                return RedirectToAction("Index", "LowStock");
             }
         }
 
@@ -617,5 +617,53 @@ public class PosController : Controller
             .FirstOrDefaultAsync();
 
         return variant is null ? NotFound() : Json(variant);
+    }
+
+    // GET: /Pos/Search?q=black hoodie - name search for the till. Every word typed must match the product name, brand,
+    // SKU, colour or size, so "nike black 9" finds that variant. Returns the same shape as Product(sku) so a picked result
+    // goes straight into the scan-preview modal. Out-of-stock items are returned too (flagged by stockQuantity) so the
+    // cashier can see they exist.
+    [HttpGet]
+    public async Task<IActionResult> Search(string? q)
+    {
+        var terms = (q ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Take(5).ToList();
+        if (terms.Count == 0 || string.Join("", terms).Length < 2) return Json(Array.Empty<object>());
+
+        var query = _context.ProductVariants.AsNoTracking()
+            .Where(v => v.IsActive && v.Product.IsActive);
+
+        foreach (var term in terms)
+        {
+            var t = term;
+            query = query.Where(v =>
+                v.Product.Name.Contains(t) ||
+                (v.Product.Brand != null && v.Product.Brand.Contains(t)) ||
+                v.SKU.Contains(t) ||
+                (v.Color != null && v.Color.Contains(t)) ||
+                (v.Size != null && v.Size.Contains(t)));
+        }
+
+        var results = await query
+            .OrderBy(v => v.Product.Name).ThenBy(v => v.Size).ThenBy(v => v.Color)
+            .Take(10)
+            .Select(v => new
+            {
+                ProductId = v.ProductId,
+                VariantId = v.ProductVariantId,
+                v.Product.Name,
+                Sku = v.SKU,
+                SellingPrice = v.PriceOverride ?? v.Product.SellingPrice,
+                v.StockQuantity,
+                v.Product.Category,
+                v.Size,
+                v.Color,
+                v.Product.Brand,
+                v.Product.ImageUrl,
+                v.Product.Description
+            })
+            .ToListAsync();
+
+        return Json(results);
     }
 }

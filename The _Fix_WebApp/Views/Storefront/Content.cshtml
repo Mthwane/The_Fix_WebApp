@@ -108,42 +108,6 @@
             <div style="@H">Which products appear in Trending is managed under <a asp-action="Trending">Trending</a>; department images under <a asp-controller="Departments" asp-action="Index">Departments</a>.</div>
         </details>
 
-        @* ============ Style Box ============ *@
-        <details class="stf-card" style="margin-bottom:14px;">
-            <summary style="cursor:pointer;"><h5 style="@SEC;display:inline;">Style Box section</h5></summary>
-            <label style="font-size:0.85rem;display:flex;gap:8px;align-items:center;margin:14px 0;"><input type="checkbox" asp-for="HideStyleBox" /> Hide this section</label>
-            <div style="margin-bottom:14px;"><label asp-for="StyleBoxEyebrow" style="@L"></label><input asp-for="StyleBoxEyebrow" style="@F" /></div>
-            <div style="margin-bottom:14px;"><label asp-for="StyleBoxHeadline" style="@L"></label><input asp-for="StyleBoxHeadline" style="@F" /></div>
-            <div style="margin-bottom:14px;"><label asp-for="StyleBoxSubheadline" style="@L"></label><textarea asp-for="StyleBoxSubheadline" rows="2" style="@F"></textarea></div>
-            <div style="margin-bottom:14px;"><label asp-for="StyleBoxStepsText" style="@L">Steps (one per line: Title | Description)</label><textarea asp-for="StyleBoxStepsText" rows="4" style="@F"></textarea></div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
-                <div><label asp-for="StyleBoxPrimaryCtaText" style="@L"></label><input asp-for="StyleBoxPrimaryCtaText" style="@F" /></div>
-                <div><label asp-for="StyleBoxSecondaryCtaText" style="@L"></label><input asp-for="StyleBoxSecondaryCtaText" style="@F" /></div>
-            </div>
-        </details>
-
-        @* ============ Story ============ *@
-        <details class="stf-card" style="margin-bottom:14px;">
-            <summary style="cursor:pointer;"><h5 style="@SEC;display:inline;">Story / ethos block</h5></summary>
-            <label style="font-size:0.85rem;display:flex;gap:8px;align-items:center;margin:14px 0;"><input type="checkbox" asp-for="HideStory" /> Hide this section</label>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
-                <div><label asp-for="StoryEyebrow" style="@L"></label><input asp-for="StoryEyebrow" style="@F" /></div>
-                <div><label asp-for="StoryHeadline" style="@L"></label><input asp-for="StoryHeadline" style="@F" /></div>
-            </div>
-            <div style="margin-bottom:14px;"><label asp-for="StoryBody" style="@L"></label><textarea asp-for="StoryBody" rows="4" style="@F"></textarea></div>
-            <div style="margin-bottom:14px;"><label asp-for="StoryChecklistText" style="@L">Tick list (one per line: Title | Description)</label><textarea asp-for="StoryChecklistText" rows="5" style="@F"></textarea></div>
-            <div style="margin-bottom:14px;">
-                <label style="@L">Story image</label>
-                @if (!string.IsNullOrWhiteSpace(Model.StoryImageUrl))
-                {
-                    <img src="@Model.StoryImageUrl.Sized(400)" alt="" style="height:90px;max-width:100%;object-fit:cover;border-radius:8px;display:block;margin-bottom:8px;border:1px solid var(--stf-outline-variant);" />
-                }
-                <input type="file" name="storyFile" accept="image/jpeg,image/png,image/webp,image/gif" style="@F" />
-                <input asp-for="StoryImageUrl" style="@F margin-top:6px;" placeholder="...or paste an image URL" />
-            </div>
-            <label asp-for="StoryCtaText" style="@L"></label><input asp-for="StoryCtaText" style="@F" />
-        </details>
-
         @* ============ Boutique ============ *@
         <details class="stf-card" style="margin-bottom:18px;">
             <summary style="cursor:pointer;"><h5 style="@SEC;display:inline;">Boutique banner</h5></summary>

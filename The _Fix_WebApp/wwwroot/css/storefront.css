@@ -290,7 +290,7 @@
 
 /* ---------- Footer ---------- */
 .ffs-footer { background: var(--ffs-cream-alt); border-top: 1px solid var(--ffs-border); padding: 56px 0 0; margin-top: 64px; }
-.ffs-footer-grid { display: grid; grid-template-columns: 1.6fr 1fr 1fr 1fr; gap: 32px; padding-bottom: 40px; }
+.ffs-footer-grid { display: grid; grid-template-columns: 1.6fr 1fr 1fr; gap: 32px; padding-bottom: 40px; }
 .ffs-footer-brand p { font-size: 0.85rem; color: var(--ffs-ink-muted); margin: 12px 0 18px; max-width: 280px; }
 .ffs-footer-newsletter { display: flex; gap: 8px; }
 .ffs-footer-newsletter input {
