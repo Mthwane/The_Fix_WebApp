@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/banner.gif" alt="Fashion Fix — Retail without friction." width="100%" />
+<img src="banner.jpg" alt="Fashion Fix — Retail without friction." width="100%" />
 
 <br /><br />
 
